@@ -17,6 +17,8 @@ import type {
   FixedSchedule,
   FixedScheduleCreateRequest,
   FreeBusy,
+  GoalCreateRequest,
+  GoalDecomposition,
   GoalsByTier,
   GoalUpdateRequest,
   Habit,
@@ -185,12 +187,21 @@ export const interviewApi = {
 export const goalsApi = {
   list: () => request<GoalsByTier>('/goals'),
 
+  create: (body: GoalCreateRequest) =>
+    request<ApiGoal>('/goals', { method: 'POST', body }),
+
   update: (goalId: string, body: GoalUpdateRequest) =>
     request<ApiGoal>(`/goals/${goalId}`, { method: 'PATCH', body }),
 
   // Focus/Maintain → Parked 전환. Parked 는 tier 한도가 없어 전용 엔드포인트 사용.
   park: (goalId: string) =>
     request<ApiGoal>(`/goals/${goalId}/park`, { method: 'POST', body: {} }),
+
+  remove: (goalId: string) =>
+    request<void>(`/goals/${goalId}`, { method: 'DELETE' }),
+
+  decompose: (goalId: string) =>
+    request<GoalDecomposition>(`/goals/${goalId}/decompose`, { method: 'POST', body: {} }),
 };
 
 // ── Time Policies (S07) ───────────────────────────────────────
