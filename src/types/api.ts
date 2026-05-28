@@ -93,6 +93,13 @@ export interface GoalsByTier {
   parked: ApiGoal[];
 }
 
+export interface GoalUpdateRequest {
+  title?: string;
+  deadline?: string | null; // YYYY-MM-DD
+  priorityLevel?: number;
+  goalTier?: GoalTier;
+}
+
 // ── Time Policies (S07) ───────────────────────────────────────
 export type PolicyType =
   | 'sleep'
