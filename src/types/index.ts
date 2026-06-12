@@ -111,7 +111,8 @@ export interface RecoveryProposal {
   desc: string;
   why: string;
   time: string;
-  conf: number;
+  // 성공률 % — 실측 통계가 없는 실 API 카드는 표시하지 않는다 (undefined)
+  conf?: number;
 }
 
 export type ChipTone =

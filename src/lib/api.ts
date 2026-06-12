@@ -2,17 +2,19 @@
 // 응답·에러·인증·Idempotency 규약은 docs/api-contract.md v0.7 의 §1 을 따른다.
 
 import type {
-  ActionItem,
+  ActionDetail,
   AnonymizeRequest,
   ApiErrorPayload,
-  ApiRecoveryProposal,
   AuthSession,
   CalendarConnection,
   CheckInRequest,
+  CheckInResponse,
+  ExecutionStartResponse,
   ConsentRecord,
   ConsentUpdateRequest,
-  ExecutionEvent,
-  FailureTag,
+  FailureTagMaster,
+  FailureTagRequest,
+  FailureTagResponse,
   FixedSchedule,
   FixedScheduleCreateRequest,
   FreeBusy,
@@ -32,6 +34,8 @@ import type {
   PlanScheduledBlock,
   PushSubscribeRequest,
   RecoveryDecisionRequest,
+  RecoveryDecisionResponse,
+  RecoveryProposalsResponse,
   ReflectionBatchRequest,
   ReflectionPendingItem,
   ReplanDiff,
@@ -265,36 +269,38 @@ export const habitsApi = {
     }),
 };
 
-// ── Today / Execution (S10-S13) — 현재 백엔드 501. fetch 래퍼만 미리 ──
+// ── Today / Execution (S10-S13) — #19-A 조회 + #19-B start/check-ins 구현 ──
 export const todayApi = {
   agenda: () => request<TodayAgenda>('/today/agenda'),
 
-  getAction: (actionItemId: string) =>
-    request<ActionItem>(`/today/actions/${actionItemId}`),
+  getAction: (actionId: string) =>
+    request<ActionDetail>(`/today/actions/${actionId}`),
 
-  start: (actionItemId: string) =>
-    request<ExecutionEvent>(`/today/actions/${actionItemId}/start`, {
+  // [▶ 시작] → execution_events 생성. 블록 없으면 서버가 즉석 블록 생성 (#19-B)
+  start: (actionId: string) =>
+    request<ExecutionStartResponse>(`/today/actions/${actionId}/start`, {
       method: 'POST',
       body: {},
     }),
 
+  // pause/resume 은 #19-B-2 까지 백엔드 501
   pause: (executionId: string) =>
-    request<ExecutionEvent>(`/today/focus/${executionId}/pause`, {
+    request<unknown>(`/today/focus/${executionId}/pause`, {
       method: 'POST',
       body: {},
     }),
 
   resume: (executionId: string) =>
-    request<ExecutionEvent>(`/today/focus/${executionId}/resume`, {
+    request<unknown>(`/today/focus/${executionId}/resume`, {
       method: 'POST',
       body: {},
     }),
 
-  checkIn: (body: CheckInRequest, idempotencyKey?: string) =>
-    request<ExecutionEvent>('/today/check-ins', {
+  // Quick Check-in 4칩 (#19-B). needsFailureTags=true → S18 → §12 Recovery
+  checkIn: (body: CheckInRequest) =>
+    request<CheckInResponse>('/today/check-ins', {
       method: 'POST',
       body,
-      idempotencyKey,
     }),
 };
 
@@ -336,29 +342,40 @@ export const reviewsApi = {
     }),
 };
 
-// ── Reflection (S17·S18) — 백엔드 501. fetch 래퍼만 미리 ────────
+// ── Reflection (S17·S18) — #19-B failure-tags 구현. pending/batch 는 501 ──
 export const reflectionApi = {
   pending: () => request<ReflectionPendingItem[]>('/reflection/pending'),
 
-  failureTags: () => request<FailureTag[]>('/reflection/failure-tags'),
+  // 13종 실패 사유 마스터 (S18 칩 원본)
+  failureTags: () => request<FailureTagMaster[]>('/reflection/failure-tags'),
 
   batch: (body: ReflectionBatchRequest, idempotencyKey: string) =>
     request<void>('/reflection/batch', { method: 'POST', body, idempotencyKey }),
 
-  tagExecution: (executionId: string, body: { tags: string[]; memoEncrypted?: string }) =>
-    request<void>(`/reflection/failure-tags/${executionId}`, { method: 'POST', body }),
+  // 실패 사유 0~2개 태깅 — 이 태그가 Recovery 룰 엔진(§12) 입력이 된다 (#19-B)
+  tagExecution: (executionId: string, body: FailureTagRequest) =>
+    request<FailureTagResponse>(`/reflection/failure-tags/${executionId}`, {
+      method: 'POST',
+      body,
+    }),
 };
 
-// ── Recovery / Replan (S19·S20) — 백엔드 501 ───────────────────
+// ── Recovery / Replan (S19·S20) — #20-A 구현. replan 은 501 ────
 export const recoveryApi = {
+  // 회복 카드 2~4장 생성 (Draft Layer). pending 존재 시 그대로 반환 — 재호출 안전
   generateProposals: (executionId: string) =>
-    request<ApiRecoveryProposal[]>('/recovery/proposals/generate', {
+    request<RecoveryProposalsResponse>('/recovery/proposals/generate', {
       method: 'POST',
       body: { executionId },
     }),
 
+  // 수락/스킵 확정 — Idempotency-Key 필수 (§1.7)
   decide: (body: RecoveryDecisionRequest, idempotencyKey: string) =>
-    request<void>('/recovery/decisions', { method: 'POST', body, idempotencyKey }),
+    request<RecoveryDecisionResponse>('/recovery/decisions', {
+      method: 'POST',
+      body,
+      idempotencyKey,
+    }),
 };
 
 export const replanApi = {

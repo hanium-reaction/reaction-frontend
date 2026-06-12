@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CaretLeft } from '@phosphor-icons/react';
 import { MergedTabBar } from '../components/TabBar';
 import { SystemIntroScreen } from '../screens/SystemIntroScreen';
@@ -18,7 +18,35 @@ import { WeeklyCalendarScreenV2 } from '../screens/WeeklyCalendarScreen';
 import { WeeklyReviewScreenV2 } from '../screens/WeeklyReviewScreen';
 import { BASE_TASKS } from '../data';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ScreenId, TabId, Task } from '../types';
+import { reflectionApi, todayApi } from '../lib/api';
+import type { ScreenId, TabId, Task, TaskStatus } from '../types';
+import type { AgendaCard, FailureTagMaster } from '../types/api';
+
+// 백엔드 actionId('action_<uuid>') 만 실 API 체인을 태운다 — mock id('t1' 등)는 로컬 전용.
+const isBackendTask = (id: string) => id.startsWith('action_');
+
+// AgendaCard.status(#19-A) → 화면 TaskStatus
+const STATUS_MAP: Record<string, TaskStatus> = {
+  planned: 'todo',
+  in_progress: 'in_progress',
+  done: 'done',
+  partial_done: 'partial_done',
+  failed: 'failed',
+  over_done: 'done',
+};
+
+function cardToTask(card: AgendaCard): Task {
+  return {
+    id: card.actionId,
+    title: card.title,
+    status: STATUS_MAP[card.status] ?? 'todo',
+    dur: `${card.estimatedMinutes}분`,
+    carryover: card.source === 'recovery_carryover',
+    tag: card.source.startsWith('recovery_')
+      ? { tone: 'coral', label: '복구 카드' }
+      : undefined,
+  };
+}
 
 // onboarding 흐름은 백엔드 §3 state machine 을 기반으로 하되, 클라이언트에서 두 쌍을
 // 묶고 coping-style 을 제거해 8단계 → 5단계로 줄였다 (recovery.tone 은 인터뷰에서 받음):
@@ -87,11 +115,62 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [failReason, setFailReason] = useState('');
   const [recoveryCount, setRecoveryCount] = useState(37);
+  // taskId(action_<uuid>) → executionId(exec_<uuid>) — #19-B 실행 추적
+  const [executions, setExecutions] = useState<Record<string, string>>({});
+  // 13종 실패 사유 마스터 (S18 칩 + label→tagCode 매핑) — #19-B
+  const [failTags, setFailTags] = useState<FailureTagMaster[]>([]);
+  // 복구 화면에 넘길 실행 ID — #20-A
+  const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
+
+  // mock-and-replace: 백엔드 agenda 에 오늘 카드가 있으면 mock(BASE_TASKS) 교체.
+  useEffect(() => {
+    let cancelled = false;
+    todayApi.agenda().then(
+      (agenda) => {
+        if (cancelled) return;
+        if (agenda.cards.length > 0) setTasks(agenda.cards.map(cardToTask));
+      },
+      () => { /* 백엔드 미기동 — mock 유지 */ },
+    );
+    reflectionApi.failureTags().then(
+      (tags) => { if (!cancelled) setFailTags(tags); },
+      () => { /* mock 라벨 유지 */ },
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  // [▶ 시작] — 실행 생성 (이미 시작했으면 기존 executionId 재사용). #19-B
+  const ensureExecution = async (taskId: string): Promise<string | null> => {
+    if (!isBackendTask(taskId)) return null;
+    if (executions[taskId]) return executions[taskId];
+    try {
+      const res = await todayApi.start(taskId);
+      setExecutions((m) => ({ ...m, [taskId]: res.executionId }));
+      return res.executionId;
+    } catch {
+      return executions[taskId] ?? null;
+    }
+  };
+
+  // Quick Check-in (4칩 중 done/failed 만 — partial 은 #19-B-2). 실패는 조용히.
+  const checkInRemote = async (
+    taskId: string,
+    completionStatus: 'done' | 'failed',
+  ): Promise<string | null> => {
+    const executionId = await ensureExecution(taskId);
+    if (!executionId) return null;
+    try {
+      await todayApi.checkIn({ executionId, completionStatus });
+    } catch { /* 이미 체크인됨(409) 등 — 데모 흐름 유지 */ }
+    return executionId;
+  };
 
   const showTabs = !hideTabs && TAB_SCREENS.includes(screen);
 
-  const markDone = (id: string) =>
+  const markDone = (id: string) => {
     setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status: 'done' } : t));
+    void checkInRemote(id, 'done');
+  };
 
   const markPartial = (id: string, pct: number) =>
     setTasks((ts) => ts.map((t) => t.id === id
@@ -103,7 +182,20 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status: 'failed', failReason: reason } : t));
     setActiveTask(tasks.find((t) => t.id === id) || null);
     setFailReason(reason);
-    setScreen('recovery');
+    // 실 API 체인: 체크인(failed) → 실패 사유 태깅 → 복구 화면 (#19-B → §11 → §12)
+    void (async () => {
+      const executionId = await checkInRemote(id, 'failed');
+      setActiveExecutionId(executionId);
+      if (executionId) {
+        const tagCode = failTags.find((t) => t.labelKo === reason)?.tagCode;
+        if (tagCode) {
+          try {
+            await reflectionApi.tagExecution(executionId, { tagCodes: [tagCode] });
+          } catch { /* 이미 태깅됨(409) 등 */ }
+        }
+      }
+      setScreen('recovery');
+    })();
   };
 
   // 실제 시작 트리거 — task 를 in_progress 로 전이하고 focus 화면으로.
@@ -120,12 +212,15 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
       }),
     );
     setActiveTask({ ...t, status: 'in_progress' });
+    void ensureExecution(id);
     setScreen('focus');
   };
 
   const openRecovery = () => {
     const partial = tasks.find((t) => t.status === 'partial_done' || t.status === 'recovery_pending');
-    setActiveTask(partial || tasks[1]);
+    const target = partial || tasks[1];
+    setActiveTask(target);
+    setActiveExecutionId(target ? (executions[target.id] ?? null) : null);
     setScreen('recovery');
   };
 
@@ -179,6 +274,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'today' && (
           <MergedTodayScreen
             tasks={tasks}
+            failTags={failTags}
             onOpen={openTask}
             onMarkDone={markDone}
             onPartial={markPartial}
@@ -190,6 +286,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'focus' && activeTask && (
           <FocusScreen
             task={activeTask}
+            executionId={activeTask ? (executions[activeTask.id] ?? null) : null}
             elapsedMin={18} totalMin={45}
             onBack={() => { setScreen('today'); setActiveTask(null); }}
             onPause={() => setScreen('today')}
@@ -199,6 +296,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'recovery' && (
           <MergedRecoveryScreen
             task={activeTask}
+            executionId={activeExecutionId}
             failReason={failReason}
             onAccept={acceptRecovery}
             onDismiss={() => setScreen('today')}

@@ -8,6 +8,7 @@ import {
   Trash,
 } from '@phosphor-icons/react';
 import type { Task } from '../types';
+import type { FailureTagMaster } from '../types/api';
 import { FAIL_REASONS, MERGED_PROPOSALS, MORNING_DATA } from '../data';
 import { useNavigation } from '../contexts/NavigationContext';
 import { habitsApi, todayApi } from '../lib/api';
@@ -163,6 +164,8 @@ export function ExecutionTodayScreen({ onRecovery, onEvening }: ExecutionTodaySc
 
 interface MergedTodayScreenProps {
   tasks: Task[];
+  // 13종 실패 사유 마스터 (#19-B) — 있으면 S18 칩을 실제 라벨로 교체
+  failTags?: FailureTagMaster[];
   onOpen: (id: string) => void;
   onMarkDone: (id: string) => void;
   onPartial: (id: string, pct: number) => void;
@@ -250,24 +253,14 @@ function todayShortKo(): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 · ${days[d.getDay()]}요일`;
 }
 
-export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail, onOpenRecovery, onEvening }: MergedTodayScreenProps) {
+export function MergedTodayScreen({ tasks, failTags, onOpen, onMarkDone, onPartial, onFail, onOpenRecovery, onEvening }: MergedTodayScreenProps) {
+  // 실패 사유 칩 — 마스터(labelKo) 우선, 백엔드 미기동 시 mock 라벨
+  const failReasonLabels =
+    failTags && failTags.length > 0 ? failTags.map((t) => t.labelKo) : FAIL_REASONS;
   const { user } = useNavigation();
   const userName = user?.name ?? '친구';
 
-  // mock-and-replace: /today/agenda 가 현재 백엔드에서 501. 채워지면 응답을
-  // tasks 로 매핑할 자리. 실패는 조용히 — 더미 흐름을 끊지 않는다.
-  useEffect(() => {
-    let cancelled = false;
-    todayApi.agenda().then(
-      (agenda) => {
-        if (cancelled) return;
-        // TODO(backend-#19): agenda.actions → Task[] 매핑 + setTasks 갱신
-        void agenda;
-      },
-      () => { /* 501/네트워크 — 더미 그대로 */ },
-    );
-    return () => { cancelled = true; };
-  }, []);
+  // agenda → tasks 매핑은 ReActionMerged(컨트롤러)가 담당 (#19-A 연동).
 
   const [failSheet, setFailSheet] = useState<string | null>(null);
   const [partialSheet, setPartialSheet] = useState<string | null>(null);
@@ -501,7 +494,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
             <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 4, color: 'var(--text-1)' }}>지금 어떤 상태예요?</div>
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>이유를 기록하면 더 잘 맞는 복구안을 제안해드려요.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-              {FAIL_REASONS.map((r) => (
+              {failReasonLabels.map((r) => (
                 <button key={r} onClick={() => setFailReason(r)} style={{ padding: '12px 14px', borderRadius: 12, textAlign: 'left', background: failReason === r ? 'var(--text-1)' : 'var(--surface-raised)', color: failReason === r ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${failReason === r ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms' }}>{r}</button>
               ))}
             </div>

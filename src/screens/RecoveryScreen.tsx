@@ -2,25 +2,89 @@ import React, { useEffect, useState } from 'react';
 import {
   ArrowsClockwise,
   XCircle,
-  Sparkle,
   Check,
   Info,
 } from '@phosphor-icons/react';
 import { MERGED_PROPOSALS } from '../data';
 import { recoveryApi } from '../lib/api';
 import type { Task, RecoveryProposal } from '../types';
+import type { RecoveryCard, RecoveryGroup } from '../types/api';
 
 interface MergedRecoveryScreenProps {
   task: Task | null;
+  // 실패 체크인된 실행 ID(exec_<uuid>) — 있으면 실 API(#20-A) 카드, 없으면 mock.
+  executionId: string | null;
   failReason?: string;
   onAccept: (optionId: string) => void;
   onDismiss: () => void;
 }
 
-export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: MergedRecoveryScreenProps) {
+// UX 4 그룹 → 카드 색 (api-contract §12)
+const GROUP_STYLE: Record<RecoveryGroup, { type: string; bg: string; bc: string; ac: string }> = {
+  DOWNSCOPE:  { type: 'DOWNSCOPE',  bg: '#E5EFE3',          bc: '#b4dfc8',           ac: 'var(--success)' },
+  RESCHEDULE: { type: 'RESCHEDULE', bg: '#FBEEDA',          bc: '#F2D29A',           ac: 'var(--warning)' },
+  CARRY_OVER: { type: 'CARRY OVER', bg: 'var(--brand-soft)', bc: 'var(--coral-200)', ac: 'var(--brand)' },
+  PARK:       { type: 'PARK',       bg: 'var(--sand-100)',  bc: 'var(--sand-200)',   ac: 'var(--text-2)' },
+};
+
+// 백엔드 RecoveryCard(#20-A) → 화면 표시용 RecoveryProposal.
+// conf(성공률)는 실측 통계가 쌓이기 전까지 표시하지 않는다 (undefined).
+function cardToProposal(card: RecoveryCard): RecoveryProposal {
+  const style = GROUP_STYLE[card.optionGroup] ?? GROUP_STYLE.DOWNSCOPE;
+  return {
+    id: card.attemptId,
+    type: style.type,
+    bg: style.bg,
+    bc: style.bc,
+    ac: style.ac,
+    title: card.labelKo,
+    desc: card.suggestedActionText,
+    why: card.triggerTag
+      ? `선택하신 실패 사유(${card.triggerTag})에 가장 잘 맞는 전략이에요.`
+      : '실패 사유와 무관하게 부담을 낮춰주는 기본 전략이에요.',
+    time: card.minRecoveryUnitMinutes > 0 ? `${card.minRecoveryUnitMinutes}분~` : '이번 주 보류',
+  };
+}
+
+export function MergedRecoveryScreen({ task, executionId, failReason, onAccept, onDismiss }: MergedRecoveryScreenProps) {
   const [sel, setSel] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
+  // mock-and-replace: 실 API 카드 도착 전까지 mock 제안 표시.
+  const [proposals, setProposals] = useState<RecoveryProposal[]>(MERGED_PROPOSALS);
+  const [fromApi, setFromApi] = useState(false);
+
+  // 실패 체크인된 실행이 있으면 실제 회복 카드 생성 (#20-A).
+  // pending 카드가 이미 있으면 백엔드가 그대로 반환하므로 재호출 안전.
+  useEffect(() => {
+    if (!executionId) return;
+    let cancelled = false;
+    recoveryApi.generateProposals(executionId).then(
+      (res) => {
+        if (cancelled || res.cards.length === 0) return;
+        setProposals(res.cards.map(cardToProposal));
+        setFromApi(true);
+        setSel(null);
+      },
+      () => { /* 백엔드 미기동/미자격 — mock 유지 */ },
+    );
+    return () => { cancelled = true; };
+  }, [executionId]);
+
+  const accept = () => {
+    if (!sel) return;
+    // 실 API 카드면 사용자 결정 확정 (Idempotency-Key 필수, §1.7).
+    if (fromApi && executionId) {
+      recoveryApi
+        .decide(
+          { executionId, decision: 'accepted', acceptedAttemptId: sel },
+          `rec-${executionId}-${sel}`,
+        )
+        .catch(() => { /* 이미 결정됨(409) 등 — 데모 흐름 유지 */ });
+    }
+    setAccepted(true);
+    setTimeout(() => onAccept(sel), 1400);
+  };
 
   // task 없이 잘못 마운트된 경우 — 회색 빈 영역을 보여주지 않도록 안내 화면.
   if (!task) {
@@ -33,34 +97,8 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
     );
   }
 
-  // mock-and-replace: 진입 시 LLM 회복 제안 생성 시도. 백엔드 501 → 더미 그대로.
-  useEffect(() => {
-    let cancelled = false;
-    recoveryApi.generateProposals(task.id).then(
-      (proposals) => {
-        if (cancelled) return;
-        // TODO(backend-#20): proposals → RecoveryProposal[] 매핑
-        void proposals;
-      },
-      () => { /* 501 ok */ },
-    );
-    return () => { cancelled = true; };
-  }, [task]);
-
-  const accept = () => {
-    if (!sel) return;
-    // mock-and-replace: 사용자 선택 저장 시도. Idempotency-Key 동봉.
-    if (task) {
-      recoveryApi
-        .decide({ executionId: task.id, proposalId: sel }, `rec-${task.id}-${sel}`)
-        .catch(() => { /* 501 ok */ });
-    }
-    setAccepted(true);
-    setTimeout(() => onAccept(sel), 1400);
-  };
-
   if (accepted) {
-    const p = MERGED_PROPOSALS.find((x) => x.id === sel);
+    const p = proposals.find((x) => x.id === sel);
     return (
       <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 18 }}>
         <div style={{ width: 72, height: 72, borderRadius: 9999, background: 'var(--coral-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -68,7 +106,9 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 500, letterSpacing: '-0.01em' }}>좋아요.</div>
         <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 260 }}>{p?.title} — 지금 바로 시작해요. 잘 하고 있어요.</p>
-        <div style={{ background: '#E5EFE3', border: '1px solid #b4dfc8', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'var(--success)', width: '100%' }}>캘린더 업데이트 완료. 실행 메모리에 복구 기록이 저장됐어요.</div>
+        <div style={{ background: '#E5EFE3', border: '1px solid #b4dfc8', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'var(--success)', width: '100%' }}>
+          {fromApi ? '실행 메모리에 복구 기록이 저장됐어요. 오늘 카드에 반영됩니다.' : '캘린더 업데이트 완료. 실행 메모리에 복구 기록이 저장됐어요.'}
+        </div>
       </div>
     );
   }
@@ -90,14 +130,14 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--coral-600)', marginBottom: 10, fontFamily: 'var(--font-mono)' }}>
-            <ArrowsClockwise size={12} weight="fill" /> 회복 제안
+            <ArrowsClockwise size={12} weight="fill" /> 회복 제안{fromApi && ' · RE:ACTION 분석'}
           </div>
 
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.01em', lineHeight: 1.2, marginBottom: 6 }}>오늘은 절반쯤 왔어요.</div>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 18, lineHeight: 1.55 }}>끝까지 가지 못해도 괜찮아요. 다시 시작할 방법이 있어요.</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {MERGED_PROPOSALS.map((p, i) => {
+            {proposals.map((p, i) => {
               const isSel = sel === p.id;
               return (
                 <div
@@ -114,7 +154,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>{p.title}</div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 3, alignItems: 'center' }}>
                           {i === 0 && <span style={{ height: 16, padding: '0 6px', background: p.bg, border: `1px solid ${p.bc}`, borderRadius: 9999, fontSize: 9, fontWeight: 700, color: p.ac, fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center', letterSpacing: '0.04em' }}>패턴 일치 ✓</span>}
-                          <span className="tnum" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: p.conf > 80 ? 'var(--success)' : p.conf > 65 ? 'var(--warning)' : 'var(--text-3)' }}>성공률 {p.conf}%</span>
+                          {p.conf != null && <span className="tnum" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: p.conf > 80 ? 'var(--success)' : p.conf > 65 ? 'var(--warning)' : 'var(--text-3)' }}>성공률 {p.conf}%</span>}
                           <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{p.time}</span>
                         </div>
                       </div>
@@ -125,6 +165,9 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
                   </div>
                   {showWhy === p.id && (
                     <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--brand-soft)', borderRadius: 8, fontSize: 11, color: 'var(--coral-700)', lineHeight: 1.5 }}>{p.why}</div>
+                  )}
+                  {isSel && p.desc && (
+                    <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--surface-ground)', borderRadius: 8, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>{p.desc}</div>
                   )}
                 </div>
               );

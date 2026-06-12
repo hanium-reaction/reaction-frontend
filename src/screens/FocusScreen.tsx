@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { CaretLeft, Pause, Check } from '@phosphor-icons/react';
 import { Chip } from '../components/Chip';
 import { ReButton } from '../components/ReButton';
@@ -8,6 +8,9 @@ import type { Task } from '../types';
 interface FocusScreenProps {
   // 잘못된 상태(force navigation, 빈 tasks 등)로 마운트되어도 폭발하지 않도록 null 허용.
   task: Task | null;
+  // 실행 ID(exec_<uuid>) — 시작/체크인 등 실행 생명주기는 컨트롤러(ReActionMerged)가
+  // 소유한다 (#19-B). 본 화면은 표시 + pause 시도만.
+  executionId?: string | null;
   elapsedMin: number;
   totalMin: number;
   onPause: () => void;
@@ -15,21 +18,7 @@ interface FocusScreenProps {
   onBack: () => void;
 }
 
-export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, onBack }: FocusScreenProps) {
-  // mock-and-replace: 백엔드 /today/* 가 501. 시작/일시정지/완료를 mock 으로 시도하되
-  // 실패는 조용히 — 화면 흐름(onPause/onComplete) 은 그대로 진행.
-  const executionIdRef = useRef<string | null>(null);
-
-  // 첫 진입 시 시작 호출 (executionId 확보 시도)
-  React.useEffect(() => {
-    if (!task) return;
-    let cancelled = false;
-    todayApi.start(task.id).then(
-      (e) => { if (!cancelled) executionIdRef.current = e.executionId; },
-      () => { /* 501 — 그냥 진행 */ },
-    );
-    return () => { cancelled = true; };
-  }, [task?.id]);
+export function FocusScreen({ task, executionId, elapsedMin, totalMin, onPause, onComplete, onBack }: FocusScreenProps) {
 
   // task 없이 잘못 마운트된 경우 — 빈 흰 화면 대신 명확한 안내 + 뒤로가기.
   if (!task) {
@@ -43,21 +32,15 @@ export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, o
   }
 
   const handlePause = () => {
-    if (executionIdRef.current) {
-      todayApi.pause(executionIdRef.current).catch(() => {});
+    // pause 는 #19-B-2 까지 백엔드 501 — 시도만 하고 조용히 진행.
+    if (executionId) {
+      todayApi.pause(executionId).catch(() => {});
     }
     onPause();
   };
 
   const handleComplete = () => {
-    if (executionIdRef.current) {
-      todayApi
-        .checkIn(
-          { executionId: executionIdRef.current, completionStatus: 'done', actualDuration: elapsedMin },
-          `check-${executionIdRef.current}`,
-        )
-        .catch(() => {});
-    }
+    // done 체크인은 컨트롤러(markDone → checkInRemote)가 수행 — 이중 체크인 방지.
     onComplete();
   };
 

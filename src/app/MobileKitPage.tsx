@@ -181,6 +181,7 @@ export function MobileKitPage() {
             <Safe scroll={false}>
               <MergedRecoveryScreen
                 task={{ id: 'demo', title: 'GROUP BY / HAVING 실습', status: 'failed', goal: 'g1', carryover: false }}
+                executionId={null}
                 failReason="막막함"
                 onAccept={() => {}}
                 onDismiss={() => {}}

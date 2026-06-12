@@ -212,61 +212,101 @@ export interface HabitCreateRequest {
   priorityLevel: number;
 }
 
-// ── Today / Execution (S10-S13) ───────────────────────────────
-// 백엔드 /today/* 는 현재 501 이라 응답 모양이 contract 에 자세히 못박혀 있지 않다.
-// api-contract §10 + DB 설계서를 근거로 합리적 추정. 백엔드가 채워질 때 조정.
+// ── Today / Execution (S10-S13) — api-contract §10 (#19-A 조회 + #19-B 쓰기 구현 반영) ──
 
 export type ActionItemStatus =
-  | 'pending'
+  | 'planned'
   | 'in_progress'
   | 'done'
   | 'partial_done'
   | 'failed'
-  | 'recovery_pending';
+  | 'over_done'
+  | 'archived';
 
-export interface DailyBrief {
-  date: string; // YYYY-MM-DD
-  greeting: string;
-  bigRock: string | null;
+export interface MorningBriefData {
+  headline: string;
+  bigRockActionId: string | null; // action_<uuid>
   adjustmentHints: string[];
+  fallbackUsed: boolean;
 }
 
-export interface ActionItem {
-  actionItemId: string;
+export interface AgendaCard {
+  actionId: string; // action_<uuid>
   title: string;
-  goalId: string | null;
-  scheduledTime: string | null; // HH:MM
-  durationMinutes: number;
+  category: string;
   status: ActionItemStatus | string;
-  carryover?: boolean;
-  failReason?: string | null;
+  priority: number;
+  estimatedMinutes: number;
+  source: string;
+  whyNow: string | null;
+  firstStep: string | null;
+}
+
+export interface AgendaHabit {
+  instanceId: string; // hinst_<uuid>
+  habitId: string; // habit_<uuid>
+  title: string;
+  targetCount: number;
+  doneCount: number;
+}
+
+export interface AgendaFixedSchedule {
+  scheduleId: string; // fixed_<uuid>
+  title: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
 }
 
 export interface TodayAgenda {
-  brief: DailyBrief;
-  actions: ActionItem[];
-  habits: HabitInstance[];
-  fixedSchedules: FixedSchedule[];
+  date: string; // YYYY-MM-DD
+  brief: MorningBriefData | null;
+  cards: AgendaCard[];
+  habits: AgendaHabit[];
+  fixedSchedules: AgendaFixedSchedule[];
+}
+
+export interface ActionDetail {
+  actionId: string;
+  title: string;
+  category: string;
+  status: string;
+  priority: number;
+  estimatedMinutes: number;
+  targetDate: string; // YYYY-MM-DD
+  source: string;
+  whyNow: string | null;
+  firstStep: string | null;
+  goalId: string | null;
 }
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-export interface ExecutionEvent {
-  executionId: string;
-  actionItemId: string;
-  startedAt: string; // KST ISO
-  endedAt: string | null;
-  status: CompletionStatus | 'started' | string;
+// POST /today/actions/{id}/start 응답 (#19-B)
+export interface ExecutionStartResponse {
+  executionId: string; // exec_<uuid>
+  actionId: string;
+  completionStatus: string; // in_progress
+  actualStartAt: string; // KST ISO
 }
 
+// POST /today/check-ins 요청 (#19-B) — Quick Check-in 4칩
 export interface CheckInRequest {
   executionId: string;
   completionStatus: CompletionStatus;
-  actualDuration?: number; // minutes
-  userFeedback?: string;
+  userRating?: number; // 1~5
+  userFeedback?: string; // 서버에서 at-rest 암호화
 }
 
-// ── Reflection (S17·S18) — 백엔드 501. api-contract §11 추정 ───
+// POST /today/check-ins 응답 — needsFailureTags=true 면 S18(실패 사유)로 이동
+export interface CheckInResponse {
+  executionId: string;
+  actionId: string;
+  completionStatus: string;
+  actualDurationMinutes: number | null;
+  needsFailureTags: boolean;
+}
+
+// ── Reflection (S17·S18) — api-contract §11 (#19-B failure-tags 구현, batch 는 501) ──
 // 13종 실패 태그 (api-contract §11)
 export type FailureTagCode =
   | 'TIME_SHORTAGE'
@@ -283,10 +323,24 @@ export type FailureTagCode =
   | 'EMERGENCY'
   | 'CONTEXT_LOSS';
 
-export interface FailureTag {
-  code: FailureTagCode | string;
-  label: string;
-  isActive: boolean;
+// GET /reflection/failure-tags 응답 row (#19-B 구현)
+export interface FailureTagMaster {
+  tagCode: FailureTagCode | string;
+  labelKo: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+// POST /reflection/failure-tags/{executionId} 요청 — 0~2개. memo 는 서버 암호화
+export interface FailureTagRequest {
+  tagCodes: Array<FailureTagCode | string>;
+  memo?: string;
+}
+
+export interface FailureTagResponse {
+  executionId: string;
+  tagCodes: string[];
+  hasMemo: boolean;
 }
 
 export interface ReflectionPendingItem {
@@ -307,7 +361,7 @@ export interface ReflectionBatchRequest {
   }>;
 }
 
-// ── Recovery / Replan (S19·S20) — 백엔드 501. api-contract §12 추정 ──
+// ── Recovery / Replan (S19·S20) — api-contract §12 (#20-A 구현, replan 은 501) ──
 export type RecoveryGroup = 'DOWNSCOPE' | 'RESCHEDULE' | 'CARRY_OVER' | 'PARK';
 
 export type RecoveryStrategyCode =
@@ -321,20 +375,40 @@ export type RecoveryStrategyCode =
   | 'FREEZE_SLOT'
   | 'PARK_DEFAULT';
 
-export interface ApiRecoveryProposal {
-  proposalId: string;
-  group: RecoveryGroup;
-  strategyCode: RecoveryStrategyCode | string;
-  title: string;
-  description: string;
-  why: string;
-  estimatedMinutes: number | null;
-  confidence: number; // 0~100
+// POST /recovery/proposals/generate 응답 (#20-A 구현) — Draft Layer
+export interface RecoveryCard {
+  attemptId: string; // rec_<uuid>
+  optionGroup: RecoveryGroup;
+  strategyType: RecoveryStrategyCode | string;
+  labelKo: string;
+  suggestedActionText: string;
+  minRecoveryUnitMinutes: number;
+  allowRestMode: boolean;
+  triggerTag: string | null;
 }
 
+export interface RecoveryProposalsResponse {
+  executionId: string;
+  cards: RecoveryCard[];
+  isDraft: boolean;
+  aiSource: 'llm' | 'rule';
+}
+
+// POST /recovery/decisions 요청 (#20-A) — Idempotency-Key 필수
 export interface RecoveryDecisionRequest {
   executionId: string;
-  proposalId: string;
+  decision: 'accepted' | 'skipped';
+  acceptedAttemptId?: string;
+  decisionReason?: string;
+}
+
+export interface RecoveryDecisionResponse {
+  executionId: string;
+  acceptedAttemptId: string | null;
+  rejectedAttemptIds: string[];
+  skippedAttemptIds: string[];
+  resultingActionItemId: string | null; // action_<uuid> (DOWNSCOPE/CARRY_OVER 수락 시)
+  isDraft: boolean;
 }
 
 export interface ReplanDiffBlock {
