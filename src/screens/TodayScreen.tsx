@@ -57,9 +57,33 @@ interface MergedTodayScreenProps {
   onOpen: (id: string) => void;
   onMarkDone: (id: string) => void;
   onPartial: (id: string, pct: number) => void;
-  onFail: (id: string, reason: string) => void;
+  // tagCode = 백엔드 실패 태그 코드(예 'AMBIGUITY'), label = 화면 표시용. 더미면 tagCode=''.
+  onFail: (id: string, tagCode: string, label: string) => void;
   onOpenRecovery: () => void;
   onEvening: () => void;
+  // /today/agenda 실데이터를 Task[] 로 매핑해 상위(tasks 소유자)로 끌어올린다.
+  onTasksLoaded?: (tasks: Task[]) => void;
+}
+
+// "14:30" → "오후 2:30" (HH:MM 24h → 한글 오전/오후). 없으면 '—'.
+function fmtTime(hhmm: string | null): string {
+  if (!hhmm) return '—';
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h)) return hhmm;
+  const ampm = h < 12 ? '오전' : '오후';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${ampm} ${h12}:${String(m || 0).padStart(2, '0')}`;
+}
+
+// 백엔드 ActionItem.status → 화면 TaskStatus (알 수 없으면 todo).
+function mapActionStatus(s: string): Task['status'] {
+  switch (s) {
+    case 'done': return 'done';
+    case 'failed': return 'failed';
+    case 'partial_done': return 'partial_done';
+    case 'in_progress': return 'in_progress';
+    default: return 'todo';
+  }
 }
 
 function Ring({ task }: { task: Task }) {
@@ -141,23 +165,36 @@ function todayShortKo(): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 · ${days[d.getDay()]}요일`;
 }
 
-export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail, onOpenRecovery, onEvening }: MergedTodayScreenProps) {
+export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail, onOpenRecovery, onEvening, onTasksLoaded }: MergedTodayScreenProps) {
   const { user } = useNavigation();
   const userName = user?.name ?? '친구';
 
-  // mock-and-replace: /today/agenda 가 현재 백엔드에서 501. 채워지면 응답을
-  // tasks 로 매핑할 자리. 실패는 조용히 — 더미 흐름을 끊지 않는다.
+  // mock-and-replace: /today/agenda 실데이터가 오면 Task[] 로 매핑해 상위로 끌어올린다.
+  // 실 actionItemId 가 task.id 가 되어 실패→회복 루프(start/check-in/tag/recovery)가 진짜로 동작.
+  // 실패/빈 응답이면 조용히 — 더미(BASE_TASKS) 흐름을 끊지 않는다(데모 안전).
   useEffect(() => {
     let cancelled = false;
     todayApi.agenda().then(
       (agenda) => {
-        if (cancelled) return;
-        // TODO(backend-#19): agenda.actions → Task[] 매핑 + setTasks 갱신
-        void agenda;
+        if (cancelled || !agenda.actions?.length || !onTasksLoaded) return;
+        onTasksLoaded(
+          agenda.actions.map((a) => ({
+            id: a.actionItemId,
+            actionItemId: a.actionItemId,
+            title: a.title,
+            status: mapActionStatus(a.status),
+            time: fmtTime(a.scheduledTime),
+            dur: `${a.durationMinutes}분`,
+            goal: a.goalId ?? undefined,
+            carryover: a.carryover,
+            failReason: a.failReason ?? undefined,
+          })),
+        );
       },
       () => { /* 501/네트워크 — 더미 그대로 */ },
     );
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [failSheet, setFailSheet] = useState<string | null>(null);
@@ -170,12 +207,19 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [failReason, setFailReason] = useState('');
   const [toast, setToast] = useState<string | null>(null);
-  // 실패 사유 목록 — 백엔드 실패 태그 카탈로그(#17)가 오면 그 labelKo 로, 없으면 더미.
-  const [failReasons, setFailReasons] = useState<string[]>(FAIL_REASONS);
+  // 실패 사유 목록 — 백엔드 실패 태그 카탈로그(#17)가 오면 {tagCode,label}, 없으면 더미(code 빈값).
+  // tagCode 는 실패 기록(reflectionApi.tagExecution)에 필요하므로 label 과 함께 보존한다.
+  const [failReasons, setFailReasons] = useState<{ code: string; label: string }[]>(
+    FAIL_REASONS.map((label) => ({ code: '', label })),
+  );
   useEffect(() => {
     let cancelled = false;
     reflectionApi.failureTags().then(
-      (tags) => { if (!cancelled && tags.length) setFailReasons(tags.map((t) => t.labelKo)); },
+      (tags) => {
+        if (!cancelled && tags.length) {
+          setFailReasons(tags.map((t) => ({ code: t.tagCode, label: t.labelKo })));
+        }
+      },
       () => { /* 미구현/오류 — 더미 그대로 */ },
     );
     return () => { cancelled = true; };
@@ -253,7 +297,8 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
 
   const submitFail = () => {
     if (!failReason || !failSheet) return;
-    onFail(failSheet, failReason);
+    const picked = failReasons.find((r) => r.label === failReason);
+    onFail(failSheet, picked?.code ?? '', failReason);
     setFailSheet(null);
     setFailReason('');
   };
@@ -326,7 +371,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
                 task={t}
                 // 대기/진행 row 클릭 = hero 로 promote (실제 시작 X)
                 onSelect={() => setSelectedTaskId(t.id)}
-                onFailedRecover={() => onFail(t.id, t.failReason || '')}
+                onFailedRecover={() => onFail(t.id, '', t.failReason || '')}
                 onPartialRecover={onOpenRecovery}
               />
             ))}
@@ -407,7 +452,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>이유를 기록하면 더 잘 맞는 복구안을 제안해드려요.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
               {failReasons.map((r) => (
-                <button key={r} onClick={() => setFailReason(r)} style={{ padding: '12px 14px', borderRadius: 12, textAlign: 'left', background: failReason === r ? 'var(--text-1)' : 'var(--surface-raised)', color: failReason === r ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${failReason === r ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms' }}>{r}</button>
+                <button key={r.label} onClick={() => setFailReason(r.label)} style={{ padding: '12px 14px', borderRadius: 12, textAlign: 'left', background: failReason === r.label ? 'var(--text-1)' : 'var(--surface-raised)', color: failReason === r.label ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${failReason === r.label ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms' }}>{r.label}</button>
               ))}
             </div>
             <button onClick={submitFail} disabled={!failReason} style={{ width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', opacity: failReason ? 1 : 0.35 }}>기록하고 복구안 보기</button>

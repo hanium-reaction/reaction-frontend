@@ -19,6 +19,7 @@ import { EveningCheckInScreen } from '../screens/EveningCheckInScreen';
 import { WeeklyCalendarScreenV2 } from '../screens/WeeklyCalendarScreen';
 import { WeeklyReviewScreenV2 } from '../screens/WeeklyReviewScreen';
 import { BASE_TASKS, MERGED_PROPOSALS } from '../data';
+import { todayApi, reflectionApi } from '../lib/api';
 import { useNavigation } from '../contexts/NavigationContext';
 import type { ScreenId, TabId, Task } from '../types';
 
@@ -110,10 +111,23 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
       : t
     ));
 
-  const markFailed = (id: string, reason: string) => {
-    setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status: 'failed', failReason: reason } : t));
-    setActiveTask(tasks.find((t) => t.id === id) || null);
-    setFailReason(reason);
+  // 실패 기록 — "실패를 데이터로 기억"의 실연동(G3). 낙관적 UI 먼저, 네트워크는 뒤.
+  // 실 actionItemId + tagCode 가 있고 첫 실패면: start → check-in(failed) → tagExecution.
+  // 더미 카드(actionItemId 없음)거나 백엔드 오류면 조용히 로컬 흐름만(데모 안전).
+  const markFailed = async (id: string, tagCode: string, label: string) => {
+    const t = tasks.find((x) => x.id === id) ?? null;
+    setTasks((ts) => ts.map((x) => x.id === id ? { ...x, status: 'failed', failReason: label || x.failReason } : x));
+    setFailReason(label || t?.failReason || '');
+    let executionId = t?.executionId;
+    if (t?.actionItemId && !executionId && tagCode) {
+      try {
+        const started = await todayApi.start(t.actionItemId);
+        executionId = started.executionId;
+        await todayApi.checkIn({ executionId, completionStatus: 'failed' }, crypto.randomUUID());
+        await reflectionApi.tagExecution(executionId, { tagCodes: [tagCode] });
+      } catch { /* 데모 안전: 백엔드 미동작이어도 화면 흐름 유지 */ }
+    }
+    setActiveTask(t ? { ...t, status: 'failed', failReason: label || t.failReason, executionId } : null);
     setScreen('recovery');
   };
 
@@ -208,6 +222,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
             onFail={markFailed}
             onOpenRecovery={openRecovery}
             onEvening={() => setScreen('evening')}
+            onTasksLoaded={setTasks}
           />
         )}
         {screen === 'focus' && activeTask && (

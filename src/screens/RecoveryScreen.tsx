@@ -64,10 +64,12 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
     );
   }
 
-  // mock-and-replace: 진입 시 LLM 회복 제안 생성 시도. 백엔드 501 → 더미 그대로.
+  // mock-and-replace: 진입 시 LLM 회복 제안 생성 시도. 백엔드 미연동/오류 → 더미 그대로.
+  // executionId 는 실패 체크인(start→check-in)에서 발급된 실 id. 더미 task 면 task.id 로 폴백.
+  const executionId = task.executionId ?? task.id;
   useEffect(() => {
     let cancelled = false;
-    recoveryApi.generateProposals(task.id).then(
+    recoveryApi.generateProposals(executionId).then(
       (res) => {
         if (cancelled) return;
         // 실데이터 매핑: cards 가 있으면 더미를 실제 복구 카드로 교체.
@@ -79,20 +81,18 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss }: 
       () => { /* 미구현/오류 — 더미 그대로 */ },
     );
     return () => { cancelled = true; };
-  }, [task]);
+  }, [executionId]);
 
   const accept = () => {
     if (!sel) return;
-    // mock-and-replace: 사용자 선택 저장 시도. Idempotency-Key 동봉.
-    // sel 은 데모 제안 id — 실제 백엔드 attemptId 매핑(backend-#20) 전까지 그대로 전달.
-    if (task) {
-      recoveryApi
-        .decide(
-          { executionId: task.id, decision: 'accept', acceptedAttemptId: sel },
-          `rec-${task.id}-${sel}`,
-        )
-        .catch(() => { /* 미구현/오류 ok — 데모 흐름 유지 */ });
-    }
+    // 사용자 선택 저장. Idempotency-Key 동봉. 실데이터면 sel = 실 attemptId(cardToProposal),
+    // 더미면 MERGED_PROPOSALS id. executionId 도 실/더미 동일 폴백. 실패해도 데모 흐름 유지.
+    recoveryApi
+      .decide(
+        { executionId, decision: 'accept', acceptedAttemptId: sel },
+        `rec-${executionId}-${sel}`,
+      )
+      .catch(() => { /* 미구현/오류 ok — 데모 흐름 유지 */ });
     setAccepted(true);
     setTimeout(() => onAccept(sel), 1400);
   };

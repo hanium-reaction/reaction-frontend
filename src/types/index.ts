@@ -46,6 +46,10 @@ export interface Task {
   progress?: number;
   failReason?: string;
   tag?: { tone: ChipTone; label: string };
+  // 백엔드 연동용 — agenda 매핑 시 실 actionItemId, 실패 체크인 후 executionId.
+  // 더미(BASE_TASKS)에는 없으며, 없으면 회복 루프가 mock 으로 동작(데모 안전).
+  actionItemId?: string;
+  executionId?: string;
 }
 
 export interface Goal {
