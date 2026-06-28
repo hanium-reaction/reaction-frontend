@@ -271,9 +271,23 @@ export interface ActionItem {
   failReason?: string | null;
 }
 
+// S10 어젠다 카드(조회 표현) — 백엔드 AgendaCard. ⚠️ 시각(scheduledTime) 없음, estimatedMinutes 만.
+export interface AgendaCard {
+  actionId: string;
+  title: string;
+  category: string;
+  status: string;
+  priority: number;
+  estimatedMinutes: number;
+  source: string;
+  whyNow: string | null;
+  firstStep: string | null;
+}
+
 export interface TodayAgenda {
-  brief: DailyBrief;
-  actions: ActionItem[];
+  date: string;
+  brief: DailyBrief | null;
+  cards: AgendaCard[];
   habits: HabitInstance[];
   fixedSchedules: FixedSchedule[];
 }

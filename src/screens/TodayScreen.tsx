@@ -65,17 +65,7 @@ interface MergedTodayScreenProps {
   onTasksLoaded?: (tasks: Task[]) => void;
 }
 
-// "14:30" → "오후 2:30" (HH:MM 24h → 한글 오전/오후). 없으면 '—'.
-function fmtTime(hhmm: string | null): string {
-  if (!hhmm) return '—';
-  const [h, m] = hhmm.split(':').map(Number);
-  if (Number.isNaN(h)) return hhmm;
-  const ampm = h < 12 ? '오전' : '오후';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${ampm} ${h12}:${String(m || 0).padStart(2, '0')}`;
-}
-
-// 백엔드 ActionItem.status → 화면 TaskStatus (알 수 없으면 todo).
+// 백엔드 AgendaCard.status → 화면 TaskStatus (알 수 없으면 todo).
 function mapActionStatus(s: string): Task['status'] {
   switch (s) {
     case 'done': return 'done';
@@ -176,18 +166,15 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
     let cancelled = false;
     todayApi.agenda().then(
       (agenda) => {
-        if (cancelled || !agenda.actions?.length || !onTasksLoaded) return;
+        if (cancelled || !agenda.cards?.length || !onTasksLoaded) return;
         onTasksLoaded(
-          agenda.actions.map((a) => ({
-            id: a.actionItemId,
-            actionItemId: a.actionItemId,
-            title: a.title,
-            status: mapActionStatus(a.status),
-            time: fmtTime(a.scheduledTime),
-            dur: `${a.durationMinutes}분`,
-            goal: a.goalId ?? undefined,
-            carryover: a.carryover,
-            failReason: a.failReason ?? undefined,
+          agenda.cards.map((c) => ({
+            id: c.actionId,            // 실 actionItemId — 실패→회복 루프의 키
+            actionItemId: c.actionId,
+            title: c.title,
+            status: mapActionStatus(c.status),
+            time: '—',                // ⚠️ agenda 카드엔 시각 없음(estimatedMinutes 만)
+            dur: `${c.estimatedMinutes}분`,
           })),
         );
       },
