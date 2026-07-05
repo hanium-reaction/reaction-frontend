@@ -298,7 +298,7 @@ export const habitsApi = {
 };
 
 // ── Today / Execution (S10-S13) ───────────────────────────────
-// start·check-ins 는 백엔드 #13 구현됨. agenda/action 상세·pause/resume 은 미구현.
+// start·check-ins 는 백엔드 #13 구현됨. focus pause/resume 은 백엔드 #83 구현됨.
 export const todayApi = {
   agenda: () => request<TodayAgenda>('/today/agenda'),
 

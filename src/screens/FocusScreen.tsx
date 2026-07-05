@@ -5,6 +5,11 @@ import { ReButton } from '../components/ReButton';
 import { todayApi } from '../lib/api';
 import type { Task } from '../types';
 
+// 집중 세션 executionId 를 task.id 별로 모듈 스코프에 보관한다.
+// FocusScreen 은 일시정지 시 unmount 되므로 컴포넌트 ref 로는 유지되지 않는다.
+// 이 맵 덕에 같은 task 로 재진입하면 start 대신 resume(#83) 을 호출할 수 있다.
+const focusExecutions = new Map<string, string>();
+
 interface FocusScreenProps {
   // 잘못된 상태(force navigation, 빈 tasks 등)로 마운트되어도 폭발하지 않도록 null 허용.
   task: Task | null;
@@ -16,18 +21,29 @@ interface FocusScreenProps {
 }
 
 export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, onBack }: FocusScreenProps) {
-  // mock-and-replace: 백엔드 /today/* 가 501. 시작/일시정지/완료를 mock 으로 시도하되
-  // 실패는 조용히 — 화면 흐름(onPause/onComplete) 은 그대로 진행.
+  // mock-and-replace: start·check-ins(#13)·pause·resume(#83) 을 실제로 호출하되
+  // 실패는 조용히 — 화면 흐름(onPause/onComplete) 은 그대로 진행(fallback).
   const executionIdRef = useRef<string | null>(null);
 
-  // 첫 진입 시 시작 호출 (executionId 확보 시도)
+  // 진입 시: 이 task 의 열린 세션이 있으면 resume(#83), 없으면 start(#13).
   React.useEffect(() => {
     if (!task) return;
     let cancelled = false;
-    todayApi.start(task.id).then(
-      (e) => { if (!cancelled) executionIdRef.current = e.executionId; },
-      () => { /* 501 — 그냥 진행 */ },
-    );
+    const existing = focusExecutions.get(task.id);
+    if (existing) {
+      executionIdRef.current = existing;
+      // 정지 중이 아니면 백엔드가 409 — 조용히 무시하고 진행.
+      todayApi.resume(existing).catch(() => {});
+    } else {
+      todayApi.start(task.id).then(
+        (e) => {
+          if (cancelled) return;
+          executionIdRef.current = e.executionId;
+          focusExecutions.set(task.id, e.executionId);
+        },
+        () => { /* 미구현/실패 — 그냥 진행 */ },
+      );
+    }
     return () => { cancelled = true; };
   }, [task?.id]);
 
@@ -59,6 +75,8 @@ export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, o
         )
         .catch(() => {});
     }
+    // 세션 종료 — 재진입 시 새 start 를 타도록 보관한 executionId 를 비운다.
+    if (task) focusExecutions.delete(task.id);
     onComplete();
   };
 

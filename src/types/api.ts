@@ -280,13 +280,15 @@ export interface TodayAgenda {
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-// /today/focus/{executionId}/pause·resume 는 아직 contract 추정(미구현).
+// /today/focus/{executionId}/pause·resume 응답 — ExecutionEventResponse (#83, 구현됨).
+// pause 는 user_pause 구간을 열고, resume 은 닫아 pauseTotalMinutes 에 누적한다.
 export interface ExecutionEvent {
   executionId: string;
   actionItemId: string;
   startedAt: string; // KST ISO
   endedAt: string | null;
   status: CompletionStatus | 'started' | string;
+  pauseTotalMinutes: number;
 }
 
 // POST /today/actions/{actionId}/start (#13)
