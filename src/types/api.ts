@@ -47,6 +47,9 @@ export interface InterviewQuestion {
   text: string;
   answerType: SlotAnswerType;
   options: string[];
+  // LLM 이 슬롯 맥락에 맞춰 추천한 답변 카드. 주로 고정 보기(options)가 없는 자유서술
+  // 슬롯(goals.list·success_image·time.fixed_blocks 등)에서 탭/참고용으로 채워진다.
+  suggestedAnswers?: string[];
 }
 
 export type InterviewEndReason = 'early_user' | 'completed' | null;
@@ -280,13 +283,16 @@ export interface TodayAgenda {
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-// /today/focus/{executionId}/pause·resume 는 아직 contract 추정(미구현).
+// POST /today/focus/{executionId}/pause·resume 응답 (ExecutionEventResponse, backend #83).
+// pause 는 interruption_events 를 열고, resume 은 그 구간을 닫아 pauseTotalMinutes 에 누적한다.
+// execution 자체는 in_progress 유지.
 export interface ExecutionEvent {
   executionId: string;
   actionItemId: string;
   startedAt: string; // KST ISO
   endedAt: string | null;
   status: CompletionStatus | 'started' | string;
+  pauseTotalMinutes: number;
 }
 
 // POST /today/actions/{actionId}/start (#13)

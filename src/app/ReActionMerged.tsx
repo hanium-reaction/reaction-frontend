@@ -98,6 +98,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   const [recoveryCount, setRecoveryCount] = useState(0);
   // 사용자가 회복 화면에서 고른 제안 — RecoveredScreen 의 before→after 카드용.
   const [appliedRecovery, setAppliedRecovery] = useState<AppliedRecovery | null>(null);
+  // Focus 에서 일시정지한 execution — 같은 task 로 재진입하면 resume 한다 (backend #83).
+  const [pausedExec, setPausedExec] = useState<{ taskId: string; executionId: string } | null>(null);
 
   const showTabs = !hideTabs && TAB_SCREENS.includes(screen);
 
@@ -170,6 +172,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     if (activeTask) markDone(activeTask.id);
     setScreen('today');
     setActiveTask(null);
+    setPausedExec(null);
   };
 
   return (
@@ -214,8 +217,10 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
           <FocusScreen
             task={activeTask}
             elapsedMin={18} totalMin={45}
-            onBack={() => { setScreen('today'); setActiveTask(null); }}
+            resumeExecutionId={pausedExec?.taskId === activeTask.id ? pausedExec.executionId : null}
+            onBack={() => { setScreen('today'); setActiveTask(null); setPausedExec(null); }}
             onPause={() => setScreen('today')}
+            onPaused={(executionId) => setPausedExec({ taskId: activeTask.id, executionId })}
             onComplete={handleFocusComplete}
           />
         )}

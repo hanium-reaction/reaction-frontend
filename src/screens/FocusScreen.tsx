@@ -10,26 +10,35 @@ interface FocusScreenProps {
   task: Task | null;
   elapsedMin: number;
   totalMin: number;
+  // 일시정지 후 재진입이면 이 execution 을 resume 한다 (없으면 새로 start).
+  resumeExecutionId?: string | null;
   onPause: () => void;
+  // 일시정지 시 확보한 executionId 를 부모로 올려 재진입 때 resume 하도록 한다.
+  onPaused?: (executionId: string) => void;
   onComplete: () => void;
   onBack: () => void;
 }
 
-export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, onBack }: FocusScreenProps) {
-  // mock-and-replace: 백엔드 /today/* 가 501. 시작/일시정지/완료를 mock 으로 시도하되
-  // 실패는 조용히 — 화면 흐름(onPause/onComplete) 은 그대로 진행.
+export function FocusScreen({ task, elapsedMin, totalMin, resumeExecutionId, onPause, onPaused, onComplete, onBack }: FocusScreenProps) {
+  // 백엔드 /today/* 실연동: start(#13)·pause/resume(#83)·check-in(#13) 을 시도하되
+  // 실패는 조용히 — 화면 흐름(onPause/onComplete) 은 그대로 진행(fallback).
   const executionIdRef = useRef<string | null>(null);
 
-  // 첫 진입 시 시작 호출 (executionId 확보 시도)
+  // 첫 진입 시: 재진입(resumeExecutionId)이면 resume, 아니면 새 세션 start.
   React.useEffect(() => {
     if (!task) return;
     let cancelled = false;
-    todayApi.start(task.id).then(
-      (e) => { if (!cancelled) executionIdRef.current = e.executionId; },
-      () => { /* 501 — 그냥 진행 */ },
-    );
+    if (resumeExecutionId) {
+      executionIdRef.current = resumeExecutionId;
+      todayApi.resume(resumeExecutionId).catch(() => { /* 실패해도 진행 */ });
+    } else {
+      todayApi.start(task.id).then(
+        (e) => { if (!cancelled) executionIdRef.current = e.executionId; },
+        () => { /* 미구현/실패 — 그냥 진행 */ },
+      );
+    }
     return () => { cancelled = true; };
-  }, [task?.id]);
+  }, [task?.id, resumeExecutionId]);
 
   // task 없이 잘못 마운트된 경우 — 빈 흰 화면 대신 명확한 안내 + 뒤로가기.
   if (!task) {
@@ -45,6 +54,7 @@ export function FocusScreen({ task, elapsedMin, totalMin, onPause, onComplete, o
   const handlePause = () => {
     if (executionIdRef.current) {
       todayApi.pause(executionIdRef.current).catch(() => {});
+      onPaused?.(executionIdRef.current);
     }
     onPause();
   };

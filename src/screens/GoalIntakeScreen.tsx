@@ -207,6 +207,10 @@ export function GoalIntakeScreen({ onDone }: GoalIntakeScreenProps) {
     (currentQuestion.answerType === 'chip' || currentQuestion.answerType === 'select') &&
     currentQuestion.options.length > 0;
 
+  // 자유서술 슬롯: 고정 보기가 없을 때만 LLM 추천 답변(suggestedAnswers)을 참고 카드로 노출.
+  // 탭하면 입력창을 채워 사용자가 수정 후 보낼 수 있게 한다 (auto-submit 아님, 참고용).
+  const suggestions = (!showQuickReplies && currentQuestion?.suggestedAnswers) || [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--surface-ground)' }}>
       {/* Header */}
@@ -318,7 +322,34 @@ export function GoalIntakeScreen({ onDone }: GoalIntakeScreenProps) {
                 ))}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 8, marginTop: showQuickReplies ? 4 : 0 }}>
+            {suggestions.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInputText(s)}
+                    disabled={isTyping}
+                    style={{
+                      padding: '7px 11px',
+                      borderRadius: 9999,
+                      border: '1.5px dashed var(--sand-200)',
+                      background: 'transparent',
+                      color: 'var(--text-2)',
+                      fontSize: 12,
+                      textAlign: 'left',
+                      cursor: isTyping ? 'wait' : 'pointer',
+                      lineHeight: 1.4,
+                      fontFamily: 'inherit',
+                      wordBreak: 'keep-all',
+                      opacity: isTyping ? 0.6 : 1,
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: showQuickReplies || suggestions.length > 0 ? 4 : 0 }}>
               <input
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
