@@ -56,7 +56,7 @@ function BlockEditSheet({ block, existingGoals, onSave, onDelete, onClose }: { b
     return arr;
   })();
   const DURS = [15, 30, 45, 60, 90, 120];
-  // 목표 선택지는 하드코딩된 이름 대신 지금 계획에 실제로 있는 카테고리에서 뽑는다(#84).
+  // 목표 선택지는 하드코딩된 이름 대신 지금 계획에 실제로 있는 카테고리에서 뽑는다(#85).
   const GOALS = Array.from(new Set([...existingGoals, block.goal].filter((g): g is string => !!g)));
 
   return (
@@ -146,7 +146,7 @@ export function WeeklyCalendarScreenV2() {
 
 
   // 이번 주 / 다음 주 모두 /plans/weekly(#21) 실데이터로 채워진다 — fetch 전엔
-  // 스켈레톤(planLoading), 실패해도 예시 대신 빈 상태 + 정직 배너를 보여준다(#84).
+  // 스켈레톤(planLoading), 실패해도 예시 대신 빈 상태 + 정직 배너를 보여준다(#85).
   const [thisWeekBlocks, setThisWeekBlocks] = useState<BlockWithStatus[]>([]);
   const [nextWeekBlocks, setNextWeekBlocks] = useState<BlockWithStatus[]>([]);
   // 활성 주차의 블록/세터로 별칭 — 아래 편집 로직(setBlocks)이 그대로 동작.
@@ -214,7 +214,7 @@ export function WeeklyCalendarScreenV2() {
 
   // 그리드 렌더 범위는 "시작 시간" 선택지(07:00~22:00, 위 BlockEditSheet.HOURS)를
   // 전부 담아야 한다 — 좁으면 그 범위 밖 블록이 y<0 으로 아예 렌더 자체가 안 돼
-  // 시간표에서 통째로 사라진다(#84: 09~11시 블록이 시간표에 하나도 안 보이던 문제).
+  // 시간표에서 통째로 사라진다(#85: 09~11시 블록이 시간표에 하나도 안 보이던 문제).
   const START_H = 6, END_H = 24;
   const HOUR_PX = 56;
   const COL_W = 50;
@@ -402,7 +402,7 @@ export function WeeklyCalendarScreenV2() {
   };
   const addBlock = () => {
     const id = 'new-' + Date.now();
-    // 기본 목표는 하드코딩된 이름 대신 지금 계획에 있는 첫 카테고리를 재사용(#84).
+    // 기본 목표는 하드코딩된 이름 대신 지금 계획에 있는 첫 카테고리를 재사용(#85).
     const defaultGoal = blocks.find((b) => b.goal)?.goal ?? '기타';
     const newBlock: BlockWithStatus = { id, day: TODAY, time: '14:00', dur: 60, title: '새 블록', goal: defaultGoal, status: 'pending' };
     setBlocks((bs) => [...bs, newBlock]);

@@ -41,7 +41,7 @@ function BlockEditSheet({ block, existingGoals, onSave, onDelete, onClose }: { b
 
   const HOURS = ['09:00','10:00','11:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','21:30','22:00'];
   const DURS = [30, 45, 60, 90, 120];
-  // 목표 선택지는 하드코딩된 이름 대신 지금 계획에 실제로 있는 카테고리에서 뽑는다(#84).
+  // 목표 선택지는 하드코딩된 이름 대신 지금 계획에 실제로 있는 카테고리에서 뽑는다(#85).
   // 편집 중인 블록 자신의 goal 은 목록에 없어도 항상 포함시켜 선택 해제되지 않게 한다.
   const GOALS = Array.from(new Set([...existingGoals, block.goal].filter((g): g is string => !!g)));
 
@@ -174,7 +174,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
 
   // 그리드 렌더 범위는 "시작 시간" 선택지(09:00~22:00, 위 BlockEditSheet.HOURS)를
   // 전부 담아야 한다 — 좁으면 그 범위 밖 블록이 y<0 으로 아예 렌더 자체가 안 돼
-  // 시간표에서 통째로 사라진다(#84: 09~11시 블록이 시간표에 하나도 안 보이던 문제).
+  // 시간표에서 통째로 사라진다(#85: 09~11시 블록이 시간표에 하나도 안 보이던 문제).
   const START_H = 6, END_H = 24;
   const HOUR_PX = 50;
   const COL_W = 48;
@@ -191,7 +191,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   const handleDelete = (id: string) => { setBlocks((bs) => bs.filter((b) => b.id !== id)); setEditing(null); };
   const addBlock = () => {
     const id = 'new-' + Date.now();
-    // 기본 목표는 하드코딩된 이름 대신 지금 계획에 있는 첫 카테고리를 재사용(#84).
+    // 기본 목표는 하드코딩된 이름 대신 지금 계획에 있는 첫 카테고리를 재사용(#85).
     const defaultGoal = blocks.find((b) => b.goal)?.goal ?? '기타';
     const newBlock: Block = { id, day: 0, time: '14:00', dur: 60, title: '새 블록', goal: defaultGoal };
     setBlocks((bs) => [...bs, newBlock]);
