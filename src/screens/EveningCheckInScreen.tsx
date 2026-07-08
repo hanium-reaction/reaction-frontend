@@ -8,12 +8,6 @@ interface EveningCheckInScreenProps {
   onDone: () => void;
 }
 
-// 백엔드 미동작/오류 시 보여줄 더미 — 화면이 비어 깨지지 않도록 fallback.
-const FALLBACK_PENDING: ReflectionPendingItem[] = [
-  { executionId: 'demo-1', actionItemId: 'demo-a1', title: 'GROUP BY / HAVING 실습', scheduledDate: '2026-07-07', scheduledTime: '21:00', completionStatus: null },
-  { executionId: 'demo-2', actionItemId: 'demo-a2', title: '알고리즘 문제 2개', scheduledDate: '2026-07-06', scheduledTime: '14:00', completionStatus: null },
-];
-
 // YYYY-MM-DD → 오늘/어제/그제 상대 라벨 (최근 3일 회고 대상이라 그 범위만 다룬다).
 function relDayLabel(dateStr: string): string {
   const today = new Date();
@@ -38,10 +32,10 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
   const [energy, setEnergy] = useState<number | null>(null);
 
   // GET /reflection/pending (#83) 은 백엔드 구현됨 — 최근 3일 미체크(in_progress) 실행을
-  // 실데이터로 보여준다. 실패/미동작 시에만 더미로 fallback 하고 DemoNotice 를 띄운다.
+  // 실데이터로 보여준다. 실패 시 더미로 가리지 않고 빈 목록 + 안내로 정직하게(목업 제거 방침).
   // /reflection/batch 저장은 이 화면이 에너지 1종만 모아 계약(executionId·completionStatus)에
   // 안 맞아 아직 로컬 흐름만 유지한다(#82).
-  const [pending, setPending] = useState<ReflectionPendingItem[]>(FALLBACK_PENDING);
+  const [pending, setPending] = useState<ReflectionPendingItem[]>([]);
   const [usingRealPending, setUsingRealPending] = useState(false);
   const [pendingLoading, setPendingLoading] = useState(true);
 
@@ -50,11 +44,11 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
     reflectionApi.pending().then(
       (items) => {
         if (cancelled) return;
-        // fetch 성공 = 연동됨. 비어있어도 실데이터로 처리 — 더미로 가리지 않는다.
+        // fetch 성공 = 연동됨. 비어있어도 실데이터로 처리한다.
         setUsingRealPending(true);
         setPending(items);
       },
-      () => { /* 네트워크/미동작 — 더미 그대로, usingRealPending=false */ },
+      () => { /* 네트워크/미동작 — 빈 목록 유지 + 아래 안내 배너 */ },
     ).finally(() => { if (!cancelled) setPendingLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -120,8 +114,9 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
       <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>오늘 하루 어땠나요?</h2>
       <p style={{ fontSize: 13, color: 'var(--text-2)' }}>에너지 상태를 기록하면 내일 계획에 반영해요.</p>
 
-      {/* 최근 3일 미체크(in_progress) 실행 — GET /reflection/pending 실연동 (#83) */}
-      {!(usingRealPending && pending.length === 0) && (
+      {/* 최근 3일 미체크(in_progress) 실행 — GET /reflection/pending 실연동 (#83).
+          로딩 중이거나 실제 항목이 있을 때만 박스를 띄우고, 실패 시엔 더미 없이 안내만. */}
+      {(pendingLoading || pending.length > 0) && (
         <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>아직 체크인하지 않은 실행</div>
@@ -144,12 +139,12 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
               ))}
             </div>
           )}
-          {!pendingLoading && !usingRealPending && (
-            <DemoNotice storageKey="evening-pending">
-              미체크 실행 목록은 아직 불러오지 못했어요. 예시 데이터를 보여드리고 있어요.
-            </DemoNotice>
-          )}
         </div>
+      )}
+      {!pendingLoading && !usingRealPending && (
+        <DemoNotice storageKey="evening-pending">
+          미체크 실행 목록을 불러오지 못했어요.
+        </DemoNotice>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
