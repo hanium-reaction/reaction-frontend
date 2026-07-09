@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Sparkle, ArrowUp, Archive, TreeStructure, ListChecks } from '@phosphor-icons/react';
+import { Sparkle, ArrowUp, Archive, TreeStructure, ListChecks, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { friendlyError, inboxApi } from '../lib/api';
 import { Segmented } from '../components/Segmented';
 import type { InboxItem, InboxStatus } from '../types/api';
@@ -100,6 +100,17 @@ export function InboxScreen() {
     }
   };
 
+  // 보관 취소(#125) — archived → 활성(classified/captured) 복원. 서버가 복원된 항목을 돌려준다.
+  const restore = async (id: string) => {
+    setError(null);
+    try {
+      applyUpdate(await inboxApi.restore(id));
+    } catch (err: unknown) {
+      const msg = friendlyError(err, '복원하지 못했어요.');
+      setError(msg);
+    }
+  };
+
   const convertToGoal = async (id: string) => {
     setError(null);
     try {
@@ -179,6 +190,8 @@ export function InboxScreen() {
         {visibleItems.map((it) => {
           const status = (it.status in STATUS_META ? it.status : 'captured') as InboxStatus;
           const meta = STATUS_META[status];
+          // 승격 대상 구분(#125): 액션으로 올린 항목은 '할 일로' 로 표기.
+          const statusLabel = status === 'promoted' && it.promotedTo === 'action' ? '할 일로' : meta.label;
           return (
             <div
               key={it.inboxId}
@@ -187,7 +200,7 @@ export function InboxScreen() {
               <div style={{ fontSize: 13, color: 'var(--text-1)', lineHeight: 1.5 }}>{it.rawText}</div>
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ height: 'var(--ctrl-xs)', padding: '0 8px', borderRadius: 9999, background: meta.bg, border: `1px solid ${meta.bd}`, fontSize: 10, fontWeight: 700, color: meta.fg, fontFamily: 'var(--font-mono)', display: 'inline-flex', alignItems: 'center' }}>
-                  {meta.label}
+                  {statusLabel}
                 </span>
                 {it.aiCategoryGuess && (
                   <span style={{ height: 'var(--ctrl-xs)', padding: '0 8px', borderRadius: 9999, background: 'var(--sand-100)', border: '1px solid var(--sand-200)', fontSize: 10, color: 'var(--text-2)', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -219,6 +232,16 @@ export function InboxScreen() {
                     title="보관"
                   >
                     <Archive size={13} />
+                  </button>
+                )}
+                {status === 'archived' && (
+                  <button
+                    onClick={() => restore(it.inboxId)}
+                    style={{ height: 26, padding: '0 10px', borderRadius: 9999, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-2)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    aria-label="복원"
+                    title="보관 취소"
+                  >
+                    <ArrowCounterClockwise size={11} weight="bold" /> 복원
                   </button>
                 )}
               </div>

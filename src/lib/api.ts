@@ -381,6 +381,10 @@ export const inboxApi = {
   // soft delete (status=archived, 204 No Content)
   archive: (inboxId: string) =>
     request<void>(`/inbox/${inboxId}/archive`, { method: 'POST', body: {} }),
+
+  // 보관 취소 (#125) — archived_at 클리어 + status 활성 복원. 멱등, 없으면 404.
+  restore: (inboxId: string) =>
+    request<InboxItem>(`/inbox/${inboxId}/restore`, { method: 'POST', body: {} }),
 };
 
 // ── Habits (S27) ──────────────────────────────────────────────

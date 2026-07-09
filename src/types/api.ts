@@ -260,6 +260,8 @@ export interface InboxItem {
   userCategory: string | null;
   status: InboxStatus | string;
   promotedGoalId: string | null;
+  // 승격 대상 구분(#125): goal(→목표) / action(→액션) / null(미승격).
+  promotedTo?: 'goal' | 'action' | null;
 }
 
 export interface InboxCreateRequest {
@@ -599,6 +601,7 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  scope?: 'week' | 'horizon'; // 생성 범위 (기본 horizon — 전체 지평선)
 }
 
 // POST /plans/{planId}/approve
@@ -642,6 +645,8 @@ export interface WeeklyPlanResponse {
 export interface BlockEditRequest {
   startAt: string; // KST ISO
   endAt?: string | null;
+  title?: string | null;    // 블록 제목 수정
+  category?: string | null; // 블록 카테고리 수정
 }
 export interface BlockEditResponse {
   blockId: string;
