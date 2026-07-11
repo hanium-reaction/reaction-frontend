@@ -712,6 +712,43 @@ export interface UserSettings {
   timezone: string;
 }
 
+// ── 지속형 프로필 메모리 (GET/PATCH /settings/profile) — #A-1·A-2 ──
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number;
+  timeChunkPreference: string;
+  preferredStartTime: string | null;
+  preferredEndTime: string | null;
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: string;
+  explanationDepth: string;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileSettings {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin: number | null; // 회복 시 최소 단위(분)
+  restOk: boolean | null; // 회복 시 휴식 제안 수용
+}
+
+export interface ProfileUpdate {
+  energyCycle?: EnergyCycle;
+  attentionSpan?: number;
+  timeChunkPreference?: string;
+  recoveryTone?: RecoveryTone;
+  reminderFrequency?: ReminderFrequency;
+  downscopeUnitMin?: number;
+  restOk?: boolean;
+}
+
 export interface ToneModeUpdateRequest {
   toneMode: ToneMode;
 }

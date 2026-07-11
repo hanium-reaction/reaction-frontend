@@ -1,9 +1,37 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Waveform } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import type {
+  ConsentRecord,
+  ConsentType,
+  EnergyCycle,
+  ProfileSettings,
+  ProfileUpdate,
+  RecoveryTone,
+  ReminderFrequency,
+  ToneMode,
+  UserSettings,
+} from '../types/api';
+
+const ENERGY_OPTIONS: { v: EnergyCycle; label: string }[] = [
+  { v: 'morning', label: '오전' },
+  { v: 'afternoon', label: '오후' },
+  { v: 'evening', label: '저녁' },
+  { v: 'night', label: '심야' },
+  { v: 'varies', label: '변동' },
+];
+const RECOVERY_OPTIONS: { v: RecoveryTone; label: string }[] = [
+  { v: 'gentle', label: '부드럽게' },
+  { v: 'normal', label: '보통' },
+  { v: 'encouraging', label: '응원' },
+];
+const REMINDER_OPTIONS: { v: ReminderFrequency; label: string }[] = [
+  { v: 'minimal', label: '최소' },
+  { v: 'standard', label: '보통' },
+  { v: 'active', label: '적극' },
+];
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -20,6 +48,7 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [profile, setProfile] = useState<ProfileSettings | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -37,6 +66,10 @@ export function SettingsScreen() {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
         }
       },
+    );
+    settingsApi.getProfile().then(
+      (p) => { if (!cancelled) setProfile(p); },
+      () => { /* 미구현/네트워크 — 프로필 섹션 숨김 */ },
     );
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
@@ -61,6 +94,16 @@ export function SettingsScreen() {
       showToast('톤이 바뀌었어요');
     } catch (err) {
       if (err instanceof ApiError) showToast('서버 미동작 — 로컬에만 적용');
+    }
+  };
+
+  const patchProfile = async (patch: ProfileUpdate) => {
+    try {
+      const updated = await settingsApi.updateProfile(patch);
+      setProfile(updated); // 서버가 병합된 전체 프로필을 돌려줌 (진실 소스)
+      showToast('저장했어요');
+    } catch (err) {
+      if (err instanceof ApiError) showToast('저장에 실패했어요');
     }
   };
 
@@ -162,6 +205,51 @@ export function SettingsScreen() {
             })}
           </div>
         </section>
+
+        {/* 프로필 메모리 (리듬/선호) — 인터뷰가 채운 값을 재인터뷰 없이 편집 (#A-2) */}
+        {profile && (
+          <section>
+            <SectionLabel icon={<Waveform size={11} weight="fill" />}>나의 리듬 (프로필)</SectionLabel>
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <ChoiceGroup
+                label="주로 집중되는 시간대"
+                options={ENERGY_OPTIONS}
+                value={profile.behavioral?.energyCycle}
+                onPick={(v) => patchProfile({ energyCycle: v })}
+              />
+              <MinuteField
+                label="한 번에 집중하는 길이"
+                value={profile.behavioral?.attentionSpan}
+                onSave={(n) => patchProfile({ attentionSpan: n })}
+              />
+              <ChoiceGroup
+                label="회복 대화 톤"
+                options={RECOVERY_OPTIONS}
+                value={profile.interaction?.recoveryTone}
+                onPick={(v) => patchProfile({ recoveryTone: v })}
+              />
+              <ChoiceGroup
+                label="알림 빈도"
+                options={REMINDER_OPTIONS}
+                value={profile.interaction?.reminderFrequency}
+                onPick={(v) => patchProfile({ reminderFrequency: v })}
+              />
+              <MinuteField
+                label="회복 시 최소 단위 (막혔을 때 이만큼만 해보기)"
+                value={profile.downscopeUnitMin ?? undefined}
+                onSave={(n) => patchProfile({ downscopeUnitMin: n })}
+              />
+              <ToggleRow
+                label="지칠 땐 휴식 제안 받기"
+                on={profile.restOk ?? false}
+                onToggle={() => patchProfile({ restOk: !(profile.restOk ?? false) })}
+              />
+              <div style={{ fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                온보딩 인터뷰에서 파악한 값이에요. 여기서 바꾸면 인터뷰를 다시 하지 않아도 반영돼요.
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Push */}
         <section>
@@ -268,6 +356,123 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+// 사람마다 다른 '분' 값 — 고정 선택지 대신 자유 수정 입력(스텝 5분 · 5~240 범위).
+function MinuteField({
+  label,
+  value,
+  onSave,
+}: {
+  label: string;
+  value: number | undefined;
+  onSave: (n: number) => void;
+}) {
+  const [text, setText] = useState(value != null ? String(value) : '');
+  useEffect(() => {
+    setText(value != null ? String(value) : '');
+  }, [value]);
+
+  const clamp = (n: number) => Math.min(240, Math.max(5, n));
+  const commit = () => {
+    const n = parseInt(text, 10);
+    if (!Number.isNaN(n)) {
+      const c = clamp(n);
+      if (c !== value) onSave(c);
+      else setText(String(c));
+    } else {
+      setText(value != null ? String(value) : ''); // 무효 입력 되돌림
+    }
+  };
+  const bump = (delta: number) => onSave(clamp((value ?? 30) + delta));
+
+  const stepBtn = (labelTxt: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      style={{ width: 34, height: 'var(--ctrl-sm)', borderRadius: 9, border: '1.5px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-1)', fontSize: 16, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1 }}
+    >
+      {labelTxt}
+    </button>
+  );
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 7 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {stepBtn('−', () => bump(-5))}
+        <input
+          type="number"
+          inputMode="numeric"
+          value={text}
+          min={5}
+          max={240}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          style={{ width: 64, height: 'var(--ctrl-sm)', textAlign: 'center', borderRadius: 9, border: '1.5px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-1)', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', outline: 'none' }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>분</span>
+        {stepBtn('+', () => bump(5))}
+      </div>
+    </div>
+  );
+}
+
+function ToggleRow({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+    >
+      <div style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{label}</div>
+      <Toggle on={on} />
+    </button>
+  );
+}
+
+function ChoiceGroup<T extends string | number>({
+  label,
+  options,
+  value,
+  onPick,
+}: {
+  label: string;
+  options: { v: T; label: string }[];
+  value: T | undefined;
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 7 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {options.map((o) => {
+          const active = value === o.v;
+          return (
+            <button
+              key={String(o.v)}
+              onClick={() => onPick(o.v)}
+              style={{
+                height: 'var(--ctrl-sm)',
+                padding: '0 13px',
+                borderRadius: 9999,
+                border: `1.5px solid ${active ? 'var(--brand)' : 'var(--sand-200)'}`,
+                background: active ? 'var(--brand-soft)' : 'var(--surface-raised)',
+                color: active ? 'var(--brand)' : 'var(--text-2)',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

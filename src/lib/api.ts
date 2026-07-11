@@ -59,6 +59,8 @@ import type {
   ToneModeUpdateRequest,
   UserProfile,
   UserSettings,
+  ProfileSettings,
+  ProfileUpdate,
   HabitPenaltyAcceptResponse,
   HabitPenaltyListResponse,
   WeeklyGenerateRequest,
@@ -552,6 +554,11 @@ export const settingsApi = {
 
   updateToneMode: (body: ToneModeUpdateRequest) =>
     request<UserSettings>('/settings/tone-mode', { method: 'PATCH', body }),
+
+  // 지속형 프로필 메모리 — 인터뷰가 채운 에너지/톤/시간을 조회·편집 (#A-2).
+  getProfile: () => request<ProfileSettings>('/settings/profile'),
+  updateProfile: (body: ProfileUpdate) =>
+    request<ProfileSettings>('/settings/profile', { method: 'PATCH', body }),
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
