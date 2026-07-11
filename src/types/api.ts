@@ -597,10 +597,14 @@ export interface FirstPlanResponse {
 }
 
 // POST /plans/generate 요청 본문 (모두 선택 — 서버가 인터뷰 결과로 보완).
+// 계획 분량(밀도) 프리셋 — 재생성 시 사용자가 조절. light≈주3 / standard≈주5 / intense≈주8 세션.
+export type PlanDensity = 'light' | 'standard' | 'intense';
+
 export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  density?: PlanDensity; // 생략 시 서버 기본값 'standard'
 }
 
 // POST /plans/{planId}/approve

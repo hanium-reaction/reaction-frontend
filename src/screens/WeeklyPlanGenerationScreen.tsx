@@ -9,7 +9,7 @@ import { ApiError, plansApi } from '../lib/api';
 import { localDateStr } from '../lib/dates';
 import { useNavigation } from '../contexts/NavigationContext';
 import type { Block } from '../types';
-import type { FirstPlanGenerateRequest, ScheduledBlockPreview, WeeklyPlanResponse } from '../types/api';
+import type { FirstPlanGenerateRequest, PlanDensity, ScheduledBlockPreview, WeeklyPlanResponse } from '../types/api';
 
 // 이미 저장된 이번 주 계획(GET /plans/weekly) → 화면 Block. 온보딩 4/4 에서 새 draft
 // 뒤에 흐리게 겹쳐 보여줘 "기존 계획이 사라진 것처럼" 보이는 오해를 없앤다(#103).
@@ -131,6 +131,11 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   const [usingRealPlan, setUsingRealPlan] = useState(false);
   // 라이브 호출을 실제로 시도했으나 실패했는지 — 배너 문구를 정직하게 맞추는 용도.
   const [genFailed, setGenFailed] = useState(false);
+  // 계획 분량(밀도) — 재생성 시 body.density 로 전달. ref 로 최신값을 읽어 generatePlan
+  // 콜백의 deps 를 바꾸지 않는다(density 변경만으로 자동 재생성되지 않게).
+  const [density, setDensity] = useState<PlanDensity>('standard');
+  const densityRef = React.useRef(density);
+  densityRef.current = density;
   // 응답의 aiSource — 'rule' 이면 AiDraftCard 가 "오프라인 모드(룰 기반)" 안내를 띄운다(#12).
   const [planAiSource, setPlanAiSource] = useState<'llm' | 'rule'>('llm');
   // 응답의 warnings[] — 스케줄러가 남긴 경고(예: 슬롯 부족) 헤더 표시(#6).
@@ -182,7 +187,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     const attempt = async (): Promise<void> => {
       for (let i = 0; i < 3; i++) {
         try {
-          const plan = await plansApi.generate(generateInput, key);
+          const plan = await plansApi.generate({ ...generateInput, density: densityRef.current }, key);
           planIdRef.current = plan.planId;
           // 200 응답 = 연동 성공. 블록이 0개여도 '예시'가 아니라 '아직 계획 없음'인
           // 실데이터다 — 더미로 가리지 않고 그대로 반영한다.
@@ -451,6 +456,44 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
           onAccept 은 우리 handleContinue (plansApi.approve mock-and-replace 포함) 사용.
           onReject 는 generating=true 로 되돌려 useEffect 의 plansApi.generate 재호출. */}
       <div style={{ flexShrink: 0, padding: '10px 14px', paddingBottom: 'max(14px, env(safe-area-inset-bottom, 14px))', background: 'var(--surface-ground)' }}>
+        {/* 계획 분량(밀도) 선택 — '재생성' 시 body.density 로 전달돼 생성되는 카드 수를 좌우한다.
+            선택만으로는 재생성하지 않는다(아래 재생성 버튼을 눌러야 반영). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-3)', flexShrink: 0 }}>계획 분량</span>
+          <div style={{ display: 'inline-flex', gap: 3, background: 'rgba(0,0,0,0.05)', borderRadius: 9999, padding: 3 }}>
+            {(
+              [
+                ['light', '가볍게'],
+                ['standard', '표준'],
+                ['intense', '촘촘히'],
+              ] as [PlanDensity, string][]
+            ).map(([val, label]) => {
+              const active = density === val;
+              return (
+                <button
+                  key={val}
+                  onClick={() => setDensity(val)}
+                  disabled={generating}
+                  style={{
+                    height: 'var(--ctrl-xs)',
+                    padding: '0 12px',
+                    borderRadius: 9999,
+                    border: 'none',
+                    cursor: generating ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: active ? 'var(--text-1)' : 'transparent',
+                    color: active ? '#FAF6EE' : 'var(--text-2)',
+                    transition: 'background 120ms, color 120ms',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <AiDraftCard
           isDraft={true}
           aiSource={planAiSource}
