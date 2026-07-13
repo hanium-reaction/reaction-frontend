@@ -601,6 +601,7 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  scope?: 'week' | 'horizon'; // 계획 범위 — 생략 시 서버 기본값 'horizon'(전체 계획).
 }
 
 // POST /plans/{planId}/approve
@@ -648,12 +649,14 @@ export interface BlockEditRequest {
   title?: string | null;
 }
 export interface BlockEditResponse {
+  actionId: string;
   blockId: string;
   startAt: string;
-  endAt: string | null;
-  blockStatus?: string;
-  category?: string | null;
-  title?: string | null;
+  endAt: string;
+  blockStatus: string;
+  category: string; // 갱신된 목표 카테고리(서버 정규화 완료 값)
+  title: string;
+  source: string;
   goalId?: string | null;
 }
 
