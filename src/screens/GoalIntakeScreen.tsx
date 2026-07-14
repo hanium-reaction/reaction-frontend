@@ -21,7 +21,7 @@ interface ChatMessage {
 // 백엔드 mock은 필수 슬롯 12개 → ambiguityScore 0 ~ 12.
 // 답변할수록 줄어드므로 (1 - score/initial) * 100 으로 명료성 환산.
 // /interview/slot-catalog 가 응답하기 전(fetch 실패 포함) 의 안전 기본값.
-const REQUIRED_SLOTS_INIT = 12;
+const REQUIRED_SLOTS_INIT = 14;
 
 // slot-catalog 의 category 식별자 → 한국어 라벨 (chip 표시용).
 const CATEGORY_LABEL: Record<string, string> = {
