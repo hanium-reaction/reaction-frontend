@@ -601,6 +601,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 계획 분량 프리셋(#129) — 재생성 시 사용자 조절. 기본 'standard'.
+  density?: 'light' | 'standard' | 'intense';
+  // 계획 범위(#129) — 'week'(이번 주만) / 'horizon'(목표 기한까지). 기본 'horizon'.
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve
