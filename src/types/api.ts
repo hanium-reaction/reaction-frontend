@@ -716,6 +716,52 @@ export interface AnonymizeRequest {
   confirmationToken: string;
 }
 
+// ── Profile Memory (GET/PATCH /settings/profile) — 백엔드 구현됨 ──
+// 지속형 프로필 메모리: 에너지/시간(behavioral) + 톤/빈도(interaction) + 회복 선호.
+// 인터뷰가 아직 안 채웠으면 해당 항목 null (행/키를 생성하지 않는다).
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number;
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  // 회복 선호 — users.focus_mode_preferences(JSONB) 출처.
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH — 지정 필드만 부분 갱신(미지정은 유지). enum 외 값은 422 COMMON_VALIDATION_ERROR.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle | null;
+  attentionSpan?: number | null; // 5~240
+  timeChunkPreference?: TimeChunkPreference | null;
+  recoveryTone?: RecoveryTone | null;
+  suggestionStyle?: SuggestionStyle | null;
+  explanationDepth?: ExplanationDepth | null;
+  reminderFrequency?: ReminderFrequency | null;
+  downscopeUnitMin?: number | null; // 1~120
+  restOk?: boolean | null;
+}
+
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
 
 export interface ConsentRecord {

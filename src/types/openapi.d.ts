@@ -427,7 +427,10 @@ export interface paths {
         };
         /**
          * List Inbox
-         * @description 내 inbox 항목. `?status=captured|classified|promoted` 필터.
+         * @description 내 inbox 항목. `?status=captured|classified|promoted|archived` 필터.
+         *
+         *     `status` 미지정 시 활성 항목(archived 제외)만. `status=archived` 는 보관함(soft-deleted)
+         *     조회 — `POST /inbox/{id}/restore` 로 되살릴 수 있다.
          */
         get: operations["list_inbox_inbox_get"];
         put?: never;
@@ -516,6 +519,29 @@ export interface paths {
          * @description Inbox → Goal 변환 (tier=maintain default, 한도 enforce). inbox.status=promoted.
          */
         post: operations["convert_to_goal_inbox__inbox_id__convert_to_goal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/{inbox_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Inbox
+         * @description 보관 취소 — `archived_at` 클리어 + status 를 활성(classified/captured)으로 복원.
+         *
+         *     보관함(`status=archived`)에서만 의미. 이미 활성이면 멱등(현재 상태 그대로 반환).
+         *     존재하지 않으면 404 `INBOX_NOT_FOUND`. hard delete 는 없으므로 언제든 되살릴 수 있다.
+         */
+        post: operations["restore_inbox_inbox__inbox_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -807,6 +833,20 @@ export interface paths {
          *     절대 시간 정책 위반 시 롤백 → 422 `PLAN_POLICY_VIOLATION`, 그 외 실패는 롤백 후 500
          *     `PLAN_SAVE_FAILED`. 만료된 Draft 는 410 `PLAN_DRAFT_EXPIRED`. 이미 승인된 Draft 는 멱등.
          *
+         *     승인 = 교체: 같은 target_date 의 이전 AI 계획 산출물 중 사용자가 손대지 않은
+         *     카드(source=goal·status=planned, user_edit 블록 없는 것)와 그 블록을 soft 정리
+         *     (archived/cancelled)하고, heaviest goal 의 기존 분해 트리도 보관한 뒤 새 계획을
+         *     영속화한다 — 재생성→재승인 반복으로 같은 날짜에 카드/블록/노드가 겹겹이 누적되던
+         *     문제 방지 (`first_plan_adapter.supersede_previous_plan`).
+         *
+         *     동시성(더블클릭·다중 디바이스 동시 승인): advisory lock 은 **트랜잭션 스코프**
+         *     (`pg_advisory_xact_lock`) 라 commit/rollback 마다 풀린다. 그래서 시도(attempt)마다
+         *     lock 을 새로 잡고, Draft 로드·만료·멱등 검사 → 영속화 → Draft 승인 마킹·온보딩
+         *     전이(`on_success` — 가드 트랜잭션 내부)까지를 **한 트랜잭션 단일 commit** 으로 묶는다.
+         *     lock 이 풀리는 순간엔 항상 status=approved 가 이미 커밋돼 있어, 대기하던 요청은
+         *     멱등 응답으로 빠진다. 재시도(ADR-0005 §2.5.1, 3회)는 이 라우터 루프가 담당한다
+         *     (adapter 내부 재시도는 rollback 으로 lock 을 잃은 채 돌게 되므로 `max_retries=1`).
+         *
          *     부수 효과: 첫 계획 승인 = 온보딩 완료 → onboarding_state 를 `ACTIVE` 로 전이(멱등,
          *     어느 온보딩 단계에서든). 원설계(FIRST_PLAN → NOTIFICATIONS)는 실제 FE 흐름에서 상태가
          *     WELCOME 에 고정돼 새로고침 시 재-온보딩되던 문제가 있어 승인에서 ACTIVE 로 마감
@@ -835,7 +875,11 @@ export interface paths {
         head?: never;
         /**
          * Edit Block
-         * @description 블록 15분 snap 이동 (S15). 충돌 422 `PLAN_BLOCK_CONFLICT` / 정책 422 `POLICY_VIOLATION`.
+         * @description 블록 15분 snap 이동 + 목표(category)/제목 수정 (S15).
+         *
+         *     충돌 422 `PLAN_BLOCK_CONFLICT` / 정책 422 `POLICY_VIOLATION`. `category`/`title` 을 주면
+         *     블록이 매달린 action_item 을 갱신한다(같은 액션의 모든 세션 블록 공유). 정책 검사는
+         *     **변경된 category** 로 수행하고, 변경 반영은 성공 commit 시에만 영속된다(422 면 롤백).
          */
         patch: operations["edit_block_plans__plan_id__blocks__block_id__patch"];
         trace?: never;
@@ -1195,6 +1239,35 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/settings/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Profile
+         * @description 지속형 프로필 메모리 — 에너지/시간(behavioral) + 톤/빈도(interaction) + 회복 선호.
+         *
+         *     인터뷰가 아직 안 채웠으면 해당 항목 null (행/키를 생성하지 않는다).
+         */
+        get: operations["get_profile_settings_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Profile
+         * @description 프로필 메모리 부분 수정 — 지정 필드만 갱신(미지정 유지). 행/키 없으면 생성.
+         *
+         *     enum 검증은 스키마 Literal (그 외 값 → 422 `COMMON_VALIDATION_ERROR`).
+         *     회복 선호(downscopeUnitMin·restOk)는 `users.focus_mode_preferences`(JSONB)에 병합 저장.
+         */
+        patch: operations["update_profile_settings_profile_patch"];
         trace?: never;
     };
     "/settings/tone-mode": {
@@ -1603,16 +1676,44 @@ export interface components {
             peakWindow: string[];
         };
         /**
+         * BehavioralProfileView
+         * @description behavioral_profiles 의 사용자 편집 대상 필드.
+         */
+        BehavioralProfileView: {
+            /** Attentionspan */
+            attentionSpan: number;
+            /**
+             * Energycycle
+             * @enum {string}
+             */
+            energyCycle: "morning" | "afternoon" | "evening" | "night" | "varies";
+            /** Preferredendtime */
+            preferredEndTime?: string | null;
+            /** Preferredstarttime */
+            preferredStartTime?: string | null;
+            /**
+             * Timechunkpreference
+             * @enum {string}
+             */
+            timeChunkPreference: "10" | "20" | "30" | "60" | "90";
+        };
+        /**
          * BlockEditRequest
-         * @description PATCH /plans/{planId}/blocks/{blockId} — 15분 snap 이동.
+         * @description PATCH /plans/{planId}/blocks/{blockId} — 15분 snap 이동 + 목표(category)/제목 수정.
          *
          *     `endAt` 생략 시 기존 길이를 보존한 채 시작만 옮긴다. 시각은 KST ISO 8601.
+         *     `category`/`title` 을 주면 블록이 매달린 action_item 을 갱신한다 — 같은 액션의 모든
+         *     세션 블록에 반영되며, 미지원 category 는 'other' 로 정규화한다. 미지정 필드는 유지.
          */
         BlockEditRequest: {
+            /** Category */
+            category?: string | null;
             /** Endat */
             endAt?: string | null;
             /** Startat */
             startAt: string;
+            /** Title */
+            title?: string | null;
         };
         /**
          * BlockEditResponse
@@ -1901,9 +2002,21 @@ export interface components {
          *     검증은 라우터/오케스트레이터 VALIDATING 단계에서 수행.
          */
         FirstPlanGenerateRequest: {
+            /**
+             * Density
+             * @default standard
+             * @enum {string}
+             */
+            density: "light" | "standard" | "intense";
             /** Interviewsessionid */
             interviewSessionId?: string | null;
             outcome?: components["schemas"]["InterviewOutcome"] | null;
+            /**
+             * Scope
+             * @default horizon
+             * @enum {string}
+             */
+            scope: "week" | "horizon";
             /** Targetdate */
             targetDate?: string | null;
         };
@@ -2339,6 +2452,8 @@ export interface components {
             inboxId: string;
             /** Promotedgoalid */
             promotedGoalId: string | null;
+            /** Promotedto */
+            promotedTo?: ("goal" | "action") | null;
             /** Rawtext */
             rawText: string;
             /** Status */
@@ -2355,6 +2470,32 @@ export interface components {
             status?: ("captured" | "classified" | "archived" | "promoted") | null;
             /** Usercategory */
             userCategory?: ("study" | "project" | "health" | "routine" | "schedule" | "other") | null;
+        };
+        /**
+         * InteractionStyleView
+         * @description interaction_styles 의 사용자 편집 대상 필드.
+         */
+        InteractionStyleView: {
+            /**
+             * Explanationdepth
+             * @enum {string}
+             */
+            explanationDepth: "brief" | "normal" | "detailed";
+            /**
+             * Recoverytone
+             * @enum {string}
+             */
+            recoveryTone: "gentle" | "normal" | "encouraging";
+            /**
+             * Reminderfrequency
+             * @enum {string}
+             */
+            reminderFrequency: "minimal" | "standard" | "active";
+            /**
+             * Suggestionstyle
+             * @enum {string}
+             */
+            suggestionStyle: "soft" | "neutral" | "firm";
         };
         /**
          * InterviewOutcome
@@ -2599,6 +2740,47 @@ export interface components {
             restOk: boolean;
             /** Weeklyenergy */
             weeklyEnergy?: string | null;
+        };
+        /**
+         * ProfileResponse
+         * @description GET/PATCH /settings/profile — 지속형 프로필 메모리.
+         *
+         *     인터뷰가 아직 안 채웠으면 각 항목 null (행 없음).
+         *     `downscopeUnitMin`/`restOk` 는 회복 선호 — `users.focus_mode_preferences`(JSONB) 출처.
+         */
+        ProfileResponse: {
+            behavioral: components["schemas"]["BehavioralProfileView"] | null;
+            /** Downscopeunitmin */
+            downscopeUnitMin?: number | null;
+            interaction: components["schemas"]["InteractionStyleView"] | null;
+            /** Restok */
+            restOk?: boolean | null;
+        };
+        /**
+         * ProfileUpdateRequest
+         * @description PATCH /settings/profile — 지정 필드만 부분 갱신. 미지정(None)은 유지.
+         *
+         *     enum 외 값은 Pydantic Literal → 422 `COMMON_VALIDATION_ERROR`.
+         */
+        ProfileUpdateRequest: {
+            /** Attentionspan */
+            attentionSpan?: number | null;
+            /** Downscopeunitmin */
+            downscopeUnitMin?: number | null;
+            /** Energycycle */
+            energyCycle?: ("morning" | "afternoon" | "evening" | "night" | "varies") | null;
+            /** Explanationdepth */
+            explanationDepth?: ("brief" | "normal" | "detailed") | null;
+            /** Recoverytone */
+            recoveryTone?: ("gentle" | "normal" | "encouraging") | null;
+            /** Reminderfrequency */
+            reminderFrequency?: ("minimal" | "standard" | "active") | null;
+            /** Restok */
+            restOk?: boolean | null;
+            /** Suggestionstyle */
+            suggestionStyle?: ("soft" | "neutral" | "firm") | null;
+            /** Timechunkpreference */
+            timeChunkPreference?: ("10" | "20" | "30" | "60" | "90") | null;
         };
         /**
          * PushSubscribeRequest
@@ -4282,6 +4464,39 @@ export interface operations {
             };
         };
     };
+    restore_inbox_inbox__inbox_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                inbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_session_interview_sessions_post: {
         parameters: {
             query?: never;
@@ -5365,6 +5580,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnonymizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_settings_profile_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_settings_profile_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
                 };
             };
             /** @description Validation Error */

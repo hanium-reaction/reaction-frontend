@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { DemoNotice } from '../components/DemoNotice';
+import type { ConsentRecord, ConsentType, ProfileResponse, ToneMode, UserSettings } from '../types/api';
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -17,9 +18,36 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
   { type: 'analytics', label: '사용 분석', desc: '오류·성능 개선용' },
 ];
 
+// 프로필 메모리(/settings/profile) enum → 한국어 라벨. 인터뷰가 학습한 값을 읽기 전용으로 보여준다.
+const ENERGY_CYCLE_LABEL: Record<string, string> = {
+  morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '야간형', varies: '유동적',
+};
+const RECOVERY_TONE_LABEL: Record<string, string> = {
+  gentle: '부드럽게', normal: '보통', encouraging: '응원',
+};
+const SUGGESTION_STYLE_LABEL: Record<string, string> = {
+  soft: '부드러운 제안', neutral: '중립', firm: '단호한 제안',
+};
+const EXPLANATION_DEPTH_LABEL: Record<string, string> = {
+  brief: '간결', normal: '보통', detailed: '상세',
+};
+const REMINDER_FREQ_LABEL: Record<string, string> = {
+  minimal: '최소', standard: '표준', active: '적극',
+};
+
+// 백엔드 미동작(네트워크/오류) 시 보여줄 더미 — DemoNotice 와 함께 노출된다.
+const DUMMY_PROFILE: ProfileResponse = {
+  behavioral: { energyCycle: 'morning', attentionSpan: 45, timeChunkPreference: '30' },
+  interaction: { recoveryTone: 'gentle', suggestionStyle: 'soft', explanationDepth: 'normal', reminderFrequency: 'standard' },
+  downscopeUnitMin: 15,
+  restOk: true,
+};
+
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse>(DUMMY_PROFILE);
+  const [usingRealProfile, setUsingRealProfile] = useState(false);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -37,6 +65,12 @@ export function SettingsScreen() {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
         }
       },
+    );
+    // 프로필 메모리 — 실제 응답이 오면 더미를 대체하고 DemoNotice 를 숨긴다.
+    // 인터뷰 미완료면 behavioral/interaction 이 null 로 와도 그건 정직한 실제 상태다.
+    settingsApi.getProfile().then(
+      (p) => { if (!cancelled) { setProfile(p); setUsingRealProfile(true); } },
+      () => { /* 미동작 — 더미 유지, DemoNotice 노출 */ },
     );
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
@@ -163,6 +197,47 @@ export function SettingsScreen() {
           </div>
         </section>
 
+        {/* Profile memory — AI가 인터뷰로 학습한 값 (읽기 전용) */}
+        <section>
+          <SectionLabel icon={<Brain size={11} weight="fill" />}>AI가 기억하는 나</SectionLabel>
+          {!usingRealProfile && (
+            <div style={{ marginBottom: 8 }}>
+              <DemoNotice storageKey="profile-memory">
+                아직 프로필을 불러오지 못했어요. 예시 값을 보여주는 중이에요.
+              </DemoNotice>
+            </div>
+          )}
+          {usingRealProfile && !profile.behavioral && !profile.interaction ? (
+            <div style={{ padding: '12px 14px', background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 12, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+              인터뷰를 마치면 에너지 리듬·집중 시간·코칭 선호를 여기에 기억해 둬요.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {profile.behavioral && (
+                <>
+                  <ProfileChip label="에너지 리듬" value={ENERGY_CYCLE_LABEL[profile.behavioral.energyCycle] ?? profile.behavioral.energyCycle} />
+                  <ProfileChip label="집중 시간" value={`${profile.behavioral.attentionSpan}분`} />
+                  <ProfileChip label="선호 단위" value={`${profile.behavioral.timeChunkPreference}분`} />
+                </>
+              )}
+              {profile.interaction && (
+                <>
+                  <ProfileChip label="회복 톤" value={RECOVERY_TONE_LABEL[profile.interaction.recoveryTone] ?? profile.interaction.recoveryTone} />
+                  <ProfileChip label="제안 방식" value={SUGGESTION_STYLE_LABEL[profile.interaction.suggestionStyle] ?? profile.interaction.suggestionStyle} />
+                  <ProfileChip label="설명 깊이" value={EXPLANATION_DEPTH_LABEL[profile.interaction.explanationDepth] ?? profile.interaction.explanationDepth} />
+                  <ProfileChip label="알림 빈도" value={REMINDER_FREQ_LABEL[profile.interaction.reminderFrequency] ?? profile.interaction.reminderFrequency} />
+                </>
+              )}
+              {typeof profile.downscopeUnitMin === 'number' && (
+                <ProfileChip label="줄이기 단위" value={`${profile.downscopeUnitMin}분`} />
+              )}
+              {typeof profile.restOk === 'boolean' && (
+                <ProfileChip label="쉬어가기" value={profile.restOk ? '허용' : '비허용'} />
+              )}
+            </div>
+          )}
+        </section>
+
         {/* Push */}
         <section>
           <SectionLabel icon={<BellRinging size={11} weight="fill" />}>알림</SectionLabel>
@@ -268,6 +343,15 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+function ProfileChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '7px 11px', background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 9999 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 700 }}>{value}</span>
     </div>
   );
 }

@@ -40,6 +40,8 @@ import type {
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
+  ProfileResponse,
+  ProfileUpdateRequest,
   BlockEditRequest,
   BlockEditResponse,
   PushSubscribeRequest,
@@ -555,6 +557,13 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리 조회 — 인터뷰 미완료 항목은 null (backend#125).
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  // 프로필 메모리 부분 갱신 — 지정 필드만 반영, enum 외 값은 422.
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {
