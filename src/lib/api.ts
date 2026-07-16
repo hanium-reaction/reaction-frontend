@@ -57,6 +57,8 @@ import type {
   TimePolicy,
   TodayAgenda,
   ToneModeUpdateRequest,
+  ProfileResponse,
+  ProfileUpdateRequest,
   UserProfile,
   UserSettings,
   HabitPenaltyAcceptResponse,
@@ -555,6 +557,16 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+};
+
+// ── 선호 프로필 메모리 (#130·#133) — 인터뷰가 채운 지속형 선호. 구현됨. ──
+export const profileApi = {
+  // 인터뷰 미완료면 behavioral/interaction 이 null 로 온다(행 없음).
+  get: () => request<ProfileResponse>('/settings/profile'),
+
+  // 지정 필드만 부분 갱신(PATCH). 미지정은 유지. enum 외 값은 422.
+  update: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
-import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, SlidersHorizontal } from '@phosphor-icons/react';
+import { ApiError, notificationsApi, privacyApi, profileApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import type {
+  ConsentRecord,
+  ConsentType,
+  ExplanationDepth,
+  ProfileResponse,
+  ProfileUpdateRequest,
+  RecoveryTonePref,
+  ReminderFrequency,
+  SuggestionStyle,
+  ToneMode,
+  UserSettings,
+} from '../types/api';
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -17,6 +28,32 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
   { type: 'analytics', label: '사용 분석', desc: '오류·성능 개선용' },
 ];
 
+// 선호 프로필 (GET/PATCH /settings/profile) — 읽기 라벨 + 편집 보기.
+const ENERGY_LABELS: Record<string, string> = {
+  morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '야간형', varies: '들쭉날쭉',
+};
+
+const RECOVERY_TONE_OPTIONS: { value: RecoveryTonePref; label: string }[] = [
+  { value: 'gentle', label: '부드럽게' },
+  { value: 'normal', label: '보통' },
+  { value: 'encouraging', label: '응원' },
+];
+const SUGGESTION_STYLE_OPTIONS: { value: SuggestionStyle; label: string }[] = [
+  { value: 'soft', label: '가볍게' },
+  { value: 'neutral', label: '중립' },
+  { value: 'firm', label: '단호히' },
+];
+const EXPLANATION_DEPTH_OPTIONS: { value: ExplanationDepth; label: string }[] = [
+  { value: 'brief', label: '짧게' },
+  { value: 'normal', label: '보통' },
+  { value: 'detailed', label: '자세히' },
+];
+const REMINDER_FREQ_OPTIONS: { value: ReminderFrequency; label: string }[] = [
+  { value: 'minimal', label: '최소' },
+  { value: 'standard', label: '표준' },
+  { value: 'active', label: '적극' },
+];
+
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -26,6 +63,8 @@ export function SettingsScreen() {
   const [confirmAnonymize, setConfirmAnonymize] = useState(false);
   const [confirmRestartInterview, setConfirmRestartInterview] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // 선호 프로필 메모리 — 인터뷰 미완료면 null 유지(섹션 숨김).
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +84,11 @@ export function SettingsScreen() {
     getPushPermission().then((granted) => {
       if (!cancelled) setPushEnabled(granted);
     });
+    // 선호 프로필 — 있으면 표시, 미구현/미완료/실패면 섹션 숨김(데모 안전).
+    profileApi.get().then(
+      (p) => { if (!cancelled) setProfile(p); },
+      () => { /* null 유지 — 섹션 숨김 */ },
+    );
     return () => { cancelled = true; };
   }, [user]);
 
@@ -61,6 +105,21 @@ export function SettingsScreen() {
       showToast('톤이 바뀌었어요');
     } catch (err) {
       if (err instanceof ApiError) showToast('서버 미동작 — 로컬에만 적용');
+    }
+  };
+
+  // 상호작용 스타일 부분 갱신(PATCH). 낙관적 반영 후 실패 시 서버값으로 롤백.
+  const updateInteraction = async (patch: ProfileUpdateRequest) => {
+    if (!profile?.interaction) return;
+    const prev = profile;
+    setProfile({ ...profile, interaction: { ...profile.interaction, ...patch } as ProfileResponse['interaction'] });
+    try {
+      const next = await profileApi.update(patch);
+      setProfile(next);
+      showToast('선호가 저장됐어요');
+    } catch (err) {
+      setProfile(prev); // 롤백
+      if (err instanceof ApiError) showToast('서버 미동작 — 저장 안 됨');
     }
   };
 
@@ -162,6 +221,48 @@ export function SettingsScreen() {
             })}
           </div>
         </section>
+
+        {/* 선호 프로필 메모리 — 인터뷰가 채운 지속형 선호. 없으면 렌더 안 함. */}
+        {profile && (profile.behavioral || profile.interaction) && (
+          <section>
+            <SectionLabel icon={<SlidersHorizontal size={11} weight="fill" />}>내 선호</SectionLabel>
+            {profile.behavioral && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: profile.interaction ? 10 : 0 }}>
+                <ProfileChip label="에너지" value={ENERGY_LABELS[profile.behavioral.energyCycle] ?? profile.behavioral.energyCycle} />
+                <ProfileChip label="집중 지속" value={`${profile.behavioral.attentionSpan}분`} />
+                <ProfileChip label="선호 단위" value={`${profile.behavioral.timeChunkPreference}분`} />
+              </div>
+            )}
+            {profile.interaction && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Segmented
+                  label="회복 톤"
+                  options={RECOVERY_TONE_OPTIONS}
+                  value={profile.interaction.recoveryTone}
+                  onChange={(v) => updateInteraction({ recoveryTone: v })}
+                />
+                <Segmented
+                  label="제안 강도"
+                  options={SUGGESTION_STYLE_OPTIONS}
+                  value={profile.interaction.suggestionStyle}
+                  onChange={(v) => updateInteraction({ suggestionStyle: v })}
+                />
+                <Segmented
+                  label="설명 깊이"
+                  options={EXPLANATION_DEPTH_OPTIONS}
+                  value={profile.interaction.explanationDepth}
+                  onChange={(v) => updateInteraction({ explanationDepth: v })}
+                />
+                <Segmented
+                  label="리마인더"
+                  options={REMINDER_FREQ_OPTIONS}
+                  value={profile.interaction.reminderFrequency}
+                  onChange={(v) => updateInteraction({ reminderFrequency: v })}
+                />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Push */}
         <section>
@@ -268,6 +369,42 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+function ProfileChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 9999 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{value}</span>
+    </div>
+  );
+}
+
+function Segmented<T extends string>({ label, options, value, onChange }: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ width: 62, flexShrink: 0, fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>{label}</span>
+      <div style={{ display: 'flex', flex: 1, gap: 4, background: 'var(--sand-100)', borderRadius: 10, padding: 3 }}>
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => { if (!active) onChange(o.value); }}
+              style={{ flex: 1, height: 30, borderRadius: 8, border: 'none', background: active ? 'var(--surface-raised)' : 'transparent', color: active ? 'var(--text-1)' : 'var(--text-3)', fontWeight: active ? 700 : 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', boxShadow: active ? 'var(--shadow-sm)' : 'none' }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

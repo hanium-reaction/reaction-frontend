@@ -64,6 +64,8 @@ export interface GoalCandidate {
   deadline?: string | null;
   whyNow?: string | null;
   successImage?: string | null;
+  // 현재 수준/출발점(#132 목표 심화) — 인터뷰가 파악한 시작 지점 서술. 없으면 null.
+  currentLevel?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
 }
@@ -601,6 +603,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 블록 밀도(#132) — 서버 기본 'standard'. light=여유롭게 / intense=빽빽하게.
+  density?: 'light' | 'standard' | 'intense';
+  // 계획 범위 — 서버 기본 'horizon'(전체 지평). 'week'=이번 주만.
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve
@@ -714,6 +720,51 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// ── 선호 프로필 메모리 (GET/PATCH /settings/profile, #130·#133) ──
+// 인터뷰가 채운 지속형 선호. 아직 안 채웠으면 각 뷰가 null.
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type RecoveryTonePref = 'gentle' | 'normal' | 'encouraging';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number;
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime?: string | null; // HH:mm
+  preferredEndTime?: string | null;   // HH:mm
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTonePref;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  // 회복 선호 (users.focus_mode_preferences JSONB 출처).
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신. 미지정은 유지.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle | null;
+  attentionSpan?: number | null;         // 5..240
+  timeChunkPreference?: TimeChunkPreference | null;
+  recoveryTone?: RecoveryTonePref | null;
+  suggestionStyle?: SuggestionStyle | null;
+  explanationDepth?: ExplanationDepth | null;
+  reminderFrequency?: ReminderFrequency | null;
+  downscopeUnitMin?: number | null;      // 1..120
+  restOk?: boolean | null;
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
