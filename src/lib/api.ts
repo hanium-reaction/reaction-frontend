@@ -40,6 +40,8 @@ import type {
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
+  ProfileResponse,
+  ProfileUpdateRequest,
   BlockEditRequest,
   BlockEditResponse,
   PushSubscribeRequest,
@@ -555,6 +557,12 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 선호 프로필 — 인터뷰 산출물(행동/상호작용 스타일)을 읽고 부분 갱신.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

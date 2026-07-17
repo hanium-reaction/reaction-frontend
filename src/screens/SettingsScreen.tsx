@@ -1,9 +1,45 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
+import { DemoNotice } from '../components/DemoNotice';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import type {
+  ConsentRecord,
+  ConsentType,
+  EnergyCycle,
+  ProfileResponse,
+  ProfileUpdateRequest,
+  RecoveryTone,
+  ReminderFrequency,
+  ToneMode,
+  UserSettings,
+} from '../types/api';
+
+// 선호 프로필 편집 칩 — 백엔드 GET/PATCH /settings/profile.
+const ENERGY_OPTIONS: { value: EnergyCycle; label: string }[] = [
+  { value: 'morning', label: '아침형' },
+  { value: 'afternoon', label: '오후형' },
+  { value: 'evening', label: '저녁형' },
+  { value: 'night', label: '야행형' },
+  { value: 'varies', label: '그때그때' },
+];
+const RECOVERY_TONE_OPTIONS: { value: RecoveryTone; label: string }[] = [
+  { value: 'gentle', label: '부드럽게' },
+  { value: 'normal', label: '보통' },
+  { value: 'encouraging', label: '응원하기' },
+];
+const REMINDER_OPTIONS: { value: ReminderFrequency; label: string }[] = [
+  { value: 'minimal', label: '최소' },
+  { value: 'standard', label: '보통' },
+  { value: 'active', label: '자주' },
+];
+
+// 백엔드가 아직 프로필을 안 채웠을 때(행 없음) 보여줄 데모 기본값.
+const DEMO_PROFILE: ProfileResponse = {
+  behavioral: { energyCycle: 'morning', attentionSpan: 25, timeChunkPreference: '30' },
+  interaction: { recoveryTone: 'gentle', suggestionStyle: 'neutral', explanationDepth: 'normal', reminderFrequency: 'standard' },
+};
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -20,6 +56,9 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  // 선호 프로필 — 성공 시 실데이터, 실패/미구현 시 데모 기본값으로 fallback(화면 유지).
+  const [profile, setProfile] = useState<ProfileResponse>(DEMO_PROFILE);
+  const [usingRealProfile, setUsingRealProfile] = useState(false);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -37,6 +76,23 @@ export function SettingsScreen() {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
         }
       },
+    );
+    settingsApi.getProfile().then(
+      (p) => {
+        if (cancelled) return;
+        // behavioral/interaction 중 하나라도 채워져 있으면 실데이터로 간주.
+        // 둘 다 null(인터뷰 전)이면 데모 기본값을 유지하되 실연결 배지는 켜지 않는다.
+        if (p.behavioral || p.interaction) {
+          setProfile({
+            behavioral: p.behavioral ?? DEMO_PROFILE.behavioral,
+            interaction: p.interaction ?? DEMO_PROFILE.interaction,
+            downscopeUnitMin: p.downscopeUnitMin,
+            restOk: p.restOk,
+          });
+          setUsingRealProfile(true);
+        }
+      },
+      () => { /* 미구현/오류 — 데모 기본값 유지 */ },
     );
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
@@ -63,6 +119,23 @@ export function SettingsScreen() {
       if (err instanceof ApiError) showToast('서버 미동작 — 로컬에만 적용');
     }
   };
+
+  // 선호 프로필 부분 갱신 — optimistic + PATCH. 실패는 조용히(로컬만).
+  const patchProfile = async (body: ProfileUpdateRequest, next: ProfileResponse) => {
+    setProfile(next);
+    try {
+      await settingsApi.updateProfile(body);
+      if (usingRealProfile) showToast('선호가 저장됐어요');
+    } catch (err) {
+      if (err instanceof ApiError) showToast('서버 미동작 — 로컬에만 적용');
+    }
+  };
+  const setEnergyCycle = (energyCycle: EnergyCycle) =>
+    patchProfile({ energyCycle }, { ...profile, behavioral: { ...(profile.behavioral ?? DEMO_PROFILE.behavioral!), energyCycle } });
+  const setRecoveryTone = (recoveryTone: RecoveryTone) =>
+    patchProfile({ recoveryTone }, { ...profile, interaction: { ...(profile.interaction ?? DEMO_PROFILE.interaction!), recoveryTone } });
+  const setReminderFrequency = (reminderFrequency: ReminderFrequency) =>
+    patchProfile({ reminderFrequency }, { ...profile, interaction: { ...(profile.interaction ?? DEMO_PROFILE.interaction!), reminderFrequency } });
 
   const togglePush = async () => {
     setPushBusy(true);
@@ -160,6 +233,23 @@ export function SettingsScreen() {
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        {/* Preference profile — GET/PATCH /settings/profile */}
+        <section>
+          <SectionLabel icon={<Brain size={11} weight="fill" />}>선호 프로필</SectionLabel>
+          {!usingRealProfile && (
+            <div style={{ marginBottom: 8 }}>
+              <DemoNotice storageKey="settings-profile">
+                아직 인터뷰로 채워진 선호가 없어요. 지금 고른 값은 로컬 미리보기이며, 인터뷰를 마치면 실제 프로필로 바뀝니다.
+              </DemoNotice>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: '14px 14px' }}>
+            <ChipRow label="집중 에너지 사이클" value={profile.behavioral?.energyCycle} options={ENERGY_OPTIONS} onSelect={setEnergyCycle} />
+            <ChipRow label="회복 톤" value={profile.interaction?.recoveryTone} options={RECOVERY_TONE_OPTIONS} onSelect={setRecoveryTone} />
+            <ChipRow label="알림 빈도" value={profile.interaction?.reminderFrequency} options={REMINDER_OPTIONS} onSelect={setReminderFrequency} />
           </div>
         </section>
 
@@ -268,6 +358,36 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+// 선호 프로필용 단일선택 칩 그룹. value 미확정(undefined)이면 아무 것도 강조 안 함.
+function ChipRow<T extends string>({
+  label, value, options, onSelect,
+}: {
+  label: string;
+  value: T | undefined;
+  options: { value: T; label: string }[];
+  onSelect: (v: T) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => onSelect(o.value)}
+              style={{ padding: '7px 12px', borderRadius: 9999, background: active ? 'var(--brand-soft)' : 'var(--surface-ground)', color: active ? 'var(--brand)' : 'var(--text-2)', border: `1.5px solid ${active ? 'var(--brand)' : 'var(--sand-200)'}`, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms' }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
