@@ -40,6 +40,10 @@ import type {
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
+  ProfileResponse,
+  ProfileUpdateRequest,
+  WeeklyReplanResponse,
+  WeeklyReplanApproveResponse,
   BlockEditRequest,
   BlockEditResponse,
   PushSubscribeRequest,
@@ -461,6 +465,17 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 forward 재계획 미리보기(Draft). 승인은 approveReplan. 백엔드 구현됨(#117).
+  replan: (idempotencyKey?: string) =>
+    request<WeeklyReplanResponse>('/plans/replan', { method: 'POST', body: {}, idempotencyKey }),
+
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -546,7 +561,7 @@ export const notificationsApi = {
     request<void>('/notifications/subscribe', { method: 'DELETE' }),
 };
 
-// ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
+// ── Settings / Privacy (S23·S28) ──────────────────────────────
 export const settingsApi = {
   get: () => request<UserSettings>('/settings'),
 
@@ -555,6 +570,12 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리 — 인터뷰가 채운 행동/상호작용 스타일. 미완이면 각 항목 null. (백엔드 구현됨)
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

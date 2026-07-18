@@ -1,15 +1,42 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, UserFocus } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import type { ConsentRecord, ConsentType, ProfileResponse, ToneMode, UserSettings } from '../types/api';
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
   { mode: 'encouraging', label: '응원하기', desc: '작은 성과도 크게. 동기 부여.' },
   { mode: 'strict', label: '단단하게', desc: '명확한 피드백. 약속 강조.' },
 ];
+
+// /settings/profile 의 enum → 한국어 라벨. 지속형 프로필 메모리(인터뷰가 채움)의 읽기 표시용.
+const ENERGY_LABELS: Record<string, string> = { morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '밤형', varies: '그때그때' };
+const RECOVERY_TONE_LABELS: Record<string, string> = { gentle: '부드러운 회복', normal: '보통 회복', encouraging: '응원 회복' };
+const SUGGESTION_LABELS: Record<string, string> = { soft: '권유형 제안', neutral: '중립 제안', firm: '단호한 제안' };
+const EXPLANATION_LABELS: Record<string, string> = { brief: '간결한 설명', normal: '보통 설명', detailed: '자세한 설명' };
+const REMINDER_LABELS: Record<string, string> = { minimal: '알림 최소', standard: '알림 표준', active: '알림 적극' };
+
+// ProfileResponse → 표시용 칩 문구 배열. 인터뷰가 안 채운 항목은 건너뛴다.
+function profileChips(p: ProfileResponse): string[] {
+  const chips: string[] = [];
+  const b = p.behavioral;
+  if (b) {
+    if (ENERGY_LABELS[b.energyCycle]) chips.push(ENERGY_LABELS[b.energyCycle]);
+    if (b.attentionSpan) chips.push(`집중 ${b.attentionSpan}분`);
+    if (b.timeChunkPreference) chips.push(`${b.timeChunkPreference}분 단위`);
+    if (b.preferredStartTime && b.preferredEndTime) chips.push(`${b.preferredStartTime}–${b.preferredEndTime}`);
+  }
+  const i = p.interaction;
+  if (i) {
+    if (RECOVERY_TONE_LABELS[i.recoveryTone]) chips.push(RECOVERY_TONE_LABELS[i.recoveryTone]);
+    if (SUGGESTION_LABELS[i.suggestionStyle]) chips.push(SUGGESTION_LABELS[i.suggestionStyle]);
+    if (EXPLANATION_LABELS[i.explanationDepth]) chips.push(EXPLANATION_LABELS[i.explanationDepth]);
+    if (REMINDER_LABELS[i.reminderFrequency]) chips.push(REMINDER_LABELS[i.reminderFrequency]);
+  }
+  return chips;
+}
 
 const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
   { type: 'marketing', label: '마케팅 수신', desc: '새 기능·이벤트 소식' },
@@ -20,6 +47,9 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  // /settings/profile — 백엔드 구현됨. 조회 성공 시에만 로드(실패/미구현이면 섹션 숨김).
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -37,6 +67,11 @@ export function SettingsScreen() {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
         }
       },
+    );
+    // mock-and-replace: 프로필 메모리는 실데이터가 올 때만 섹션을 띄운다. 실패하면 숨김(데모 안 깨짐).
+    settingsApi.getProfile().then(
+      (p) => { if (!cancelled) { setProfile(p); setProfileLoaded(true); } },
+      () => { /* 미구현/에러 — 섹션 숨김 */ },
     );
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
@@ -162,6 +197,34 @@ export function SettingsScreen() {
             })}
           </div>
         </section>
+
+        {/* Profile memory (S23) — /settings/profile 실연동. 조회 성공 시에만 렌더. */}
+        {profileLoaded && (() => {
+          const chips = profile ? profileChips(profile) : [];
+          return (
+            <section>
+              <SectionLabel icon={<UserFocus size={11} weight="fill" />}>내 코칭 프로필</SectionLabel>
+              <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 14 }}>
+                {chips.length > 0 ? (
+                  <>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10, lineHeight: 1.5 }}>
+                      인터뷰로 파악한 리듬·선호예요. 계획과 회복 제안이 이 프로필을 따라요.
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {chips.map((c) => (
+                        <span key={c} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 9999, padding: '5px 11px' }}>{c}</span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                    아직 프로필이 비어 있어요. 인터뷰를 마치면 리듬·선호가 여기에 표시돼요.
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Push */}
         <section>

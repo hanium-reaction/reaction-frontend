@@ -535,6 +535,42 @@ export interface ReplanApproveResponse {
   isDraft?: boolean;
 }
 
+// ── Weekly Replan (S16) — POST /plans/replan · /plans/replan/{planId}/approve ──
+// 주간 forward 재계획(미래 블록 재조정). S20 실행단위 replan(ReplanDiff·
+// ReplanApproveResponse)과 이름은 비슷하나 별개 흐름 — 백엔드가 컴포넌트명 충돌을
+// 피하려 'Weekly' 접두사를 붙였다. 항상 Draft 로 반환되고 approve 로 확정.
+export interface WeeklyReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // date-time (KST)
+  end: string; // date-time (KST)
+  // 교체 대상 옛 미래 블록의 대표 id. 백로그라 대응 블록이 없으면 null.
+  replacesBlockId?: string | null;
+}
+
+export interface WeeklyReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: WeeklyReplanBlockPreview[];
+  generatedAt: string; // date-time
+  // 아래 셋은 스키마 default 가 있어 응답에 항상 포함되지만 안전하게 optional.
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+  warnings?: string[];
+}
+
+// POST /plans/replan/{planId}/approve — 재조정 확정. cancelled/created/skipped 카운트.
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // date-time
+  isDraft?: false;
+}
+
 // ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
 export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
 
@@ -710,6 +746,53 @@ export interface UserSettings {
 
 export interface ToneModeUpdateRequest {
   toneMode: ToneMode;
+}
+
+// ── Profile Memory (S23) — GET/PATCH /settings/profile ─────────
+// 지속형 프로필 메모리. behavioral·interaction 은 인터뷰가 아직 안 채웠으면 null(행 없음).
+// downscopeUnitMin·restOk 은 회복 선호(users.focus_mode_preferences JSONB).
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+// behavioral_profiles 의 사용자 편집 대상 필드.
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number; // 분
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime: string | null; // HH:MM
+  preferredEndTime: string | null; // HH:MM
+}
+
+// interaction_styles 의 사용자 편집 대상 필드.
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신(미지정은 유지). enum 외 값은 422.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle;
+  attentionSpan?: number; // 5–240
+  timeChunkPreference?: TimeChunkPreference;
+  recoveryTone?: RecoveryTone;
+  suggestionStyle?: SuggestionStyle;
+  explanationDepth?: ExplanationDepth;
+  reminderFrequency?: ReminderFrequency;
+  downscopeUnitMin?: number; // 1–120
+  restOk?: boolean;
 }
 
 export interface AnonymizeRequest {
