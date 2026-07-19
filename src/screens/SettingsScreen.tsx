@@ -1,9 +1,35 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { DemoNotice } from '../components/DemoNotice';
+import type { ConsentRecord, ConsentType, ProfileResponse, ToneMode, UserSettings } from '../types/api';
+
+// 행동 프로파일 enum → 한국어 라벨. 서버 미구현/미지 값이면 raw 값 그대로 노출(안전 fallback).
+const ENERGY_LABELS: Record<string, string> = {
+  morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '밤형', varies: '유동적',
+};
+const TONE_LABELS_KO: Record<string, string> = {
+  gentle: '부드럽게', normal: '보통', encouraging: '응원하기',
+};
+const SUGGESTION_LABELS: Record<string, string> = {
+  soft: '부드러운 제안', neutral: '중립', firm: '단호한 제안',
+};
+const DEPTH_LABELS: Record<string, string> = {
+  brief: '간결하게', normal: '보통', detailed: '자세히',
+};
+const FREQ_LABELS: Record<string, string> = {
+  minimal: '최소', standard: '보통', active: '적극적',
+};
+const labelOf = (map: Record<string, string>, v: string | null | undefined) =>
+  v == null ? '—' : map[v] ?? v;
+
+// 백엔드 미동작 시 보여줄 데모 프로파일(플라스크 배너와 함께). 실데이터 오면 교체.
+const DEMO_PROFILE: ProfileResponse = {
+  behavioral: { energyCycle: 'morning', attentionSpan: 30, timeChunkPreference: '30' },
+  interaction: { recoveryTone: 'gentle', suggestionStyle: 'soft', explanationDepth: 'normal', reminderFrequency: 'standard' },
+};
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -26,6 +52,9 @@ export function SettingsScreen() {
   const [confirmAnonymize, setConfirmAnonymize] = useState(false);
   const [confirmRestartInterview, setConfirmRestartInterview] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // 행동 프로파일 — 초기값은 데모(mock-and-replace). 실데이터 오면 profileReal=true 로 배너 숨김.
+  const [profile, setProfile] = useState<ProfileResponse>(DEMO_PROFILE);
+  const [profileReal, setProfileReal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +70,18 @@ export function SettingsScreen() {
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
       () => { /* 501 — 빈 list */ },
+    );
+    // 행동 프로파일 — 실데이터(behavioral/interaction 중 하나라도) 있으면 데모 대체.
+    settingsApi.getProfile().then(
+      (p) => {
+        if (cancelled) return;
+        if (p && (p.behavioral || p.interaction)) {
+          setProfile(p);
+          setProfileReal(true);
+        }
+        // 인터뷰 미완료로 둘 다 null 이면 데모 유지(배너 표시)
+      },
+      () => { /* 미동작 — 데모 프로파일 유지 */ },
     );
     getPushPermission().then((granted) => {
       if (!cancelled) setPushEnabled(granted);
@@ -163,6 +204,37 @@ export function SettingsScreen() {
           </div>
         </section>
 
+        {/* Behavioral / interaction profile (읽기 전용) */}
+        {(profile.behavioral || profile.interaction) && (
+          <section>
+            <SectionLabel icon={<Brain size={11} weight="fill" />}>행동 프로파일</SectionLabel>
+            {!profileReal && (
+              <div style={{ marginBottom: 8 }}>
+                <DemoNotice storageKey="settings-profile">
+                  인터뷰로 파악한 나의 리듬이에요. 온보딩 인터뷰를 마치면 실제 프로파일로 바뀝니다.
+                </DemoNotice>
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {profile.behavioral && (
+                <>
+                  <ProfileRow label="에너지 리듬" value={labelOf(ENERGY_LABELS, profile.behavioral.energyCycle)} />
+                  <ProfileRow label="집중 지속" value={`약 ${profile.behavioral.attentionSpan}분`} />
+                  <ProfileRow label="선호 시간 단위" value={`${profile.behavioral.timeChunkPreference}분`} />
+                </>
+              )}
+              {profile.interaction && (
+                <>
+                  <ProfileRow label="회복 톤" value={labelOf(TONE_LABELS_KO, profile.interaction.recoveryTone)} />
+                  <ProfileRow label="제안 방식" value={labelOf(SUGGESTION_LABELS, profile.interaction.suggestionStyle)} />
+                  <ProfileRow label="설명 깊이" value={labelOf(DEPTH_LABELS, profile.interaction.explanationDepth)} />
+                  <ProfileRow label="알림 빈도" value={labelOf(FREQ_LABELS, profile.interaction.reminderFrequency)} />
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Push */}
         <section>
           <SectionLabel icon={<BellRinging size={11} weight="fill" />}>알림</SectionLabel>
@@ -268,6 +340,15 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+function ProfileRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 12 }}>
+      <div style={{ flex: 1, fontSize: 12, color: 'var(--text-3)' }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)' }}>{value}</div>
     </div>
   );
 }

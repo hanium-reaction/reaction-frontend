@@ -64,6 +64,7 @@ export interface GoalCandidate {
   deadline?: string | null;
   whyNow?: string | null;
   successImage?: string | null;
+  currentLevel?: string | null; // 현재 수준 요약(인터뷰 파생) — api-contract v1.20 계열
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
 }
@@ -535,6 +536,41 @@ export interface ReplanApproveResponse {
   isDraft?: boolean;
 }
 
+// ── Weekly Replan (S22 후속) — POST /plans/replan (#117, api-contract v1.20/v1.21) ──
+// 주간 forward 재계획: 다음 주 월~마감까지 남은 작업 + 수락한 회복을 다시 배치한 Draft.
+// 회복(recovery) replan 과는 별개 계약이다.
+export interface ReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // KST ISO
+  end: string;   // KST ISO
+  // 교체 대상 옛 미래 블록(없으면 백로그라 null). 승인 시 block-id 재조정 기준.
+  replacesBlockId?: string | null;
+}
+
+// POST /plans/replan 응답 (201) — Draft 미리보기.
+export interface ReplanResponse {
+  planId: string;
+  windowStart: string; // KST ISO
+  horizon?: string | null;
+  blocks: ReplanBlockPreview[];
+  warnings?: string[];
+  generatedAt: string; // KST ISO
+  aiSource?: string;
+  isDraft?: boolean; // true
+}
+
+// POST /plans/replan/{planId}/approve 응답 — block-id 재조정 승인 결과.
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // KST ISO
+  isDraft?: boolean; // false
+}
+
 // ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
 export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
 
@@ -601,6 +637,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 배치 범위 — api-contract v1.18. 'horizon'(기본)=마감까지 전 구간 분배 / 'week'=targetDate 가 속한 달력 주만.
+  scope?: 'week' | 'horizon';
+  // 배치 밀도 — 'standard'(기본)/'light'/'intense'. 하루 집중 상한·세션 밀도 조절.
+  density?: 'light' | 'standard' | 'intense';
 }
 
 // POST /plans/{planId}/approve
@@ -714,6 +754,44 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// ── Behavioral / Interaction Profile (S28 후속) — GET·PATCH /settings/profile ──
+// 온보딩 인터뷰에서 파생된 행동·상호작용 프로파일(코칭 개인화 근거). 실구현(ProfileRepo).
+export interface BehavioralProfileView {
+  energyCycle: string;          // morning / evening 등
+  attentionSpan: number;        // 분
+  timeChunkPreference: string;  // short / long 등
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+}
+
+export interface InteractionStyleView {
+  recoveryTone: string;
+  suggestionStyle: string;
+  explanationDepth: string;
+  reminderFrequency: string;
+}
+
+// GET /settings/profile 응답. behavioral/interaction 은 미설정 시 null.
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile 요청 — 모두 선택(부분 갱신).
+export interface ProfileUpdateRequest {
+  energyCycle?: string | null;
+  attentionSpan?: number | null;
+  timeChunkPreference?: string | null;
+  recoveryTone?: string | null;
+  suggestionStyle?: string | null;
+  explanationDepth?: string | null;
+  reminderFrequency?: string | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;

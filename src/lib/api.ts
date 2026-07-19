@@ -47,11 +47,15 @@ import type {
   RecoveryDecisionResponse,
   RecoveryGenerateRequest,
   RecoveryProposalsResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   ReflectionBatchRequest,
   ReflectionBatchResponse,
   ReflectionPendingItem,
   ReplanApproveResponse,
   ReplanDiff,
+  ReplanResponse,
+  WeeklyReplanApproveResponse,
   SlotAnswerRequest,
   SlotCatalogEntry,
   TimePolicy,
@@ -461,6 +465,19 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 forward 재계획 Draft 생성 — 다음 주 월~마감까지 재배치 (#117, v1.20/v1.21).
+  // recovery replan 과 별개. 201 Created 로 Draft 미리보기(ReplanResponse) 반환.
+  replan: (idempotencyKey?: string) =>
+    request<ReplanResponse>('/plans/replan', { method: 'POST', body: {}, idempotencyKey }),
+
+  // block-id 재조정 승인(blanket-cancel 없음). Draft 만료 시 410 PLAN_DRAFT_EXPIRED.
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -555,6 +572,12 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 온보딩 인터뷰 파생 행동·상호작용 프로파일 (백엔드 ProfileRepo 실구현).
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {
