@@ -10,6 +10,7 @@ import { MorningBriefScreen } from '../screens/MorningBriefScreen';
 import { InboxScreen } from '../screens/InboxScreen';
 import { GoalsScreen } from '../screens/GoalsScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { MyInfoScreen } from '../screens/MyInfoScreen';
 import { MergedTodayScreen } from '../screens/TodayScreen';
 import { FocusScreen } from '../screens/FocusScreen';
 import { MergedRecoveryScreen } from '../screens/RecoveryScreen';
@@ -44,6 +45,7 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   'review':                 { label: '주간 리뷰',      back: null },
   'goals':                  { label: '목표 관리',      back: 'today' },
   'settings':               { label: '설정',           back: 'today' },
+  'my-info':                { label: '내 정보',        back: 'settings' },
 };
 
 const TAB_SCREENS: ScreenId[] = ['today', 'weekly', 'inbox', 'review'];
@@ -281,6 +283,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'review' && <WeeklyReviewScreenV2 />}
         {screen === 'goals' && <GoalsScreen />}
         {screen === 'settings' && <SettingsScreen />}
+        {screen === 'my-info' && <MyInfoScreen />}
       </div>
 
       {showTabs && <MergedTabBar active={tab} onChange={handleTabChange} />}

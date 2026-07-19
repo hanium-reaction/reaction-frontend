@@ -30,7 +30,8 @@ export type ScreenId =
   | 'inbox'
   | 'review'
   | 'goals'
-  | 'settings';
+  | 'settings'
+  | 'my-info';
 
 export type TabId = 'today' | 'weekly' | 'inbox' | 'review';
 
