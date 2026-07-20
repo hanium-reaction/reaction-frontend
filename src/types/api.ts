@@ -535,6 +535,38 @@ export interface ReplanApproveResponse {
   isDraft?: boolean;
 }
 
+// ── Weekly replan (POST /plans/replan · /plans/replan/{planId}/approve) — 백엔드 구현됨 ──
+// 활성 주간 계획을 남은 기간 기준으로 다시 배치한 Draft 프리뷰. approve 전엔 미적용(멱등).
+export interface ReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // date-time
+  end: string; // date-time
+  replacesBlockId: string | null; // 이 블록이 대체하는 기존 블록(신규면 null)
+}
+
+export interface ReplanResponse {
+  planId: string;
+  windowStart: string; // date-time — 재배치 시작 경계
+  horizon: string | null; // date-time — 재배치 종료 경계
+  blocks: ReplanBlockPreview[];
+  generatedAt: string; // date-time
+  // 아래 셋은 스키마 default 가 있어 응답에 항상 포함되지만 안전하게 optional.
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+  warnings?: string[];
+}
+
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // date-time
+  isDraft?: boolean;
+}
+
 // ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
 export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
 
@@ -714,6 +746,51 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// ── Profile memory (GET/PATCH /settings/profile) — 지속형 프로필 메모리, 백엔드 구현됨 ──
+// 인터뷰가 채운 행동/상호작용 선호. 인터뷰 전이면 각 항목 null(행 없음).
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90'; // 분(문자열 enum)
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number; // 분 (5–240)
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime: string | null; // HH:MM
+  preferredEndTime: string | null; // HH:MM
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  // 회복 선호 — users.focus_mode_preferences(JSONB) 출처. 없으면 null.
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH — 지정 필드만 부분 갱신. 미지정(undefined)은 유지. enum 외 값은 422.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle | null;
+  attentionSpan?: number | null; // 5–240
+  timeChunkPreference?: TimeChunkPreference | null;
+  recoveryTone?: RecoveryTone | null;
+  suggestionStyle?: SuggestionStyle | null;
+  explanationDepth?: ExplanationDepth | null;
+  reminderFrequency?: ReminderFrequency | null;
+  downscopeUnitMin?: number | null; // 1–120
+  restOk?: boolean | null;
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;

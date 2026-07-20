@@ -52,6 +52,10 @@ import type {
   ReflectionPendingItem,
   ReplanApproveResponse,
   ReplanDiff,
+  ReplanResponse,
+  WeeklyReplanApproveResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   SlotAnswerRequest,
   SlotCatalogEntry,
   TimePolicy,
@@ -461,6 +465,17 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 재배치 초안 생성 — 활성 계획을 남은 기간 기준으로 다시 배치(Draft). 백엔드 구현됨.
+  replan: () => request<ReplanResponse>('/plans/replan', { method: 'POST', body: {} }),
+
+  // 재배치 초안 확정 — cancelled/created/skipped 요약 반환(멱등).
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -555,6 +570,13 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리(인터뷰가 채운 행동/상호작용 선호) — 백엔드 구현됨.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  // 지정 필드만 부분 갱신(미지정은 유지). enum 외 값은 422.
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

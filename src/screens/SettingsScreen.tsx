@@ -1,9 +1,55 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { DemoNotice } from '../components/DemoNotice';
+import type {
+  ConsentRecord,
+  ConsentType,
+  EnergyCycle,
+  ProfileResponse,
+  RecoveryTone,
+  SuggestionStyle,
+  ToneMode,
+  UserSettings,
+} from '../types/api';
+
+// 프로필 메모리(GET /settings/profile) 표시용 한국어 라벨.
+const ENERGY_LABEL: Record<EnergyCycle, string> = {
+  morning: '아침형',
+  afternoon: '오후 집중형',
+  evening: '저녁형',
+  night: '야행성',
+  varies: '그때그때',
+};
+const RECOVERY_TONE_LABEL: Record<RecoveryTone, string> = {
+  gentle: '부드럽게',
+  normal: '보통',
+  encouraging: '응원 많이',
+};
+const SUGGEST_STYLE_LABEL: Record<SuggestionStyle, string> = {
+  soft: '가볍게 제안',
+  neutral: '중립',
+  firm: '분명하게',
+};
+
+// 백엔드 응답이 없거나(실패) 인터뷰 전이라 비어있을 때 보여줄 미리보기.
+const DEMO_PROFILE: ProfileResponse = {
+  behavioral: {
+    energyCycle: 'morning',
+    attentionSpan: 25,
+    timeChunkPreference: '30',
+    preferredStartTime: null,
+    preferredEndTime: null,
+  },
+  interaction: {
+    recoveryTone: 'gentle',
+    suggestionStyle: 'soft',
+    explanationDepth: 'normal',
+    reminderFrequency: 'standard',
+  },
+};
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -20,6 +66,8 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [profileLive, setProfileLive] = useState(false); // 실데이터가 들어왔는가
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -35,6 +83,26 @@ export function SettingsScreen() {
         // 백엔드 501 — auth.me 의 toneMode 만이라도 활용
         if (!cancelled && user) {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
+        }
+      },
+    );
+    // mock-and-replace: 인터뷰가 채운 프로필 메모리. 하나라도 있으면 실데이터로 표시,
+    // 실패하거나 아직 비어있으면 미리보기(DEMO_PROFILE)로 fallback — 화면은 안 깨진다.
+    settingsApi.getProfile().then(
+      (p) => {
+        if (cancelled) return;
+        if (p && (p.behavioral || p.interaction)) {
+          setProfile(p);
+          setProfileLive(true);
+        } else {
+          setProfile(DEMO_PROFILE);
+          setProfileLive(false);
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setProfile(DEMO_PROFILE);
+          setProfileLive(false);
         }
       },
     );
@@ -163,6 +231,38 @@ export function SettingsScreen() {
           </div>
         </section>
 
+        {/* Profile memory — 인터뷰가 파악한 나의 실행 성향 (read-only 요약) */}
+        {profile && (
+          <section>
+            <SectionLabel icon={<Brain size={11} weight="fill" />}>내 실행 성향</SectionLabel>
+            {!profileLive && (
+              <div style={{ marginBottom: 8 }}>
+                <DemoNotice storageKey="profile-memory">
+                  인터뷰를 완료하면 실제로 파악한 성향으로 채워져요. 지금은 미리보기예요.
+                </DemoNotice>
+              </div>
+            )}
+            <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {profile.behavioral && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <ProfileChip label="에너지" value={ENERGY_LABEL[profile.behavioral.energyCycle]} />
+                  <ProfileChip label="집중 지속" value={`${profile.behavioral.attentionSpan}분`} />
+                  <ProfileChip label="선호 블록" value={`${profile.behavioral.timeChunkPreference}분`} />
+                </div>
+              )}
+              {profile.interaction && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <ProfileChip label="회복 톤" value={RECOVERY_TONE_LABEL[profile.interaction.recoveryTone]} />
+                  <ProfileChip label="제안 방식" value={SUGGEST_STYLE_LABEL[profile.interaction.suggestionStyle]} />
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                인터뷰에서 파악한 성향이에요. 다시 조정하려면 아래 온보딩에서 인터뷰를 이어갈 수 있어요.
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Push */}
         <section>
           <SectionLabel icon={<BellRinging size={11} weight="fill" />}>알림</SectionLabel>
@@ -268,6 +368,15 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+function ProfileChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 9999 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{value}</span>
     </div>
   );
 }
