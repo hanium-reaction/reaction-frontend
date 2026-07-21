@@ -750,6 +750,8 @@ export interface ProfileSettings {
   interaction: InteractionStyleView | null;
   downscopeUnitMin: number | null; // 회복 시 최소 단위(분)
   restOk: boolean | null; // 회복 시 휴식 제안 수용
+  activityStart: string | null; // 계획을 잡아도 되는 활동 시간대 "HH:MM"
+  activityEnd: string | null; // 자정=24:00
 }
 
 export interface ProfileUpdate {
@@ -760,6 +762,8 @@ export interface ProfileUpdate {
   reminderFrequency?: ReminderFrequency;
   downscopeUnitMin?: number;
   restOk?: boolean;
+  activityStart?: string;
+  activityEnd?: string;
 }
 
 export interface ToneModeUpdateRequest {

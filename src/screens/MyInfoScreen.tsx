@@ -105,6 +105,12 @@ export function MyInfoScreen() {
                 value={profile?.behavioral?.attentionSpan}
                 onSave={(n) => patchProfile({ attentionSpan: n })}
               />
+              <TimeRangeField
+                label="계획을 잡아도 되는 시간대 (이 시간 밖엔 일정을 안 잡아요)"
+                start={profile?.activityStart}
+                end={profile?.activityEnd}
+                onSave={(s, e) => patchProfile({ activityStart: s, activityEnd: e })}
+              />
               <ChoiceGroup
                 label="회복 대화 톤"
                 options={RECOVERY_OPTIONS}
@@ -231,6 +237,51 @@ function ToggleRow({ label, on, onToggle }: { label: string; on: boolean; onTogg
       <div style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{label}</div>
       <Toggle on={on} />
     </button>
+  );
+}
+
+// 활동 시간대(계획을 잡아도 되는 창) 편집 — 두 개의 시간 입력. 둘 다 채워지면 저장.
+function TimeRangeField({
+  label,
+  start,
+  end,
+  onSave,
+}: {
+  label: string;
+  start: string | null | undefined;
+  end: string | null | undefined;
+  onSave: (start: string, end: string) => void;
+}) {
+  const [s, setS] = useState(start ?? '');
+  const [e, setE] = useState(end ?? '');
+  useEffect(() => {
+    setS(start ?? '');
+    setE(end ?? '');
+  }, [start, end]);
+  const commit = (ns: string, ne: string) => {
+    if (ns && ne && (ns !== (start ?? '') || ne !== (end ?? ''))) onSave(ns, ne);
+  };
+  const inputStyle = {
+    height: 'var(--ctrl-sm)',
+    padding: '0 10px',
+    borderRadius: 9,
+    border: '1.5px solid var(--sand-200)',
+    background: 'var(--surface-raised)',
+    color: 'var(--text-1)',
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    outline: 'none',
+  } as const;
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 7 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input type="time" value={s} onChange={(ev) => { setS(ev.target.value); commit(ev.target.value, e); }} style={inputStyle} />
+        <span style={{ color: 'var(--text-3)', fontSize: 13 }}>~</span>
+        <input type="time" value={e} onChange={(ev) => { setE(ev.target.value); commit(s, ev.target.value); }} style={inputStyle} />
+      </div>
+    </div>
   );
 }
 
