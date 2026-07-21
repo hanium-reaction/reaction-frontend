@@ -166,7 +166,10 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   // POST /plans/generate 가 빈 본문이면 "최근 정상 종료 인터뷰"로 자동 복구하므로
   // (api-contract v1.16) 항상 호출한다 — sessionId 가 있으면 그 세션을 명시.
   // 완료된 인터뷰가 아예 없으면 422 → genFailed 배너로 정직하게 안내.
-  const { interviewSessionId, setScreen } = useNavigation();
+  const { interviewSessionId, setScreen, plannedMilestones } = useNavigation();
+  // 확정 마일스톤을 ref 로 잡아 generatePlan 콜백 deps 를 흔들지 않는다(#milestones Stage B).
+  const milestonesRef = React.useRef(plannedMilestones);
+  milestonesRef.current = plannedMilestones;
   const generateInput: FirstPlanGenerateRequest = interviewSessionId
     ? { interviewSessionId }
     : {};
@@ -189,7 +192,10 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     const attempt = async (): Promise<void> => {
       for (let i = 0; i < 3; i++) {
         try {
-          const plan = await plansApi.generate({ ...generateInput, density: densityRef.current }, key);
+          const plan = await plansApi.generate(
+            { ...generateInput, density: densityRef.current, milestones: milestonesRef.current ?? undefined },
+            key,
+          );
           planIdRef.current = plan.planId;
           // 200 응답 = 연동 성공. 블록이 0개여도 '예시'가 아니라 '아직 계획 없음'인
           // 실데이터다 — 더미로 가리지 않고 그대로 반영한다.

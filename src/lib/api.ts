@@ -20,6 +20,7 @@ import type {
   FirstPlanApproveResponse,
   FirstPlanGenerateRequest,
   FirstPlanResponse,
+  MilestoneListResponse,
   FixedSchedule,
   FixedScheduleCreateRequest,
   FixedScheduleUpdateRequest,
@@ -448,6 +449,10 @@ export const plansApi = {
   // Idempotency-Key 동봉 시 같은 키 재요청은 동일 planId 를 돌려준다(재시도 안전, #6).
   generate: (body: FirstPlanGenerateRequest = {}, idempotencyKey?: string) =>
     request<FirstPlanResponse>('/plans/generate', { method: 'POST', body, idempotencyKey }),
+
+  // Stage A(#milestones) — 목표를 중간 목표 3~5개로. 사용자 확인·편집 후 generate 에 넘긴다.
+  milestones: (body: FirstPlanGenerateRequest = {}) =>
+    request<MilestoneListResponse>('/plans/milestones', { method: 'POST', body }),
 
   get: (planId: string) => request<FirstPlanResponse>(`/plans/${planId}`),
 

@@ -600,11 +600,24 @@ export interface FirstPlanResponse {
 // 계획 분량(밀도) 프리셋 — 재생성 시 사용자가 조절. light≈주3 / standard≈주5 / intense≈주8 세션.
 export type PlanDensity = 'light' | 'standard' | 'intense';
 
+// 중간 목표(마일스톤) — 사용자가 확인·편집하는 계획 뼈대 (Phase 2).
+export interface Milestone {
+  title: string;
+  summary: string;
+}
+
+// POST /plans/milestones 응답 (Stage A).
+export interface MilestoneListResponse {
+  milestones: Milestone[];
+  aiSource: 'llm' | 'rule';
+}
+
 export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
   density?: PlanDensity; // 생략 시 서버 기본값 'standard'
+  milestones?: Milestone[]; // 사용자가 확정한 마일스톤 (있으면 분해가 branch 로 고정, Stage B)
 }
 
 // POST /plans/{planId}/approve

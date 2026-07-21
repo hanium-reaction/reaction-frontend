@@ -5,6 +5,7 @@ import { SystemIntroScreen } from '../screens/SystemIntroScreen';
 import { GoalIntakeScreen } from '../screens/GoalIntakeScreen';
 import { GoalClassificationScreen } from '../screens/GoalClassificationScreen';
 import { SetupScreen } from '../screens/SetupScreen';
+import { MilestoneConfirmScreen } from '../screens/MilestoneConfirmScreen';
 import { WeeklyPlanGenerationScreen } from '../screens/WeeklyPlanGenerationScreen';
 import { MorningBriefScreen } from '../screens/MorningBriefScreen';
 import { InboxScreen } from '../screens/InboxScreen';
@@ -33,7 +34,8 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   'goal-intake':            { label: '목표 파악',      back: 'intro' },
   'goal-classify':          { label: '목표 분류',      back: 'goal-intake' },
   'setup':                  { label: '마무리 확인',    back: 'goal-classify' },
-  'weekly-plan':            { label: '주간 계획 생성', back: 'setup' },
+  'milestone-confirm':      { label: '계획의 큰 그림', back: 'setup' },
+  'weekly-plan':            { label: '주간 계획 생성', back: 'milestone-confirm' },
   'morning-brief':          { label: '모닝 브리프',    back: 'weekly-plan' },
   'today':                  { label: '오늘의 실행',    back: null },
   'focus':                  { label: '집중 모드',      back: 'today' },
@@ -224,8 +226,9 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
           <GoalClassificationScreen onNext={() => setScreen('setup')} outcome={interviewOutcome} />
         )}
         {screen === 'setup' && (
-          <SetupScreen onDone={() => setScreen('weekly-plan')} />
+          <SetupScreen onDone={() => setScreen('milestone-confirm')} />
         )}
+        {screen === 'milestone-confirm' && <MilestoneConfirmScreen />}
         {screen === 'weekly-plan' && (
           <WeeklyPlanGenerationScreen onContinue={() => setScreen('morning-brief')} />
         )}

@@ -19,6 +19,7 @@ export type ScreenId =
   | 'goal-intake'
   | 'goal-classify'
   | 'setup'
+  | 'milestone-confirm'
   | 'weekly-plan'
   | 'morning-brief'
   | 'today'
