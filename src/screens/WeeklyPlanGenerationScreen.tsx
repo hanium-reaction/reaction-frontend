@@ -140,6 +140,8 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   const [planAiSource, setPlanAiSource] = useState<'llm' | 'rule'>('llm');
   // 응답의 warnings[] — 스케줄러가 남긴 경고(예: 슬롯 부족) 헤더 표시(#6).
   const [warnings, setWarnings] = useState<string[]>([]);
+  // 분해가 '자료를 참조했는데 원문이 없음'을 flag 하면(#materials) 자료를 붙여넣도록 되묻는다.
+  const [materialsMissing, setMaterialsMissing] = useState(false);
   const planIdRef = React.useRef<string | null>(null);
   // 생성이 이미 진행 중인지 — 자기 자신 중복 발사(effect 재실행/재생성 버튼)로 백엔드
   // planning advisory lock 에 겹쳐 409 AGENT_CONCURRENT_ACCESS 가 나는 걸 막는다.
@@ -164,7 +166,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   // POST /plans/generate 가 빈 본문이면 "최근 정상 종료 인터뷰"로 자동 복구하므로
   // (api-contract v1.16) 항상 호출한다 — sessionId 가 있으면 그 세션을 명시.
   // 완료된 인터뷰가 아예 없으면 422 → genFailed 배너로 정직하게 안내.
-  const { interviewSessionId } = useNavigation();
+  const { interviewSessionId, setScreen } = useNavigation();
   const generateInput: FirstPlanGenerateRequest = interviewSessionId
     ? { interviewSessionId }
     : {};
@@ -194,6 +196,9 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
           setBlocks((plan.blocks ?? []).map(previewToBlock));
           setPlanAiSource(plan.aiSource === 'rule' ? 'rule' : 'llm');
           setWarnings(plan.warnings ?? []);
+          setMaterialsMissing(
+            (plan.policyViolations ?? []).some((v) => v.reason === 'materials_referenced_but_missing'),
+          );
           setUsingRealPlan(true);
           return;
         } catch (err) {
@@ -377,6 +382,22 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
         {usingRealPlan && blocks.length === 0 && (
           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
             아직 계획 블록이 없어요. 아래 "블록 추가"로 채워보세요.
+          </div>
+        )}
+        {/* 자료 미제공 되묻기(#materials) — 자료를 참조했는데 원문이 없어 계획이 추측으로 채워짐 */}
+        {materialsMissing && (
+          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--coral-700)' }}>참고 자료를 넣으면 계획이 훨씬 정확해져요</div>
+            <div style={{ fontSize: 11.5, color: 'var(--coral-700)', lineHeight: 1.5 }}>
+              자료를 참조하겠다고 하셨는데 실제 내용이 없어, 지금 계획은 일부 추측으로 채워졌어요.
+              프로젝트 설명·강의계획서 같은 자료 원문을 인터뷰에서 붙여넣으면 그 내용대로 다시 세워드려요.
+            </div>
+            <button
+              onClick={() => setScreen('goal-intake')}
+              style={{ alignSelf: 'flex-start', padding: '7px 13px', borderRadius: 9, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              자료 붙여넣으러 가기
+            </button>
           </div>
         )}
         {/* 스케줄러 경고(warnings[]) — 슬롯 부족 등 (#6) */}
