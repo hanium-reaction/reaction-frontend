@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { DemoNotice } from '../components/DemoNotice';
+import type { ConsentRecord, ConsentType, ProfileResponse, ToneMode, UserSettings } from '../types/api';
+
+// 프로필 메모리(GET /settings/profile) enum → 한국어 라벨. 값이 없으면 렌더 스킵.
+const ENERGY_LABEL: Record<string, string> = {
+  morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '밤형', varies: '그때그때',
+};
+const RECOVERY_TONE_LABEL: Record<string, string> = {
+  gentle: '부드럽게', normal: '보통', encouraging: '응원형',
+};
+const SUGGESTION_LABEL: Record<string, string> = {
+  soft: '가볍게', neutral: '중립', firm: '단단하게',
+};
+const REMINDER_LABEL: Record<string, string> = {
+  minimal: '최소', standard: '보통', active: '자주',
+};
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -21,6 +36,9 @@ export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
+  // 프로필 메모리 — 인터뷰가 채운 지속 프로필. null 이면(미구현/미완) DemoNotice 로 정직하게.
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [confirmAnonymize, setConfirmAnonymize] = useState(false);
@@ -41,6 +59,12 @@ export function SettingsScreen() {
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
       () => { /* 501 — 빈 list */ },
+    );
+    // mock-and-replace: 프로필 메모리 best-effort 조회. 성공(비어있어도)이면 실데이터,
+    // 실패(미구현/네트워크)면 profile=null 유지 → DemoNotice 로 안내.
+    settingsApi.getProfile().then(
+      (p) => { if (!cancelled) { setProfile(p); setProfileLoaded(true); } },
+      () => { if (!cancelled) setProfileLoaded(true); },
     );
     getPushPermission().then((granted) => {
       if (!cancelled) setPushEnabled(granted);
@@ -162,6 +186,44 @@ export function SettingsScreen() {
             })}
           </div>
         </section>
+
+        {/* Profile memory (GET /settings/profile) — 인터뷰가 채운 지속 프로필 */}
+        {profileLoaded && (() => {
+          const b = profile?.behavioral ?? null;
+          const i = profile?.interaction ?? null;
+          const rows: { label: string; value: string }[] = [];
+          if (b) {
+            rows.push({ label: '에너지 사이클', value: ENERGY_LABEL[b.energyCycle] ?? b.energyCycle });
+            rows.push({ label: '집중 지속', value: `${b.attentionSpan}분` });
+            rows.push({ label: '집중 단위', value: `${b.timeChunkPreference}분` });
+          }
+          if (i) {
+            rows.push({ label: '회복 톤', value: RECOVERY_TONE_LABEL[i.recoveryTone] ?? i.recoveryTone });
+            rows.push({ label: '제안 스타일', value: SUGGESTION_LABEL[i.suggestionStyle] ?? i.suggestionStyle });
+            rows.push({ label: '알림 빈도', value: REMINDER_LABEL[i.reminderFrequency] ?? i.reminderFrequency });
+          }
+          if (profile?.restOk != null) rows.push({ label: '휴식 허용', value: profile.restOk ? '네' : '아니오' });
+          const hasReal = rows.length > 0;
+          return (
+            <section>
+              <SectionLabel icon={<Brain size={11} weight="fill" />}>나에 대해</SectionLabel>
+              {hasReal ? (
+                <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 12, padding: '4px 14px' }}>
+                  {rows.map((r, idx) => (
+                    <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderTop: idx === 0 ? 'none' : '1px solid var(--sand-100)' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{r.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <DemoNotice storageKey="settings-profile">
+                  인터뷰를 마치면 에너지·집중·회복 성향이 여기에 정리돼요.
+                </DemoNotice>
+              )}
+            </section>
+          );
+        })()}
 
         {/* Push */}
         <section>

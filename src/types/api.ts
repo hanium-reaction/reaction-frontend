@@ -66,6 +66,8 @@ export interface GoalCandidate {
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
+  // 현재 수준/현황 메모 (인터뷰가 채우면) — 분해 입력 참고용.
+  currentLevel?: string | null;
 }
 
 // 종료 턴(S03 확인 카드용) 요약 — 표현 계층일 뿐, First Plan 시드는 outcome 쪽.
@@ -487,9 +489,12 @@ export interface RecoveryProposalsResponse {
 // POST /recovery/decisions (#20)
 export interface RecoveryDecisionRequest {
   executionId: string;
-  decision: string; // accept / reject / skip 등
+  // accepted / edited / skipped. 'edited' 는 사용자가 회복안 문구를 손봐 수락(editedActionText 동반).
+  decision: 'accepted' | 'edited' | 'skipped' | string;
   acceptedAttemptId?: string | null;
   decisionReason?: string | null;
+  // decision='edited' 일 때 사용자가 고친 액션 문구(최대 300자).
+  editedActionText?: string | null;
 }
 
 export interface RecoveryDecisionResponse {
@@ -601,6 +606,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 블록 밀도 — light(여유)/standard(기본)/intense(빡빡). 미지정 시 서버 standard.
+  density?: 'light' | 'standard' | 'intense';
+  // 배치 범위 — week(이번 주만)/horizon(마감까지). 미지정 시 서버 horizon.
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve
@@ -655,6 +664,39 @@ export interface BlockEditResponse {
   category?: string | null;
   title?: string | null;
   goalId?: string | null;
+}
+
+// ── Weekly Replan (POST /plans/replan, .../approve) — 주간 forward 재계획 (#117) ──
+// 남은 작업 + 수락한 회복을 다음 주부터 마감까지 다시 배치. 항상 Draft → HITL 승인.
+export interface ReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // date-time
+  end: string; // date-time
+  // 이 새 블록이 교체할 옛 블록 id (action 단위 재조정용, #117). 백로그면 null.
+  replacesBlockId?: string | null;
+}
+
+export interface ReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: ReplanBlockPreview[];
+  generatedAt: string;
+  warnings?: string[];
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+}
+
+// POST /plans/replan/{planId}/approve — action 단위 재조정 카운트. isDraft=false.
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string;
+  isDraft?: false;
 }
 
 // ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
@@ -714,6 +756,52 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// ── Persistent Profile Memory (GET/PATCH /settings/profile) ──────
+// 지속형 프로필 메모리 — 에너지/시간(behavioral) + 톤/빈도(interaction) + 회복 선호.
+// 인터뷰가 아직 안 채운 항목은 null (백엔드가 행/키를 만들지 않는다).
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number; // 분
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  // 회복 선호 (users.focus_mode_preferences) — 인터뷰 미완이면 null.
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신(미지정은 유지). enum 외 값은 422.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle | null;
+  attentionSpan?: number | null; // 5–240
+  timeChunkPreference?: TimeChunkPreference | null;
+  recoveryTone?: RecoveryTone | null;
+  suggestionStyle?: SuggestionStyle | null;
+  explanationDepth?: ExplanationDepth | null;
+  reminderFrequency?: ReminderFrequency | null;
+  downscopeUnitMin?: number | null; // 1–120
+  restOk?: boolean | null;
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;

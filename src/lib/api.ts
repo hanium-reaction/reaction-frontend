@@ -42,8 +42,12 @@ import type {
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   PushSubscribeRequest,
   RecoveryDecisionRequest,
+  ReplanResponse,
+  WeeklyReplanApproveResponse,
   RecoveryDecisionResponse,
   RecoveryGenerateRequest,
   RecoveryProposalsResponse,
@@ -461,6 +465,18 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 forward 재계획 (#117) — 남은 작업 + 수락한 회복을 다음 주부터 마감까지 재배치.
+  // 항상 Draft 를 돌려주고 자동 적용하지 않는다. 승인은 replan(...).approve.
+  replan: (idempotencyKey?: string) =>
+    request<ReplanResponse>('/plans/replan', { method: 'POST', body: {}, idempotencyKey }),
+
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -555,6 +571,12 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리 — 에너지/시간 + 톤/빈도 + 회복 선호. 인터뷰 미완 항목은 null.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {
