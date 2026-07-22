@@ -42,6 +42,8 @@ import type {
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   PushSubscribeRequest,
   RecoveryDecisionRequest,
   RecoveryDecisionResponse,
@@ -52,6 +54,8 @@ import type {
   ReflectionPendingItem,
   ReplanApproveResponse,
   ReplanDiff,
+  ReplanResponse,
+  WeeklyReplanApproveResponse,
   SlotAnswerRequest,
   SlotCatalogEntry,
   TimePolicy,
@@ -461,6 +465,17 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 forward 재계획 — 항상 Draft 프리뷰를 만든다(백엔드 구현됨). 승인은 approveReplan.
+  replan: (idempotencyKey?: string) =>
+    request<ReplanResponse>('/plans/replan', { method: 'POST', body: {}, idempotencyKey }),
+
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -546,7 +561,8 @@ export const notificationsApi = {
     request<void>('/notifications/subscribe', { method: 'DELETE' }),
 };
 
-// ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
+// ── Settings / Privacy (S23·S28) ──────────────────────────────
+// get/toneMode/anonymize 는 아직 백엔드 501, profile 은 구현됨.
 export const settingsApi = {
   get: () => request<UserSettings>('/settings'),
 
@@ -555,6 +571,13 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리(인터뷰 산출) 조회 — 인터뷰 전이면 behavioral/interaction 은 null.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  // 지정 필드만 부분 갱신(미지정은 유지). enum 밖 값은 422 COMMON_VALIDATION_ERROR.
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

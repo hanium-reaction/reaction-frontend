@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise } from '@phosphor-icons/react';
+import { CaretLeft, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, Brain } from '@phosphor-icons/react';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { DemoNotice } from '../components/DemoNotice';
+import type { ConsentRecord, ConsentType, ProfileResponse, ToneMode, UserSettings } from '../types/api';
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -17,9 +18,30 @@ const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
   { type: 'analytics', label: '사용 분석', desc: '오류·성능 개선용' },
 ];
 
+// 프로필 메모리(GET /settings/profile) enum → 한국어 라벨.
+const ENERGY_CYCLE_KO: Record<string, string> = {
+  morning: '아침형', afternoon: '오후형', evening: '저녁형', night: '심야형', varies: '그때그때',
+};
+const RECOVERY_TONE_KO: Record<string, string> = { gentle: '부드럽게', normal: '보통', encouraging: '응원' };
+const SUGGESTION_STYLE_KO: Record<string, string> = { soft: '제안형', neutral: '중립', firm: '단호' };
+const EXPLANATION_DEPTH_KO: Record<string, string> = { brief: '간결', normal: '보통', detailed: '자세히' };
+const REMINDER_FREQ_KO: Record<string, string> = { minimal: '최소', standard: '보통', active: '자주' };
+
+// 인터뷰 전(프로필 미형성)·백엔드 실패 시 보여줄 더미. 실데이터가 오면 교체되고
+// DemoNotice 도 사라진다(mock-and-replace).
+const DUMMY_PROFILE: ProfileResponse = {
+  behavioral: { energyCycle: 'morning', attentionSpan: 45, timeChunkPreference: '30' },
+  interaction: { recoveryTone: 'gentle', suggestionStyle: 'soft', explanationDepth: 'normal', reminderFrequency: 'standard' },
+  downscopeUnitMin: 15,
+  restOk: true,
+};
+
 export function SettingsScreen() {
   const { user, setScreen } = useNavigation();
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  // 실데이터(behavioral/interaction 중 하나라도 존재)면 true → DemoNotice 숨김.
+  const [profileLive, setProfileLive] = useState(false);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
@@ -37,6 +59,15 @@ export function SettingsScreen() {
           setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
         }
       },
+    );
+    settingsApi.getProfile().then(
+      (p) => {
+        if (cancelled) return;
+        setProfile(p);
+        // 인터뷰가 실제로 채운 프로필만 실데이터로 취급(둘 다 null 이면 아직 없음).
+        setProfileLive(!!(p.behavioral || p.interaction));
+      },
+      () => { /* 미형성/실패 — 더미로 fallback, DemoNotice 유지 */ },
     );
     privacyApi.consents().then(
       (c) => { if (!cancelled) setConsents(c); },
@@ -139,6 +170,12 @@ export function SettingsScreen() {
             </div>
           </div>
         )}
+
+        {/* Profile memory (GET /settings/profile) — 인터뷰가 학습한 내 프로필 */}
+        <section>
+          <SectionLabel icon={<Brain size={11} weight="fill" />}>내 프로필 (AI 기억)</SectionLabel>
+          <ProfileMemory profile={profile ?? DUMMY_PROFILE} live={profileLive} />
+        </section>
 
         {/* Tone mode */}
         <section>
@@ -268,6 +305,47 @@ function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.React
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
       {icon}
       {children}
+    </div>
+  );
+}
+
+// 읽기 전용 프로필 메모리 카드. 실데이터가 없으면(!live) 더미 + DemoNotice.
+function ProfileMemory({ profile, live }: { profile: ProfileResponse; live: boolean }) {
+  const b = profile.behavioral;
+  const i = profile.interaction;
+  const rows: { label: string; value: string }[] = [];
+  if (b) {
+    rows.push({ label: '에너지 리듬', value: ENERGY_CYCLE_KO[b.energyCycle] ?? String(b.energyCycle) });
+    rows.push({ label: '집중 지속', value: `${b.attentionSpan}분` });
+    rows.push({ label: '선호 단위', value: `${b.timeChunkPreference}분` });
+  }
+  if (i) {
+    rows.push({ label: '회복 톤', value: RECOVERY_TONE_KO[i.recoveryTone] ?? String(i.recoveryTone) });
+    rows.push({ label: '제안 방식', value: SUGGESTION_STYLE_KO[i.suggestionStyle] ?? String(i.suggestionStyle) });
+    rows.push({ label: '설명 깊이', value: EXPLANATION_DEPTH_KO[i.explanationDepth] ?? String(i.explanationDepth) });
+    rows.push({ label: '알림 빈도', value: REMINDER_FREQ_KO[i.reminderFrequency] ?? String(i.reminderFrequency) });
+  }
+  if (profile.downscopeUnitMin != null) rows.push({ label: '축소 단위', value: `${profile.downscopeUnitMin}분` });
+  if (profile.restOk != null) rows.push({ label: '휴식 허용', value: profile.restOk ? '예' : '아니오' });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {!live && (
+        <DemoNotice storageKey="settings-profile">
+          아직 인터뷰가 프로필을 채우지 않았어요. 인터뷰를 마치면 실제로 학습한 내 프로필로 바뀝니다.
+        </DemoNotice>
+      )}
+      <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {rows.map((r, idx) => (
+          <div
+            key={r.label}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderTop: idx === 0 ? 'none' : '1px solid var(--sand-100)' }}
+          >
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{r.label}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{r.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

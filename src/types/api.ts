@@ -657,6 +657,42 @@ export interface BlockEditResponse {
   goalId?: string | null;
 }
 
+// ── Weekly Replan (POST /plans/replan, 백엔드 구현됨) ──────────
+// 주간 forward 재계획. 항상 Draft 프리뷰를 만들고, 승인은 별도 엔드포인트.
+// ⚠️ S20 실행단위 replan(/replan/{executionId}) 과는 다른 도메인이다.
+export interface ReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // KST ISO date-time
+  end: string; // KST ISO date-time
+  // 이 새 블록이 교체하는 옛 미래 블록의 대표 id(미리보기용, 백로그면 null).
+  replacesBlockId?: string | null;
+}
+
+// POST /plans/replan (201) — 주간 재계획 미리보기(Draft).
+export interface ReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: ReplanBlockPreview[];
+  generatedAt: string; // KST ISO date-time
+  warnings?: string[];
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+}
+
+// POST /plans/replan/{planId}/approve — 승인 결과(재조정 카운트). isDraft=false.
+// skippedBlocks 는 started/finished 로 보존된 옛 블록·타 계획 승인분 수.
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // KST ISO date-time
+  isDraft?: false;
+}
+
 // ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
 export interface WeeklyReviewResponse {
   weekStart: string;
@@ -710,6 +746,54 @@ export interface UserSettings {
 
 export interface ToneModeUpdateRequest {
   toneMode: ToneMode;
+}
+
+// ── Profile memory (GET/PATCH /settings/profile, 백엔드 구현됨) ──
+// 인터뷰가 채우는 지속형 프로필. 인터뷰 전이면 behavioral/interaction 은 null(행 없음).
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+
+// behavioral_profiles 의 사용자 편집 대상 필드.
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle | string;
+  attentionSpan: number;
+  timeChunkPreference: TimeChunkPreference | string;
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+}
+
+// interaction_styles 의 사용자 편집 대상 필드.
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone | string;
+  suggestionStyle: SuggestionStyle | string;
+  explanationDepth: ExplanationDepth | string;
+  reminderFrequency: ReminderFrequency | string;
+}
+
+// GET/PATCH /settings/profile 응답. downscopeUnitMin/restOk 는 회복 선호
+// (users.focus_mode_preferences JSONB 출처).
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신(미지정은 유지). enum 밖 값은 422.
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle;
+  attentionSpan?: number; // 5~240
+  timeChunkPreference?: TimeChunkPreference;
+  recoveryTone?: RecoveryTone;
+  suggestionStyle?: SuggestionStyle;
+  explanationDepth?: ExplanationDepth;
+  reminderFrequency?: ReminderFrequency;
+  downscopeUnitMin?: number; // 1~120
+  restOk?: boolean;
 }
 
 export interface AnonymizeRequest {
