@@ -64,6 +64,8 @@ export interface GoalCandidate {
   deadline?: string | null;
   whyNow?: string | null;
   successImage?: string | null;
+  // 현재 수준/시작점 서술(선택) — 인터뷰가 파악했을 때만 채워진다.
+  currentLevel?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
 }
@@ -485,10 +487,14 @@ export interface RecoveryProposalsResponse {
 }
 
 // POST /recovery/decisions (#20)
+export type RecoveryDecision = 'accepted' | 'edited' | 'skipped';
+
 export interface RecoveryDecisionRequest {
   executionId: string;
-  decision: string; // accept / reject / skip 등
+  decision: RecoveryDecision | string; // accepted / edited / skipped
   acceptedAttemptId?: string | null;
+  // decision='edited' 일 때 사용자가 직접 고친 실행 문구.
+  editedActionText?: string | null;
   decisionReason?: string | null;
 }
 
@@ -601,6 +607,9 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 계획 밀도(기본 standard)와 범위(기본 horizon=마감까지 / week=이번 주만).
+  density?: 'light' | 'standard' | 'intense';
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve
@@ -612,6 +621,39 @@ export interface FirstPlanApproveResponse {
   activatedActionItems: number;
   activatedBlocks: number;
   isDraft?: boolean;
+}
+
+// ── Weekly Replan (POST /plans/replan · /plans/replan/{planId}/approve) ──
+// 주간 forward 재계획. generate 는 항상 Draft 프리뷰, approve 는 재조정 카운트 반환.
+// ⚠️ S20 실행단위 replan(ReplanDiff/ReplanApproveResponse)과 다른 것 — 혼동 주의.
+export interface ReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // KST ISO date-time
+  end: string; // KST ISO date-time
+  // 이 새 블록이 교체하는 옛 미래 블록의 대표 id(미리보기용, 백로그면 null).
+  replacesBlockId?: string | null;
+}
+
+export interface ReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: ReplanBlockPreview[];
+  generatedAt: string; // date-time
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+  warnings?: string[];
+}
+
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // date-time
+  isDraft?: false;
 }
 
 // GET /plans/weekly (#21 구현됨) — 실제 contract.
@@ -716,6 +758,50 @@ export interface AnonymizeRequest {
   confirmationToken: string;
 }
 
+// ── Persistent Profile (GET/PATCH /settings/profile) ──────────
+// 인터뷰가 채운 지속형 프로필 메모리. 아직 안 채웠으면 각 섹션 null.
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+
+export interface BehavioralProfileView {
+  energyCycle: EnergyCycle;
+  attentionSpan: number; // 분
+  timeChunkPreference: TimeChunkPreference;
+  preferredStartTime?: string | null; // HH:MM
+  preferredEndTime?: string | null; // HH:MM
+}
+
+export interface InteractionStyleView {
+  recoveryTone: RecoveryTone;
+  suggestionStyle: SuggestionStyle;
+  explanationDepth: ExplanationDepth;
+  reminderFrequency: ReminderFrequency;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null; // 회복 선호(최소 단위)
+  restOk?: boolean | null; // 회복 선호(쉬어도 됨)
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신(미지정은 유지).
+export interface ProfileUpdateRequest {
+  energyCycle?: EnergyCycle | null;
+  attentionSpan?: number | null; // 5~240
+  timeChunkPreference?: TimeChunkPreference | null;
+  recoveryTone?: RecoveryTone | null;
+  suggestionStyle?: SuggestionStyle | null;
+  explanationDepth?: ExplanationDepth | null;
+  reminderFrequency?: ReminderFrequency | null;
+  downscopeUnitMin?: number | null; // 1~120
+  restOk?: boolean | null;
+}
+
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
 
 export interface ConsentRecord {
@@ -733,6 +819,13 @@ export interface ConsentUpdateRequest {
 export interface PushSubscribeRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+}
+
+// GET /notifications/vapid-public-key — FE applicationServerKey 용 공개값.
+// publicKey 가 null 이면 서버에 VAPID 미설정 → 구독을 만들지 말 것(발송 못 하는
+// 구독이 조용히 쌓이는 것 방지).
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── 공통 에러 ─────────────────────────────────────────────────

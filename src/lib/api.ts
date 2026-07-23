@@ -42,7 +42,12 @@ import type {
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   PushSubscribeRequest,
+  ReplanResponse,
+  WeeklyReplanApproveResponse,
+  VapidPublicKeyResponse,
   RecoveryDecisionRequest,
   RecoveryDecisionResponse,
   RecoveryGenerateRequest,
@@ -461,6 +466,18 @@ export const plansApi = {
       method: 'PATCH',
       body,
     }),
+
+  // 주간 forward 재계획 — 항상 Draft 프리뷰 생성(201). S20 실행단위 replan 과 별개.
+  replan: (idempotencyKey?: string) =>
+    request<ReplanResponse>('/plans/replan', { method: 'POST', body: {}, idempotencyKey }),
+
+  // 재계획 초안 승인 — 액션 단위 재조정 카운트 반환. is_draft=false.
+  approveReplan: (planId: string, idempotencyKey?: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -536,6 +553,10 @@ export const replanApi = {
 export const notificationsApi = {
   getSettings: () => request<NotificationSettings>('/notifications/settings'),
 
+  // FE applicationServerKey 용 VAPID 공개키. publicKey=null 이면 서버 미설정 → 구독 만들지 말 것.
+  vapidPublicKey: () =>
+    request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
+
   updateSettings: (body: NotificationSettingsUpdateRequest) =>
     request<NotificationSettings>('/notifications/settings', { method: 'PATCH', body }),
 
@@ -549,6 +570,12 @@ export const notificationsApi = {
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
 export const settingsApi = {
   get: () => request<UserSettings>('/settings'),
+
+  // 지속형 프로필 메모리(인터뷰가 채운 행동/상호작용 스타일). 미충족 섹션은 null.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 
   updateToneMode: (body: ToneModeUpdateRequest) =>
     request<UserSettings>('/settings/tone-mode', { method: 'PATCH', body }),
