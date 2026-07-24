@@ -420,7 +420,7 @@ export const habitsApi = {
 };
 
 // ── Today / Execution (S10-S13) ───────────────────────────────
-// start·check-ins 는 백엔드 #13 구현됨. agenda/action 상세·pause/resume 은 미구현.
+// start·check-ins·agenda·pause/resume 모두 백엔드 구현됨(#13·#66).
 export const todayApi = {
   agenda: () => request<TodayAgenda>('/today/agenda'),
 

@@ -66,6 +66,7 @@ export interface GoalCandidate {
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
+  currentLevel?: string | null; // 현재 수준/진척 서술(있을 때만)
 }
 
 // 종료 턴(S03 확인 카드용) 요약 — 표현 계층일 뿐, First Plan 시드는 outcome 쪽.
@@ -111,6 +112,7 @@ export interface SlotCatalogEntry {
   answerType: SlotAnswerType;
   isRequired: boolean;
   category: string;
+  options?: string[]; // 선택형(single/multi) 슬롯의 후보 값
 }
 
 // ── Goals (S03·S26) ───────────────────────────────────────────
@@ -304,8 +306,8 @@ export interface HabitCreateRequest {
 }
 
 // ── Today / Execution (S10-S13) ───────────────────────────────
-// start·check-ins 는 백엔드 #13 으로 구현됨. agenda/action 상세·pause/resume 은
-// 아직 contract 추정(미구현) 이며 백엔드가 채워질 때 조정.
+// start·check-ins·agenda·pause/resume 모두 백엔드 구현됨(#13·#66). action 상세는
+// 실 응답에 맞춰 조정.
 
 export type ActionItemStatus =
   | 'pending'
@@ -315,11 +317,14 @@ export type ActionItemStatus =
   | 'failed'
   | 'recovery_pending';
 
-export interface DailyBrief {
-  date: string; // YYYY-MM-DD
-  greeting: string;
-  bigRock: string | null;
+// GET /today/agenda 의 brief (백엔드 MorningBrief 스키마와 정렬, #66).
+// bigRockActionId 로 오늘의 핵심 액션을 가리키고, fallbackUsed 는 규칙 기반 fallback
+// 여부, headline 은 상단 한 줄 요약이다.
+export interface MorningBrief {
+  headline: string;
+  bigRockActionId: string | null;
   adjustmentHints: string[];
+  fallbackUsed: boolean;
 }
 
 export interface ActionItem {
@@ -347,23 +352,43 @@ export interface AgendaCard {
   firstStep: string | null;
 }
 
+// GET /today/agenda 의 습관 1건 (백엔드 AgendaHabit 스키마와 정렬). 주간 진행률
+// (doneCount/targetCount)만 담는 경량 뷰로, /habit-instances 의 HabitInstance 와 다르다.
+export interface AgendaHabit {
+  habitId: string;
+  instanceId: string;
+  title: string;
+  targetCount: number;
+  doneCount: number;
+}
+
+// GET /today/agenda 의 고정 일정 1건 (백엔드 AgendaFixedSchedule 스키마와 정렬).
+export interface AgendaFixedSchedule {
+  scheduleId: string;
+  title: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}
+
 export interface TodayAgenda {
   date: string;
-  brief: DailyBrief | null;
+  brief: MorningBrief | null;
   cards: AgendaCard[];
-  habits: HabitInstance[];
-  fixedSchedules: FixedSchedule[];
+  habits: AgendaHabit[];
+  fixedSchedules: AgendaFixedSchedule[];
 }
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-// /today/focus/{executionId}/pause·resume 는 아직 contract 추정(미구현).
+// POST /today/focus/{executionId}/pause·resume 응답 (백엔드 ExecutionEventResponse, 구현됨).
+// pauseTotalMinutes 는 누적 일시정지 시간(분).
 export interface ExecutionEvent {
   executionId: string;
   actionItemId: string;
   startedAt: string; // KST ISO
   endedAt: string | null;
   status: CompletionStatus | 'started' | string;
+  pauseTotalMinutes: number;
 }
 
 // POST /today/actions/{actionId}/start (#13)
@@ -490,6 +515,7 @@ export interface RecoveryDecisionRequest {
   decision: string; // accept / reject / skip 등
   acceptedAttemptId?: string | null;
   decisionReason?: string | null;
+  editedActionText?: string | null; // accept 시 사용자가 회복 액션 문구를 손봤다면 그 값
 }
 
 export interface RecoveryDecisionResponse {
@@ -601,6 +627,8 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  density?: string | null; // 일정 밀도 힌트(서버 기본값 있음)
+  scope?: string | null; // 계획 범위 힌트(서버 기본값 있음)
 }
 
 // POST /plans/{planId}/approve
@@ -649,11 +677,13 @@ export interface BlockEditRequest {
 }
 export interface BlockEditResponse {
   blockId: string;
+  actionId: string;
+  source: string; // goal / habit / fixed 등
   startAt: string;
-  endAt: string | null;
-  blockStatus?: string;
-  category?: string | null;
-  title?: string | null;
+  endAt: string;
+  blockStatus: string;
+  category: string;
+  title: string;
   goalId?: string | null;
 }
 
@@ -679,7 +709,6 @@ export interface WeeklyGenerateRequest {
   weekStart?: string;
 }
 export interface HabitWeekStat {
-  weekStart: string;
   doneCount: number;
   targetCount: number;
 }
@@ -696,7 +725,9 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  message: string;
+  previousFrequency: number;
+  newFrequency: number;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──

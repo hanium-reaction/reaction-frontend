@@ -51,7 +51,7 @@ function cardToBlock(c: AgendaCard): BriefBlock {
 export function MorningBriefScreen({ onStart }: MorningBriefScreenProps) {
   const { user } = useNavigation();
   const userName = user?.name ?? '친구';
-  const greeting = `좋은 아침이에요, ${userName}.`;
+  const fallbackGreeting = `좋은 아침이에요, ${userName}.`;
   const date = todayKo();
 
   // mock-and-replace: /today/agenda 로 오늘 실행 카드, /goals·/reviews 로 헤더 지표.
@@ -60,6 +60,10 @@ export function MorningBriefScreen({ onStart }: MorningBriefScreenProps) {
   const [blocks, setBlocks] = useState<BriefBlock[]>([]);
   const [goalName, setGoalName] = useState<string>('');
   const [weekProgress, setWeekProgress] = useState<number | null>(null);
+  // /today/agenda 의 brief(MorningBrief) — headline 은 히어로 인사말을, adjustmentHints
+  // 는 조정 안내를 실데이터로 덮는다. 없으면 각각 기본 인사말·미표시로 fallback.
+  const [briefHeadline, setBriefHeadline] = useState<string | null>(null);
+  const [adjustmentHints, setAdjustmentHints] = useState<string[]>([]);
   // /today/agenda 가 응답했는지 — true 면 blocks 가 실데이터(비어있어도)라 더미 이월 안내를 숨긴다.
   const [usingReal, setUsingReal] = useState(false);
   // 초기 로드 중 — 더미/실데이터 겹침 대신 스켈레톤을 보여준다.
@@ -71,6 +75,8 @@ export function MorningBriefScreen({ onStart }: MorningBriefScreenProps) {
       (a) => {
         if (cancelled) return;
         setBlocks((a.cards ?? []).map(cardToBlock));
+        if (a.brief?.headline) setBriefHeadline(a.brief.headline);
+        setAdjustmentHints(a.brief?.adjustmentHints ?? []);
         setUsingReal(true);
         setLoading(false);
       },
@@ -125,7 +131,7 @@ export function MorningBriefScreen({ onStart }: MorningBriefScreenProps) {
         {/* Hero card — dark */}
         <div style={{ background: 'var(--sand-950)', borderRadius: 20, padding: '20px 18px' }}>
           <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', letterSpacing: '0.14em', color: 'rgba(250,246,238,.4)', marginBottom: 6, textTransform: 'uppercase' }}>{date}</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.1, color: '#FAF6EE', marginBottom: 14 }}>{greeting}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.1, color: '#FAF6EE', marginBottom: 14 }}>{briefHeadline || fallbackGreeting}</div>
           <div style={{ display: 'flex', gap: 20 }}>
             <div>
               <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'rgba(250,246,238,.4)', marginBottom: 2 }}>오늘 할 일</div>
@@ -150,6 +156,18 @@ export function MorningBriefScreen({ onStart }: MorningBriefScreenProps) {
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--warning)', marginBottom: 1 }}>오늘 일정을 불러오지 못했어요</div>
               <div style={{ fontSize: 11, color: 'var(--warning)', opacity: 0.85 }}>네트워크 상태를 확인하고 다시 시도해 주세요.</div>
             </div>
+          </div>
+        )}
+
+        {/* /today/agenda brief 의 조정 안내(adjustmentHints) — 실데이터가 있을 때만 노출. */}
+        {!loading && adjustmentHints.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {adjustmentHints.map((h, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 12 }}>
+                <Sparkle size={13} weight="fill" color="var(--brand)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 12, color: 'var(--coral-700)', lineHeight: 1.4 }}>{h}</div>
+              </div>
+            ))}
           </div>
         )}
 
