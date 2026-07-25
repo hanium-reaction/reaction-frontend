@@ -60,6 +60,7 @@ import type {
   ToneModeUpdateRequest,
   UserProfile,
   UserSettings,
+  VapidPublicKeyResponse,
   HabitPenaltyAcceptResponse,
   HabitPenaltyListResponse,
   WeeklyGenerateRequest,
@@ -547,6 +548,9 @@ export const replanApi = {
 // ── Notifications (S08·S25) ───────────────────────────────────
 export const notificationsApi = {
   getSettings: () => request<NotificationSettings>('/notifications/settings'),
+
+  // 서버가 자기 private key 의 짝을 런타임에 알려준다(#16). publicKey=null 이면 VAPID 미설정.
+  vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
 
   updateSettings: (body: NotificationSettingsUpdateRequest) =>
     request<NotificationSettings>('/notifications/settings', { method: 'PATCH', body }),

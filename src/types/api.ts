@@ -64,6 +64,8 @@ export interface GoalCandidate {
   deadline?: string | null;
   whyNow?: string | null;
   successImage?: string | null;
+  // 현재 수준(예: "주 2회", "초급") — 인터뷰에서 추출한 시작점. 서버 파생.
+  currentLevel?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
 }
@@ -246,6 +248,13 @@ export interface NotificationSettingsUpdateRequest {
   morningBriefTime?: string;
   eveningReflectionTime?: string;
   preCardEnabled?: boolean;
+}
+
+// GET /notifications/vapid-public-key (#16) — FE `applicationServerKey` 용 런타임 공개값.
+// publicKey=null 이면 서버에 VAPID 미설정 → FE 는 구독을 만들지 말아야 한다(도달 못 하는
+// 구독이 조용히 쌓이는 것 방지). 하드코딩 대신 런타임에 받아 서버 키 rotate 를 자동 반영.
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── Inbox (S24·S25) ───────────────────────────────────────────
@@ -487,8 +496,11 @@ export interface RecoveryProposalsResponse {
 // POST /recovery/decisions (#20)
 export interface RecoveryDecisionRequest {
   executionId: string;
-  decision: string; // accept / reject / skip 등
+  // 백엔드 enum: accepted(제안 수용) / edited(제안 수정본 채택) / skipped(나중에·건너뜀).
+  decision: 'accepted' | 'edited' | 'skipped';
   acceptedAttemptId?: string | null;
+  // decision='edited' 일 때 사용자가 직접 고친 행동 문구(최대 300자).
+  editedActionText?: string | null;
   decisionReason?: string | null;
 }
 
@@ -601,6 +613,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 계획 밀도 — light/standard/intense (기본 standard). 백엔드 스케줄 밀도 힌트.
+  density?: 'light' | 'standard' | 'intense';
+  // 계획 범위 — 이번 주(week) 또는 목표 지평 전체(horizon). 기본 horizon.
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve

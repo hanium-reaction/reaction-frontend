@@ -111,7 +111,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   const reject = () => {
     if (executionId) {
       recoveryApi
-        .decide({ executionId, decision: 'reject', decisionReason: failReason ?? null }, `rec-${executionId}-reject`)
+        .decide({ executionId, decision: 'skipped', decisionReason: failReason ?? null }, `rec-${executionId}-reject`)
         .catch(() => {});
     }
     onDismiss();
@@ -125,7 +125,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
     if (executionId) {
       recoveryApi
         .decide(
-          { executionId, decision: 'accept', acceptedAttemptId: sel },
+          { executionId, decision: 'accepted', acceptedAttemptId: sel },
           `rec-${executionId}-${sel}`,
         )
         .catch(() => { /* 오류 ok — 흐름 유지 */ });
