@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import type {
   ActionItem,
   AnonymizeRequest,
+  AnonymizeResponse,
   ApiErrorPayload,
   ApiGoal,
   AuthSession,
@@ -34,6 +35,7 @@ import type {
   Habit,
   HabitCreateRequest,
   HabitInstance,
+  HabitUpdateRequest,
   InboxCreateRequest,
   InboxItem,
   InboxUpdateRequest,
@@ -60,6 +62,7 @@ import type {
   ToneModeUpdateRequest,
   UserProfile,
   UserSettings,
+  VapidPublicKeyResponse,
   HabitPenaltyAcceptResponse,
   HabitPenaltyListResponse,
   WeeklyGenerateRequest,
@@ -406,6 +409,9 @@ export const habitsApi = {
   create: (body: HabitCreateRequest) =>
     request<Habit>('/habits', { method: 'POST', body }),
 
+  update: (habitId: string, body: HabitUpdateRequest) =>
+    request<Habit>(`/habits/${habitId}`, { method: 'PATCH', body }),
+
   remove: (habitId: string) =>
     request<void>(`/habits/${habitId}`, { method: 'DELETE' }),
 
@@ -420,7 +426,7 @@ export const habitsApi = {
 };
 
 // ── Today / Execution (S10-S13) ───────────────────────────────
-// start·check-ins 는 백엔드 #13 구현됨. agenda/action 상세·pause/resume 은 미구현.
+// agenda·start·pause/resume·check-ins 모두 백엔드 구현됨(#13·#83).
 export const todayApi = {
   agenda: () => request<TodayAgenda>('/today/agenda'),
 
@@ -551,6 +557,9 @@ export const notificationsApi = {
   updateSettings: (body: NotificationSettingsUpdateRequest) =>
     request<NotificationSettings>('/notifications/settings', { method: 'PATCH', body }),
 
+  // FE 가 pushManager.subscribe(applicationServerKey) 에 쓸 서버 발급 공개키(#25).
+  getVapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
+
   subscribe: (body: PushSubscribeRequest) =>
     request<void>('/notifications/subscribe', { method: 'POST', body }),
 
@@ -558,15 +567,16 @@ export const notificationsApi = {
     request<void>('/notifications/subscribe', { method: 'DELETE' }),
 };
 
-// ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
+// ── Settings / Privacy (S23·S28) ──────────────────────────────
 export const settingsApi = {
   get: () => request<UserSettings>('/settings'),
 
   updateToneMode: (body: ToneModeUpdateRequest) =>
     request<UserSettings>('/settings/tone-mode', { method: 'PATCH', body }),
 
+  // confirmationToken 없이 호출하면 1단계(토큰 발급), 있으면 2단계(실제 익명화 적용).
   anonymize: (body: AnonymizeRequest) =>
-    request<void>('/settings/anonymize', { method: 'POST', body }),
+    request<AnonymizeResponse>('/settings/anonymize', { method: 'POST', body }),
 };
 
 export const privacyApi = {

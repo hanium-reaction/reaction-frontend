@@ -52,7 +52,7 @@ export interface InterviewQuestion {
   suggestedAnswers?: string[];
 }
 
-export type InterviewEndReason = 'early_user' | 'completed' | null;
+export type InterviewEndReason = 'early_user' | 'completed' | 'turn_limit' | 'abandoned' | null;
 
 // 핵심 목표 후보 (outcome.coreGoals) — First Plan 의 goal_node 분해 입력이자,
 // 목표 분류(S03) 화면이 GET /goals 대신 렌더해야 하는 값(#75. 이 시점엔 아직
@@ -111,6 +111,7 @@ export interface SlotCatalogEntry {
   answerType: SlotAnswerType;
   isRequired: boolean;
   category: string;
+  options?: string[];
 }
 
 // ── Goals (S03·S26) ───────────────────────────────────────────
@@ -303,9 +304,14 @@ export interface HabitCreateRequest {
   priorityLevel: number;
 }
 
+// PATCH /habits/{id} — 제목·빈도 부분 수정. 빈도 변경 시 target_count 도 동기화된다.
+export interface HabitUpdateRequest {
+  title?: string | null;
+  frequencyPerWeek?: number | null; // 1~7
+}
+
 // ── Today / Execution (S10-S13) ───────────────────────────────
-// start·check-ins 는 백엔드 #13 으로 구현됨. agenda/action 상세·pause/resume 은
-// 아직 contract 추정(미구현) 이며 백엔드가 채워질 때 조정.
+// agenda·start·pause/resume·check-ins 모두 백엔드 구현됨(#13·#83).
 
 export type ActionItemStatus =
   | 'pending'
@@ -315,22 +321,27 @@ export type ActionItemStatus =
   | 'failed'
   | 'recovery_pending';
 
+// GET /today/agenda 의 brief 필드 (백엔드 MorningBrief 스키마와 정렬).
 export interface DailyBrief {
-  date: string; // YYYY-MM-DD
-  greeting: string;
-  bigRock: string | null;
+  headline: string;
+  bigRockActionId: string | null;
   adjustmentHints: string[];
+  fallbackUsed: boolean;
 }
 
+// GET /today/actions/{actionId} 응답 (백엔드 ActionDetail 스키마와 정렬).
 export interface ActionItem {
-  actionItemId: string;
+  actionId: string;
   title: string;
-  goalId: string | null;
-  scheduledTime: string | null; // HH:MM
-  durationMinutes: number;
+  category: string;
   status: ActionItemStatus | string;
-  carryover?: boolean;
-  failReason?: string | null;
+  priority: number;
+  estimatedMinutes: number;
+  targetDate: string; // YYYY-MM-DD
+  source: string;
+  whyNow: string | null;
+  firstStep: string | null;
+  goalId: string | null;
 }
 
 // GET /today/agenda 의 카드 1건 (백엔드 AgendaCard 스키마와 정렬).
@@ -347,23 +358,41 @@ export interface AgendaCard {
   firstStep: string | null;
 }
 
+// agenda.habits 행 — HabitInstance 와 달리 weekStart 가 없고 title 이 붙는다.
+export interface AgendaHabit {
+  instanceId: string;
+  habitId: string;
+  title: string;
+  targetCount: number;
+  doneCount: number;
+}
+
+// agenda.fixedSchedules 행 — FixedSchedule 과 달리 daysOfWeek 가 없다(오늘 요일 것만 옴).
+export interface AgendaFixedSchedule {
+  scheduleId: string;
+  title: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}
+
 export interface TodayAgenda {
   date: string;
   brief: DailyBrief | null;
   cards: AgendaCard[];
-  habits: HabitInstance[];
-  fixedSchedules: FixedSchedule[];
+  habits: AgendaHabit[];
+  fixedSchedules: AgendaFixedSchedule[];
 }
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-// /today/focus/{executionId}/pause·resume 는 아직 contract 추정(미구현).
+// POST /today/focus/{executionId}/pause·resume 응답 (백엔드 ExecutionEventResponse 구현됨, #83).
 export interface ExecutionEvent {
   executionId: string;
   actionItemId: string;
   startedAt: string; // KST ISO
   endedAt: string | null;
   status: CompletionStatus | 'started' | string;
+  pauseTotalMinutes: number;
 }
 
 // POST /today/actions/{actionId}/start (#13)
@@ -485,10 +514,13 @@ export interface RecoveryProposalsResponse {
 }
 
 // POST /recovery/decisions (#20)
+// decision='accepted' → acceptedAttemptId 필수. decision='edited' → acceptedAttemptId +
+// editedActionText 필수(새 카드 title 을 사용자 문구로). decision='skipped' → 나머지 무시.
 export interface RecoveryDecisionRequest {
   executionId: string;
-  decision: string; // accept / reject / skip 등
+  decision: 'accepted' | 'edited' | 'skipped';
   acceptedAttemptId?: string | null;
+  editedActionText?: string | null;
   decisionReason?: string | null;
 }
 
@@ -533,20 +565,6 @@ export interface ReplanApproveResponse {
   startAt: string; // date-time
   endAt: string; // date-time
   isDraft?: boolean;
-}
-
-// ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
-export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
-
-export interface PlanScheduledBlock {
-  blockId: string;
-  actionItemId: string | null;
-  title: string;
-  scheduledTime: string; // KST ISO 또는 HH:MM
-  durationMinutes: number;
-  goalId: string | null;
-  fixed?: boolean;
-  carryover?: boolean;
 }
 
 // ── First Plan (S06·S14·S15) — 백엔드 #18 구현됨 ───────────────
@@ -601,6 +619,8 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  density?: 'light' | 'standard' | 'intense'; // default 'standard'
+  scope?: 'week' | 'horizon'; // default 'horizon'
 }
 
 // POST /plans/{planId}/approve
@@ -649,11 +669,13 @@ export interface BlockEditRequest {
 }
 export interface BlockEditResponse {
   blockId: string;
+  actionId: string;
+  title: string;
+  category: string;
   startAt: string;
-  endAt: string | null;
-  blockStatus?: string;
-  category?: string | null;
-  title?: string | null;
+  endAt: string;
+  blockStatus: string;
+  source: string;
   goalId?: string | null;
 }
 
@@ -679,7 +701,6 @@ export interface WeeklyGenerateRequest {
   weekStart?: string;
 }
 export interface HabitWeekStat {
-  weekStart: string;
   doneCount: number;
   targetCount: number;
 }
@@ -696,36 +717,61 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  previousFrequency: number;
+  newFrequency: number;
+  message: string;
 }
 
-// ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──
+// ── Settings / Privacy (S23·S28) — api-contract §16 ───────────
 export type Language = 'ko' | 'en' | string;
 
+// GET /settings 의 알림 요약 — 상세 설정/수정은 NotificationSettings(§15) 쪽.
+export interface NotificationSummary {
+  morningBriefTime: string; // HH:MM
+  eveningReflectionTime: string;
+  preCardEnabled: boolean;
+}
+
 export interface UserSettings {
-  toneMode: ToneMode;
+  // 인터뷰 전 신규 유저는 null.
+  toneMode: ToneMode | null;
   language: Language;
   timezone: string;
+  // 알림 설정 행이 아직 없으면 null(GET 이 행을 만들지 않는다).
+  notifications: NotificationSummary | null;
 }
 
 export interface ToneModeUpdateRequest {
   toneMode: ToneMode;
 }
 
+// POST /settings/anonymize — confirmationToken 없으면 1단계(토큰 발급), 있으면 2단계(실행).
 export interface AnonymizeRequest {
-  confirmationToken: string;
+  confirmationToken?: string | null;
 }
 
-export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
+export interface AnonymizeResponse {
+  status: 'confirmation_required' | 'anonymized';
+  message: string;
+  confirmationToken?: string | null;
+  expiresAt?: string | null;
+  anonymizedAt?: string | null;
+  maskedCount?: number | null;
+}
 
+// 백엔드가 강제하는 3종 enum (schemas/privacy.py). 'required' 는 서비스 이용 필수 동의.
+export type ConsentType = 'required' | 'marketing' | 'research';
+
+// GET /privacy/consent 응답 항목 (consent_type 별 최신 동의 상태).
 export interface ConsentRecord {
-  type: ConsentType;
-  granted: boolean;
-  grantedAt: string | null;
+  consentType: ConsentType;
+  isGranted: boolean;
+  updatedAt: string;
 }
 
+// POST /privacy/consent — 동의/철회(append-only 새 기록).
 export interface ConsentUpdateRequest {
-  type: ConsentType;
+  consentType: ConsentType;
   granted: boolean;
 }
 
@@ -733,6 +779,12 @@ export interface ConsentUpdateRequest {
 export interface PushSubscribeRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+}
+
+// GET /notifications/vapid-public-key — FE applicationServerKey 용. null 이면
+// 서버에 VAPID 미설정 — 구독을 만들지 말아야 한다(발송 불가한 구독이 쌓임 방지).
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── 공통 에러 ─────────────────────────────────────────────────

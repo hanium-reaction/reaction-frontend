@@ -12,9 +12,9 @@ const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
 ];
 
 const CONSENT_TYPES: { type: ConsentType; label: string; desc: string }[] = [
+  { type: 'required', label: '서비스 이용 (필수)', desc: '목표·실행 데이터 처리 동의' },
   { type: 'marketing', label: '마케팅 수신', desc: '새 기능·이벤트 소식' },
   { type: 'research', label: '연구 활용', desc: '익명 통계 (논문/리포트)' },
-  { type: 'analytics', label: '사용 분석', desc: '오류·성능 개선용' },
 ];
 
 export function SettingsScreen() {
@@ -32,9 +32,9 @@ export function SettingsScreen() {
     settingsApi.get().then(
       (s) => { if (!cancelled) setSettings(s); },
       () => {
-        // 백엔드 501 — auth.me 의 toneMode 만이라도 활용
+        // 네트워크/오류 — auth.me 의 toneMode 만이라도 활용
         if (!cancelled && user) {
-          setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone });
+          setSettings({ toneMode: user.toneMode, language: 'ko', timezone: user.timezone, notifications: null });
         }
       },
     );
@@ -89,30 +89,36 @@ export function SettingsScreen() {
     }
   };
 
-  const setConsentValue = async (type: ConsentType, granted: boolean) => {
+  const setConsentValue = async (consentType: ConsentType, granted: boolean) => {
+    const now = new Date().toISOString();
     setConsents((cs) => {
-      const found = cs.find((c) => c.type === type);
-      if (found) return cs.map((c) => (c.type === type ? { ...c, granted } : c));
-      return [...cs, { type, granted, grantedAt: granted ? new Date().toISOString() : null }];
+      const found = cs.find((c) => c.consentType === consentType);
+      if (found) return cs.map((c) => (c.consentType === consentType ? { ...c, isGranted: granted, updatedAt: now } : c));
+      return [...cs, { consentType, isGranted: granted, updatedAt: now }];
     });
     try {
-      await privacyApi.updateConsent({ type, granted });
-    } catch { /* 501 — 로컬만 */ }
+      await privacyApi.updateConsent({ consentType, granted });
+    } catch { /* 오류 — 로컬만 */ }
   };
 
+  // 2단계 확인 — 토큰 없이 호출해 confirmationToken 발급받고, 곧바로 그 토큰으로 실행.
+  // 화면의 "정말 익명화할까요?" 다이얼로그가 이미 사람의 확인을 받았으므로 두 단계를 이어서 처리한다.
   const anonymize = async () => {
     try {
-      await settingsApi.anonymize({ confirmationToken: 'demo-confirm' });
-      showToast('익명화 요청 접수됨');
+      const issued = await settingsApi.anonymize({});
+      if (issued.status === 'confirmation_required' && issued.confirmationToken) {
+        await settingsApi.anonymize({ confirmationToken: issued.confirmationToken });
+      }
+      showToast('익명화가 처리됐어요');
     } catch (err) {
-      showToast('서버 미동작 — 데모 모드');
+      showToast('익명화에 실패했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setConfirmAnonymize(false);
     }
   };
 
   const consentGranted = (type: ConsentType) =>
-    consents.find((c) => c.type === type)?.granted ?? false;
+    consents.find((c) => c.consentType === type)?.isGranted ?? false;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)', position: 'relative' }}>
