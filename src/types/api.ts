@@ -535,6 +535,37 @@ export interface ReplanApproveResponse {
   isDraft?: boolean;
 }
 
+// POST /plans/replan — 주간 forward 재계획(S21 후속, #117). 항상 Draft(isDraft=true).
+export interface WeeklyReplanBlock {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // date-time
+  end: string; // date-time
+  replacesBlockId?: string | null; // 없으면 백로그 신규
+}
+
+export interface WeeklyReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: WeeklyReplanBlock[];
+  warnings?: string[];
+  generatedAt: string; // date-time
+  isDraft: boolean;
+  aiSource?: 'llm' | 'rule';
+}
+
+// POST /plans/replan/{planId}/approve — action 단위 재조정 승인(Idempotency-Key 필수).
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  isDraft: false;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // date-time
+}
+
 // ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
 export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
 
@@ -729,10 +760,58 @@ export interface ConsentUpdateRequest {
   granted: boolean;
 }
 
+// GET/PATCH /settings/profile — 지속형 프로필 메모리(behavioral/interaction + 회복 선호).
+// 인터뷰가 아직 안 채워졌으면 behavioral/interaction 은 null.
+export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+export type TimeChunkPreference = '10' | '20' | '30' | '60' | '90';
+export type ExplanationDepth = 'brief' | 'normal' | 'detailed';
+export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
+export type ReminderFrequency = 'minimal' | 'standard' | 'active';
+export type SuggestionStyle = 'soft' | 'neutral' | 'firm';
+
+export interface BehavioralProfileView {
+  attentionSpan: number;
+  energyCycle: EnergyCycle;
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+  timeChunkPreference: TimeChunkPreference;
+}
+
+export interface InteractionStyleView {
+  explanationDepth: ExplanationDepth;
+  recoveryTone: RecoveryTone;
+  reminderFrequency: ReminderFrequency;
+  suggestionStyle: SuggestionStyle;
+}
+
+export interface ProfileResponse {
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+export interface ProfileUpdateRequest {
+  attentionSpan?: number | null;
+  energyCycle?: EnergyCycle | null;
+  timeChunkPreference?: TimeChunkPreference | null;
+  explanationDepth?: ExplanationDepth | null;
+  recoveryTone?: RecoveryTone | null;
+  reminderFrequency?: ReminderFrequency | null;
+  suggestionStyle?: SuggestionStyle | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
 // ── Web Push (S08·S25) ────────────────────────────────────────
 export interface PushSubscribeRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+}
+
+// GET /notifications/vapid-public-key — publicKey 가 null 이면 서버 미설정(구독 생성 금지).
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── 공통 에러 ─────────────────────────────────────────────────

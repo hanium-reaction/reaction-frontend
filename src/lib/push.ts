@@ -1,15 +1,23 @@
 // Web Push 구독 헬퍼 (#25).
-// VAPID public key 는 백엔드에서 받아야 하지만 미구현이라 데모용 키 사용.
-// 실제 푸시 발송이 안 되어도 subscribe API 의 응답 모양은 확인 가능.
+// VAPID public key 는 GET /notifications/vapid-public-key 로 백엔드에서 받는다(#25 구현됨).
+// 서버가 응답하면 (null 포함) 그 값을 신뢰한다 — publicKey=null 은 서버에 VAPID 가 정말
+// 미설정이라는 뜻이라 구독을 만들면 안 된다(구독은 성공해도 발송이 전부 403 실패).
+// 네트워크 실패 등으로 서버를 아예 못 부른 경우에만 데모용 더미 키로 폴백한다.
 
+import { notificationsApi } from './api';
 import type { PushSubscribeRequest } from '../types/api';
 
-// VAPID public key — 우선 환경변수(VITE_VAPID_PUBLIC_KEY), 없으면 시연용 더미로 fallback.
-// 실제 발송에는 같은 키쌍의 private key 를 가진 백엔드(#25)가 필요하다.
 const FALLBACK_VAPID_PUBLIC_KEY =
   'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
-const VAPID_PUBLIC_KEY =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ?? FALLBACK_VAPID_PUBLIC_KEY;
+
+async function resolveVapidPublicKey(): Promise<string | null> {
+  try {
+    const { publicKey } = await notificationsApi.vapidPublicKey();
+    return publicKey;
+  } catch {
+    return import.meta.env.VITE_VAPID_PUBLIC_KEY ?? FALLBACK_VAPID_PUBLIC_KEY;
+  }
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -37,10 +45,13 @@ export async function subscribePush(): Promise<PushSubscribeRequest | null> {
   }
   if (Notification.permission !== 'granted') return null;
 
+  const publicKey = await resolveVapidPublicKey();
+  if (!publicKey) return null;
+
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
+    applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
   });
 
   const json = sub.toJSON();

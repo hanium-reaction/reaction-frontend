@@ -74,7 +74,7 @@ export function SettingsScreen() {
           setPushEnabled(true);
           showToast('푸시 알림 켜졌어요');
         } else {
-          showToast('브라우저가 허용을 거부했어요');
+          showToast('알림을 켤 수 없어요 — 브라우저 권한이나 서버 설정을 확인해주세요');
         }
       } else {
         await unsubscribePush();
