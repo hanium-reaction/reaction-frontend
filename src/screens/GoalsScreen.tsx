@@ -261,6 +261,11 @@ export function GoalsScreen() {
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>{g.title}</div>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+                          {/* 잠정(proposed) — 인터뷰가 뽑았지만 계획을 아직 승인하지 않은 목표.
+                              배지가 없으면 진짜 목표와 구분이 안 돼 '왜 이게 저장돼 있지' 가 된다. */}
+                          {g.status === 'proposed' && (
+                            <span style={{ height: 'var(--ctrl-xs)', padding: '0 7px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 9999, fontSize: 10, color: 'var(--coral-700)', fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>계획 전</span>
+                          )}
                           {g.deadline && (
                             <span className="tnum" style={{ height: 'var(--ctrl-xs)', padding: '0 7px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 9999, fontSize: 10, color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center' }}>~{g.deadline}</span>
                           )}

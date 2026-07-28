@@ -471,6 +471,11 @@ export const plansApi = {
   approve: (planId: string, idempotencyKey?: string) =>
     request<FirstPlanApproveResponse>(`/plans/${planId}/approve`, { method: 'POST', body: {}, idempotencyKey }),
 
+  // 초안 폐기 — "이 계획 말고 다시 인터뷰할래". 초안은 비영속(계획 블록은 승인 전 DB 에
+  // 들어가지 않는다)이라 상태 전이만 일어난다. 멱등(204), 이미 승인된 계획은 409.
+  discard: (planId: string) =>
+    request<void>(`/plans/${planId}/discard`, { method: 'POST', body: {} }),
+
   // 주간 보기/블록 수정 — 백엔드 #21 구현됨.
   weekly: (weekStart: string) =>
     request<WeeklyPlanResponse>(`/plans/weekly?weekStart=${encodeURIComponent(weekStart)}`),

@@ -254,6 +254,22 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
       .finally(() => { onContinue(); });
   };
 
+  // "다시 인터뷰하기" — 이 계획을 버리고 처음부터 다시 답한다.
+  // 예전엔 이 경로가 없어 사용자가 **새로고침으로 화면을 끊었고**, 그러면 초안이 만료(3일)
+  // 까지 승인 대기로 남고 인터뷰가 만든 잠정 목표도 그대로 쌓였다. 명시적으로 버리면
+  // 초안은 그 자리에서 종착 상태가 되고, 새 인터뷰가 이전 잠정 목표를 대체한다.
+  const [discarding, setDiscarding] = useState(false);
+  const handleRestartInterview = () => {
+    if (discarding || approvingRef.current) return;
+    setDiscarding(true);
+    const planId = planIdRef.current;
+    // 폐기 실패해도(네트워크 등) 재인터뷰는 막지 않는다 — 초안은 어차피 만료되고,
+    // 사용자를 화면에 가둬 두는 게 더 나쁘다.
+    const done = () => setScreen('goal-intake');
+    if (!planId) { done(); return; }
+    plansApi.discard(planId).catch(() => {}).finally(done);
+  };
+
   // 자정부터 자정까지 24시간 전체를 스크롤로 훑을 수 있어야 한다 — 실제 주간
   // 캘린더(WeeklyCalendarScreen)와 동일한 범위·치수를 써서 두 화면이 같은
   // 캘린더처럼 보이게 한다(#85 뒤 이어진 요청).
@@ -604,6 +620,28 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
             })}
           </div>
         </AiDraftCard>
+        {/* 계획을 확정하기 전 되돌아가는 길 — '재생성' 은 같은 답으로 다시 만드는 것이고,
+            답 자체를 바꾸고 싶을 땐 인터뷰를 다시 해야 한다. 이 버튼이 없어서 사용자가
+            새로고침으로 화면을 끊었고, 그러면 초안·잠정 목표가 그대로 남았다. */}
+        <button
+          onClick={handleRestartInterview}
+          disabled={discarding || approving}
+          style={{
+            marginTop: 10,
+            alignSelf: 'center',
+            padding: '8px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--sand-200)',
+            background: 'transparent',
+            color: 'var(--text-2)',
+            fontSize: 12,
+            fontFamily: 'inherit',
+            cursor: discarding || approving ? 'default' : 'pointer',
+            opacity: discarding || approving ? 0.5 : 1,
+          }}
+        >
+          {discarding ? '정리하는 중…' : '답을 바꾸고 싶어요 · 다시 인터뷰하기'}
+        </button>
       </div>
 
       {editing && (
