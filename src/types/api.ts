@@ -64,6 +64,8 @@ export interface GoalCandidate {
   deadline?: string | null;
   whyNow?: string | null;
   successImage?: string | null;
+  // 현재 수준(자유서술) — 목표 파악 인터뷰에서 수집(#83).
+  currentLevel?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
 }
@@ -111,6 +113,8 @@ export interface SlotCatalogEntry {
   answerType: SlotAnswerType;
   isRequired: boolean;
   category: string;
+  // chip/select 고정 보기(자유서술 슬롯이면 빈 배열) — InterviewQuestion.options 와 동형.
+  options: string[];
 }
 
 // ── Goals (S03·S26) ───────────────────────────────────────────
@@ -315,11 +319,12 @@ export type ActionItemStatus =
   | 'failed'
   | 'recovery_pending';
 
+// GET /today/agenda 의 brief — 백엔드 MorningBrief 스키마와 정렬(#83).
 export interface DailyBrief {
-  date: string; // YYYY-MM-DD
-  greeting: string;
-  bigRock: string | null;
+  headline: string;
+  bigRockActionId: string | null;
   adjustmentHints: string[];
+  fallbackUsed: boolean;
 }
 
 export interface ActionItem {
@@ -347,23 +352,41 @@ export interface AgendaCard {
   firstStep: string | null;
 }
 
+// GET /today/agenda 의 습관 row — HabitInstance 와 비슷하지만 weekStart 대신 title 이 있다.
+export interface AgendaHabit {
+  instanceId: string;
+  habitId: string;
+  title: string;
+  targetCount: number;
+  doneCount: number;
+}
+
+// GET /today/agenda 의 고정 일정 row — FixedSchedule 과 달리 daysOfWeek 가 없다(오늘 요일만).
+export interface AgendaFixedSchedule {
+  scheduleId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface TodayAgenda {
   date: string;
   brief: DailyBrief | null;
   cards: AgendaCard[];
-  habits: HabitInstance[];
-  fixedSchedules: FixedSchedule[];
+  habits: AgendaHabit[];
+  fixedSchedules: AgendaFixedSchedule[];
 }
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
 
-// /today/focus/{executionId}/pause·resume 는 아직 contract 추정(미구현).
+// POST /today/focus/{executionId}/pause·resume 응답 (#83 구현됨).
 export interface ExecutionEvent {
   executionId: string;
   actionItemId: string;
   startedAt: string; // KST ISO
   endedAt: string | null;
   status: CompletionStatus | 'started' | string;
+  pauseTotalMinutes: number;
 }
 
 // POST /today/actions/{actionId}/start (#13)
@@ -487,9 +510,11 @@ export interface RecoveryProposalsResponse {
 // POST /recovery/decisions (#20)
 export interface RecoveryDecisionRequest {
   executionId: string;
-  decision: string; // accept / reject / skip 등
+  decision: 'accepted' | 'edited' | 'skipped';
   acceptedAttemptId?: string | null;
   decisionReason?: string | null;
+  // decision='edited' 일 때 필수 — 사용자가 고쳐 쓴 새 카드 문구(최대 300자).
+  editedActionText?: string | null;
 }
 
 export interface RecoveryDecisionResponse {
@@ -601,6 +626,10 @@ export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
+  // 생성 밀도 — 기본 'standard'.
+  density?: 'light' | 'standard' | 'intense';
+  // 계획 범위 — 'week'(이번 주만) | 'horizon'(마감까지), 기본 'horizon'.
+  scope?: 'week' | 'horizon';
 }
 
 // POST /plans/{planId}/approve
@@ -649,11 +678,13 @@ export interface BlockEditRequest {
 }
 export interface BlockEditResponse {
   blockId: string;
+  actionId: string;
   startAt: string;
   endAt: string | null;
-  blockStatus?: string;
-  category?: string | null;
-  title?: string | null;
+  blockStatus: string;
+  category: string;
+  title: string;
+  source: string;
   goalId?: string | null;
 }
 
@@ -679,7 +710,6 @@ export interface WeeklyGenerateRequest {
   weekStart?: string;
 }
 export interface HabitWeekStat {
-  weekStart: string;
   doneCount: number;
   targetCount: number;
 }
@@ -696,7 +726,9 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  previousFrequency: number;
+  newFrequency: number;
+  message: string;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──
@@ -733,6 +765,11 @@ export interface ConsentUpdateRequest {
 export interface PushSubscribeRequest {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+}
+
+// GET /notifications/vapid-public-key (#83) — publicKey=null 이면 서버 VAPID 미설정.
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── 공통 에러 ─────────────────────────────────────────────────

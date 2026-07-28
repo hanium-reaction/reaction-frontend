@@ -44,6 +44,7 @@ import type {
   BlockEditRequest,
   BlockEditResponse,
   PushSubscribeRequest,
+  VapidPublicKeyResponse,
   RecoveryDecisionRequest,
   RecoveryDecisionResponse,
   RecoveryGenerateRequest,
@@ -556,6 +557,9 @@ export const notificationsApi = {
 
   unsubscribe: () =>
     request<void>('/notifications/subscribe', { method: 'DELETE' }),
+
+  // FE `pushManager.subscribe(applicationServerKey)` 용 공개키 — 서버 rotate 에도 자동 추종(#83).
+  vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
