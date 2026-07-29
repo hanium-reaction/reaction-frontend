@@ -1,3 +1,5 @@
+import { ScoreDonut } from '../components/ScoreDonut';
+import { SectionHeader } from '../components/SectionHeader';
 import React, { useEffect, useState } from 'react';
 import { Sparkle, ArrowRight } from '@phosphor-icons/react';
 import { reviewsApi } from '../lib/api';
@@ -5,6 +7,7 @@ import { localDateStr } from '../lib/dates';
 import { DemoNotice } from '../components/DemoNotice';
 import { useNavigation } from '../contexts/NavigationContext';
 import type { WeeklyReviewResponse, HabitPenaltyCandidate } from '../types/api';
+import { categoryLabel, isKnownCategory } from '../data';
 
 // 이번 주 월요일 (YYYY-MM-DD)
 function thisMonday(): string {
@@ -40,33 +43,6 @@ function windowLabel(raw: string): string {
   return raw;
 }
 
-// ── Score Donut ────────────────────────────────────────────────
-function ScoreDonut({ score, size = 120, stroke = 12 }: { score: number; size?: number; stroke?: number }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--sand-200)" strokeWidth={stroke} fill="none" />
-      <circle
-        cx={size / 2} cy={size / 2} r={r} stroke="var(--brand)" strokeWidth={stroke} fill="none"
-        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: 'stroke-dashoffset 800ms ease-out' }}
-      />
-      <text x={size / 2} y={size / 2 - 3} textAnchor="middle" fontSize="30" fontWeight="800" fill="var(--text-1)" fontFamily="Pretendard Variable" style={{ letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>{score}</text>
-      <text x={size / 2} y={size / 2 + 15} textAnchor="middle" fontSize="10" fill="var(--text-3)" fontFamily="Pretendard Variable" letterSpacing="0.06em">/ 100</text>
-    </svg>
-  );
-}
-
-// ── Section label ──────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 10 }}>
-      {children}
-    </div>
-  );
-}
 
 // 0~1 비율이면 %로, 이미 0~100이면 그대로.
 function toPct(v: number | null | undefined): number | null {
@@ -141,6 +117,11 @@ export function WeeklyReviewScreenV2() {
         : '다음 주엔 다르게 해봐요';
 
   // 실데이터로 만든 KPI 그리드 (백엔드가 주는 지표만). trend 는 비교 데이터 없으면 빈값.
+  // 한국어 이름이 있는 카테고리만. (모르는 코드는 제외 — 위 주석 참고)
+  const namedCategoryRates = Object.entries(real?.categorySuccessRate ?? {}).filter(
+    ([cat]) => isKnownCategory(cat),
+  );
+
   const realKpi = real
     ? ([
         { label: '준수율', val: toPct(real.adherenceRate), target: 80, unit: '%' },
@@ -194,11 +175,11 @@ export function WeeklyReviewScreenV2() {
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-3)' }}>
               <span className="tnum" style={{ color: 'var(--text-2)' }}>주 {c.currentFrequency}회</span>
               <ArrowRight size={12} color="var(--text-3)" />
-              <span className="tnum" style={{ color: 'var(--brand)', fontWeight: 700 }}>주 {c.suggestedFrequency}회</span>
+              <span className="tnum" style={{ color: 'var(--brand-ink)', fontWeight: 700 }}>주 {c.suggestedFrequency}회</span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => dismissPenalty(c.habitId)} style={{ flex: 1, height: 40, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>지금대로 유지</button>
-              <button onClick={() => acceptPenalty(c.habitId)} style={{ flex: 1.4, height: 40, borderRadius: 10, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>주 {c.suggestedFrequency}회로 조정</button>
+              <button onClick={() => acceptPenalty(c.habitId)} style={{ flex: 1.4, height: 40, borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>주 {c.suggestedFrequency}회로 조정</button>
             </div>
           </div>
         ))}
@@ -228,7 +209,7 @@ export function WeeklyReviewScreenV2() {
                 실제 값이 없으면 문장 자체를 생략한다(#67). */}
             {recoveryPct != null && (
               <p style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5, margin: 0 }}>
-                복구 <span style={{ color: 'var(--success)', fontWeight: 700 }} className="tnum">{recoveryPct}%</span> 성공
+                복구 <span style={{ color: 'var(--success-ink)', fontWeight: 700 }} className="tnum">{recoveryPct}%</span> 성공
               </p>
             )}
           </div>
@@ -258,7 +239,7 @@ export function WeeklyReviewScreenV2() {
             return (
               <div key={i} style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 16, color: k.ok ? 'var(--success)' : 'var(--warning)' }}>
+                  <div style={{ fontSize: 16, color: k.ok ? 'var(--success-ink)' : 'var(--warning-ink)' }}>
                     {k.ok ? '●' : '◎'}
                   </div>
                 </div>
@@ -278,17 +259,20 @@ export function WeeklyReviewScreenV2() {
         </div>
         )}
 
-        {/* 카테고리별 성공률 — 백엔드 categorySuccessRate 실데이터. */}
-        {real?.categorySuccessRate && Object.keys(real.categorySuccessRate).length > 0 && (
+        {/* 카테고리별 성공률 — 백엔드 categorySuccessRate 실데이터.
+            이름 붙일 수 없는 코드는 빼고 보여준다. 전부 '기타' 로 접으면 같은 이름의
+            줄이 여러 개 생겨 차트가 고장난 것처럼 보이고, 이름 없는 줄은 사용자에게
+            알려주는 것도 없다. */}
+        {namedCategoryRates.length > 0 && (
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: '12px 14px' }}>
-            <SectionLabel>카테고리별 성공률</SectionLabel>
+            <SectionHeader>카테고리별 성공률</SectionHeader>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-              {Object.entries(real.categorySuccessRate).map(([cat, rate]) => {
+              {namedCategoryRates.map(([cat, rate]) => {
                 const pct = toPct(rate) ?? 0;
                 return (
                   <div key={cat}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
-                      <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{cat}</span>
+                      <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{categoryLabel(cat)}</span>
                       <span className="tnum" style={{ color: 'var(--text-1)', fontWeight: 700 }}>{pct}%</span>
                     </div>
                     <div style={{ height: 6, background: 'var(--sand-200)', borderRadius: 9999, overflow: 'hidden' }}>
@@ -319,7 +303,7 @@ export function WeeklyReviewScreenV2() {
 
       {/* Sticky CTA */}
       <div style={{ flexShrink: 0, padding: '12px 18px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))', background: 'var(--surface-ground)' }}>
-        <button onClick={goToNextWeekPlan} style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <button onClick={goToNextWeekPlan} style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           다음 주 계획 확인 <ArrowRight size={15} />
         </button>
       </div>

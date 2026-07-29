@@ -3,12 +3,11 @@ import { CaretLeft, CaretRight, Sparkle, BellRinging, BellSlash, Shield, Warning
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
 import { useNavigation } from '../contexts/NavigationContext';
-import type {
-  ConsentRecord,
-  ConsentType,
-  ToneMode,
-  UserSettings,
-} from '../types/api';
+import type { ConsentRecord, ConsentType, ToneMode, UserSettings } from '../types/api';
+import { Toggle } from '../components/Toggle';
+import { SectionHeader } from '../components/SectionHeader';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { Toast } from '../components/Toast';
 
 const TONE_OPTIONS: { mode: ToneMode; label: string; desc: string }[] = [
   { mode: 'gentle', label: '부드럽게', desc: '실패도 격려로. 압박 적은 톤.' },
@@ -135,7 +134,7 @@ export function SettingsScreen() {
 
         {user && (
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 9999, background: 'var(--brand-soft)', color: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 9999, background: 'var(--brand-soft)', color: 'var(--brand-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>
               {user.name.slice(0, 1)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -147,7 +146,7 @@ export function SettingsScreen() {
 
         {/* Tone mode */}
         <section>
-          <SectionLabel icon={<Sparkle size={11} weight="fill" />}>코칭 톤</SectionLabel>
+          <SectionHeader icon={<Sparkle size={11} weight="fill" />}>코칭 톤</SectionHeader>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {TONE_OPTIONS.map((o) => {
               const active = settings?.toneMode === o.mode;
@@ -170,7 +169,7 @@ export function SettingsScreen() {
 
         {/* 내 정보 — 사용자 메모리(리듬/선호)는 별도 화면에서 조회·편집 */}
         <section>
-          <SectionLabel icon={<IdentificationCard size={11} weight="fill" />}>내 정보</SectionLabel>
+          <SectionHeader icon={<IdentificationCard size={11} weight="fill" />}>내 정보</SectionHeader>
           <button
             onClick={() => setScreen('my-info')}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', width: '100%', background: 'var(--surface-raised)', border: '1.5px solid var(--sand-200)', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
@@ -185,7 +184,7 @@ export function SettingsScreen() {
 
         {/* Push */}
         <section>
-          <SectionLabel icon={<BellRinging size={11} weight="fill" />}>알림</SectionLabel>
+          <SectionHeader icon={<BellRinging size={11} weight="fill" />}>알림</SectionHeader>
           <button
             onClick={togglePush}
             disabled={pushBusy}
@@ -204,7 +203,7 @@ export function SettingsScreen() {
 
         {/* Consent */}
         <section>
-          <SectionLabel icon={<Shield size={11} weight="fill" />}>동의 관리</SectionLabel>
+          <SectionHeader icon={<Shield size={11} weight="fill" />}>동의 관리</SectionHeader>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {CONSENT_TYPES.map((c) => {
               const granted = consentGranted(c.type);
@@ -227,7 +226,7 @@ export function SettingsScreen() {
 
         {/* Onboarding */}
         <section>
-          <SectionLabel icon={<ArrowClockwise size={11} weight="fill" />}>온보딩</SectionLabel>
+          <SectionHeader icon={<ArrowClockwise size={11} weight="fill" />}>온보딩</SectionHeader>
           <button
             onClick={() => setConfirmRestartInterview(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', width: '100%', background: 'var(--surface-raised)', border: '1.5px solid var(--sand-200)', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
@@ -243,7 +242,7 @@ export function SettingsScreen() {
               <div style={{ fontSize: 11, color: 'var(--coral-700)', marginBottom: 10, lineHeight: 1.5 }}>목표 파악부터 다시 진행돼요. 기존 목표는 삭제되지 않고 그대로 남아있어요 — 새 인터뷰로 목표를 더 추가하게 돼요.</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setConfirmRestartInterview(false)} style={{ flex: 1, height: 36, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-2)', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>취소</button>
-                <button onClick={() => setScreen('goal-intake')} style={{ flex: 1, height: 36, borderRadius: 10, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>다시 시작</button>
+                <button onClick={() => setScreen('goal-intake')} style={{ flex: 1, height: 36, borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>다시 시작</button>
               </div>
             </div>
           )}
@@ -251,19 +250,19 @@ export function SettingsScreen() {
 
         {/* Danger zone */}
         <section>
-          <SectionLabel icon={<Warning size={11} weight="fill" />} tone="danger">데이터 관리</SectionLabel>
+          <SectionHeader icon={<Warning size={11} weight="fill" />} tone="danger">데이터 관리</SectionHeader>
           <button
             onClick={() => setConfirmAnonymize(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', width: '100%', background: 'transparent', border: '1.5px solid var(--coral-200)', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
           >
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--danger)' }}>계정 익명화 요청</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--danger-ink)' }}>계정 익명화 요청</div>
               <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>이름·이메일·메모가 익명화돼요. 통계는 유지.</div>
             </div>
           </button>
           {confirmAnonymize && (
             <div style={{ marginTop: 8, padding: 12, background: '#FAE2D8', border: '1px solid var(--coral-200)', borderRadius: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger)', marginBottom: 6 }}>정말 익명화할까요?</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--danger-ink)', marginBottom: 6 }}>정말 익명화할까요?</div>
               <div style={{ fontSize: 11, color: 'var(--coral-700)', marginBottom: 10, lineHeight: 1.5 }}>이 동작은 되돌릴 수 없어요. 한 번 더 확인 후 진행돼요.</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setConfirmAnonymize(false)} style={{ flex: 1, height: 36, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-2)', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>취소</button>
@@ -275,27 +274,9 @@ export function SettingsScreen() {
       </div>
 
       {toast && (
-        <div style={{ position: 'absolute', bottom: 'max(16px, env(safe-area-inset-bottom, 16px))', left: 16, right: 16, padding: '10px 14px', background: 'var(--text-1)', color: '#FAF6EE', borderRadius: 10, fontSize: 12, textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
-          {toast}
-        </div>
+        <Toast>{toast}</Toast>
       )}
     </div>
   );
 }
 
-function SectionLabel({ icon, children, tone = 'default' }: { icon?: React.ReactNode; children: React.ReactNode; tone?: 'default' | 'danger' }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: tone === 'danger' ? 'var(--danger)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
-      {icon}
-      {children}
-    </div>
-  );
-}
-
-function Toggle({ on }: { on: boolean }) {
-  return (
-    <div style={{ width: 36, height: 20, borderRadius: 9999, background: on ? 'var(--brand)' : 'var(--sand-300)', position: 'relative', flexShrink: 0 }}>
-      <div style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: 9999, background: '#fff', transition: 'left 160ms' }} />
-    </div>
-  );
-}

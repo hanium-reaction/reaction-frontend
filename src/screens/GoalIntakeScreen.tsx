@@ -4,6 +4,7 @@ import { ApiError, friendlyError, interviewApi } from '../lib/api';
 import type { InterviewOutcome, InterviewQuestion, InterviewSession, SlotCatalogEntry } from '../types/api';
 import { SetupProgress } from '../components/SetupProgress';
 import { useNavigation } from '../contexts/NavigationContext';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface GoalIntakeScreenProps {
   onDone: () => void;
@@ -297,7 +298,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
         <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 12, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7, marginTop: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', letterSpacing: '0.01em' }}>명료성 지표</span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--brand)', fontFamily: 'var(--font-mono)' }}>{clarity}%&nbsp;명확</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--brand-ink)', fontFamily: 'var(--font-mono)' }}>{clarity}%&nbsp;명확</span>
           </div>
           <div style={{ height: 5, background: 'var(--sand-200)', borderRadius: 9999, overflow: 'hidden' }}>
             <div style={{ height: '100%', borderRadius: 9999, background: 'var(--brand)', width: `${clarity}%`, transition: 'width 0.6s ease' }} />
@@ -312,13 +313,16 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
       {/* Chat feed */}
       <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {error && (
-          <div style={{ background: '#FAE2D8', border: '1px solid var(--coral-200)', color: 'var(--coral-700)', borderRadius: 10, padding: '10px 12px', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span>{error}</span>
-            {/* 인터뷰 시작/이어가기가 막혀도(예: 기존 세션 409) 온보딩을 진행할 수 있게 한다. */}
-            <button onClick={onDone} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 12px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--surface-raised)', color: 'var(--coral-700)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              다음 단계로 넘어가기 <ArrowRight size={12} />
-            </button>
-          </div>
+          <ErrorBanner
+            action={
+              /* 인터뷰 시작/이어가기가 막혀도(예: 기존 세션 409) 온보딩을 진행할 수 있게 한다. */
+              <button onClick={onDone} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 12px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--surface-raised)', color: 'var(--coral-700)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                다음 단계로 넘어가기 <ArrowRight size={12} />
+              </button>
+            }
+          >
+            {error}
+          </ErrorBanner>
         )}
         {messages.map((m) => (
           <div key={m.id} style={{ display: 'flex', justifyContent: m.who === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -330,7 +334,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
                 <div style={{ background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: '14px 14px 14px 4px', padding: '10px 13px', fontSize: 13, lineHeight: 1.55, color: 'var(--text-1)', whiteSpace: 'pre-line' }}>{m.text}</div>
               </div>
             ) : (
-              <div style={{ maxWidth: '78%', background: 'var(--brand)', color: '#FFFCF6', borderRadius: '14px 14px 4px 14px', padding: '10px 13px', fontSize: 13, lineHeight: 1.45, fontWeight: 500 }}>{m.text}</div>
+              <div style={{ maxWidth: '78%', background: 'var(--brand-surface)', color: '#FFFCF6', borderRadius: '14px 14px 4px 14px', padding: '10px 13px', fontSize: 13, lineHeight: 1.45, fontWeight: 500 }}>{m.text}</div>
             )}
           </div>
         ))}
@@ -367,7 +371,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
             {stuckHint && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', borderRadius: 12, background: 'var(--brand-soft)', border: '1px solid var(--coral-200)' }}>
                 <span style={{ fontSize: 12, color: 'var(--coral-700)', lineHeight: 1.5 }}>같은 질문이 반복되고 있어요. 충분히 답했다면 바로 다음 단계로 넘어가도 돼요.</span>
-                <button onClick={finishEarly} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 14px', borderRadius: 9999, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <button onClick={finishEarly} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 14px', borderRadius: 9999, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   이 정도면 충분해요 <ArrowRight size={12} weight="bold" />
                 </button>
               </div>
@@ -463,7 +467,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
               <button
                 onClick={() => submit(inputText)}
                 disabled={isTyping || !inputText.trim()}
-                style={{ width: 44, height: 44, borderRadius: 9999, border: 'none', background: 'var(--brand)', color: '#FFFCF6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, opacity: isTyping || !inputText.trim() ? 0.5 : 1 }}
+                style={{ width: 44, height: 44, borderRadius: 9999, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, opacity: isTyping || !inputText.trim() ? 0.5 : 1 }}
               >
                 <ArrowUp size={14} weight="fill" />
               </button>
@@ -472,7 +476,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
         ) : (
           <button
             onClick={onDone}
-            style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
             목표 분류 확인 <ArrowRight size={16} />
           </button>

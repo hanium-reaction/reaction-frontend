@@ -7,12 +7,18 @@ import {
   Trash,
 } from '@phosphor-icons/react';
 import type { Task, TaskStatus } from '../types';
-import type { AgendaCard } from '../types/api';
+import type { AgendaCard, ApiGoal, WeeklyPlanResponse } from '../types/api';
 import { FAIL_REASONS, GOAL_CATEGORY_OPTIONS } from '../data';
 import { useNavigation } from '../contexts/NavigationContext';
-import { habitsApi, reflectionApi, todayApi } from '../lib/api';
+import { goalsApi, habitsApi, plansApi, reflectionApi, todayApi } from '../lib/api';
 import { localDateStr } from '../lib/dates';
+import { categoryLabel, goalColor } from '../data';
 import { DemoNotice } from '../components/DemoNotice';
+import { HeroTaskCard } from '../components/HeroTaskCard';
+import { TaskRow } from '../components/TaskRow';
+import { ProgressSheet } from '../components/ProgressSheet';
+import { EmptyState } from '../components/EmptyState';
+import { SkeletonBlock } from '../components/SkeletonBlock';
 import { Gear, Target, DotsThreeVertical } from '@phosphor-icons/react';
 
 // Today 헤더 우상단 — 목표 관리·설정을 하나의 ⋮ 메뉴로 통합 (아이콘 2개 → 1개).
@@ -72,59 +78,6 @@ interface MergedTodayScreenProps {
   onAgendaLoaded: (tasks: Task[]) => void;
 }
 
-function Ring({ task }: { task: Task }) {
-  const s = task.status;
-  if (s === 'done') return (
-    <div style={{ width: 26, height: 26, borderRadius: 9999, background: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Check size={13} color="#FFFCF6" weight="bold" />
-    </div>
-  );
-  if (s === 'failed') return (
-    <div style={{ width: 26, height: 26, borderRadius: 9999, background: 'var(--danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <X size={13} color="#FFFCF6" />
-    </div>
-  );
-  if (s === 'partial_done' || s === 'recovery_pending') return (
-    <div style={{ width: 26, height: 26, borderRadius: 9999, border: '2px solid var(--brand)', background: `conic-gradient(var(--brand) 0 ${task.progress ?? 67}%, var(--brand-soft) ${task.progress ?? 67}% 100%)` }} />
-  );
-  if (s === 'in_progress') return (
-    <div style={{ width: 26, height: 26, borderRadius: 9999, border: '2px solid var(--brand)', background: 'conic-gradient(var(--brand) 0 40%, var(--surface-raised) 40% 100%)' }} />
-  );
-  return (
-    <div style={{ width: 26, height: 26, borderRadius: 9999, border: '1.5px solid var(--sand-300)', background: 'var(--surface-raised)' }} />
-  );
-}
-
-function PartialSheet({ taskId, taskTitle, onSubmit, onClose }: { taskId: string; taskTitle: string; onSubmit: (pct: number) => void; onClose: () => void }) {
-  const [pct, setPct] = useState(50);
-  return (
-    <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 20px 44px', boxShadow: 'var(--shadow-xl)' }}>
-        <div style={{ width: 36, height: 4, borderRadius: 9999, background: 'var(--sand-300)', margin: '0 auto 18px' }} />
-        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 4 }}>오늘은 얼마나 했어요?</div>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 18 }}>{taskTitle}</p>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>진척</span>
-          <span className="tnum" style={{ fontSize: 30, fontWeight: 800, color: 'var(--brand)', letterSpacing: '-0.02em' }}>{pct}<span style={{ fontSize: 16, fontWeight: 600 }}>%</span></span>
-        </div>
-        <div style={{ position: 'relative', height: 8, background: 'var(--sand-200)', borderRadius: 9999, marginBottom: 8 }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: 'var(--brand)', borderRadius: 9999 }} />
-          <div style={{ position: 'absolute', left: `${pct}%`, top: '50%', transform: 'translate(-50%,-50%)', width: 24, height: 24, borderRadius: 9999, background: '#FFFCF6', border: '2px solid var(--brand)', boxShadow: 'var(--shadow-md)' }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px', marginBottom: 18 }}>
-          {[0, 25, 50, 75, 100].map((t) => (
-            <button key={t} onClick={() => setPct(t)} className="tnum" style={{ background: 'transparent', border: 'none', fontSize: 12, cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit', color: pct === t ? 'var(--brand)' : 'var(--text-3)', fontWeight: pct === t ? 600 : 500 }}>{t}</button>
-          ))}
-        </div>
-        <div style={{ background: 'var(--coral-50)', borderRadius: 10, padding: '8px 10px', fontSize: 11, color: 'var(--coral-700)', marginBottom: 14 }}>
-          저장 시 <b>recovery_pending</b>으로 자동 전이돼요.
-        </div>
-        <button onClick={() => onSubmit(pct)} style={{ width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}>저장하기</button>
-      </div>
-    </div>
-  );
-}
-
 // 화면용 Habit — 백엔드 Habit + 이번 주 HabitInstance 를 평탄화한 모양.
 // instanceId 는 체크 API 호출 시 필요. instance 가 아직 없으면 null.
 interface Habit {
@@ -175,6 +128,25 @@ function actionToTask(a: AgendaCard): Task {
   };
 }
 
+// /today/agenda 에는 예약 시각이 없다(AgendaCard 필드에 없음). 시각은 주간 계획의
+// 블록에만 있으므로 actionId 로 조인해서 채운다 — 지어내지 않고 실제 계획값을 쓴다.
+function todayBlockIndex(plan: WeeklyPlanResponse, todayStr: string) {
+  const byAction = new Map<string, { time: string; durMin: number; goalId?: string | null }>();
+  for (const day of plan.days ?? []) {
+    if (day.date !== todayStr) continue;
+    for (const b of day.blocks ?? []) {
+      const s = new Date(b.startAt);
+      const e = new Date(b.endAt);
+      byAction.set(b.actionId, {
+        time: `${String(s.getHours()).padStart(2, '0')}:${String(s.getMinutes()).padStart(2, '0')}`,
+        durMin: Math.max(1, Math.round((e.getTime() - s.getTime()) / 60000)),
+        goalId: b.goalId,
+      });
+    }
+  }
+  return byAction;
+}
+
 // "5월 24일 · 일요일" — Today 헤더용
 function todayShortKo(): string {
   const d = new Date();
@@ -207,6 +179,40 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
     ).finally(() => { if (!cancelled) setAgendaLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // 오늘 블록의 예약 시각·소요, 그리고 목표 이름. 둘 다 agenda 응답엔 없어서 따로 가져온다.
+  // agenda 렌더를 막지 않는다 — 늦게 도착하면 그때 칩이 붙는다(없으면 안 붙을 뿐).
+  const [blockInfo, setBlockInfo] = useState<Map<string, { time: string; durMin: number; goalId?: string | null }>>(new Map());
+  const [goalTitles, setGoalTitles] = useState<Map<string, ApiGoal>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    const today = localDateStr(new Date());
+    plansApi.weekly(thisMonday()).then(
+      (plan) => { if (!cancelled) setBlockInfo(todayBlockIndex(plan, today)); },
+      () => { /* 계획 없음/오류 — 시각 칩만 안 붙는다 */ },
+    );
+    goalsApi.list().then(
+      (byTier) => {
+        if (cancelled) return;
+        const all = [...(byTier.focus ?? []), ...(byTier.maintain ?? []), ...(byTier.parked ?? [])];
+        setGoalTitles(new Map(all.map((g) => [g.goalId, g])));
+      },
+      () => { /* 목표 못 가져오면 카테고리 라벨로 폴백 */ },
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  // 화면에 붙일 부가 정보. 없는 건 없는 대로 둔다(빈 값을 지어내지 않는다).
+  const metaFor = (t: Task) => {
+    const b = blockInfo.get(t.id);
+    const goal = b?.goalId ? goalTitles.get(b.goalId) : undefined;
+    return {
+      time: b?.time ?? t.time,
+      dur: b ? `${b.durMin}분` : t.dur,
+      goalLabel: goal?.title ?? (t.goal ? categoryLabel(t.goal) : undefined),
+      goalColor: goalColor(goal?.category ?? t.goal),
+    };
+  };
 
   const [detailTask, setDetailTask] = useState<Task | null>(null); // 액션 상세 시트(S11)
   const [failSheet, setFailSheet] = useState<string | null>(null);
@@ -368,14 +374,16 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {partialTasks.length > 0 && (
+              // 회복은 이 제품의 핵심 차별점인데 ⋮ 옆 작은 아이콘이라 존재감이 없었다.
+              // 이름을 붙인 칩으로 올린다 — 뭘 누르는 건지 읽히게.
               <button
                 onClick={onOpenRecovery}
-                aria-label="회복 제안"
                 title={`회복 제안 ${partialTasks.length}건`}
-                style={{ position: 'relative', width: 36, height: 36, borderRadius: 9999, border: 'none', background: 'var(--brand-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                style={{ height: 32, padding: '0 11px 0 9px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--brand-soft)', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontFamily: 'inherit' }}
               >
-                <ArrowsClockwise size={16} color="var(--brand)" weight="fill" />
-                <span className="tnum" style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 'var(--ctrl-xs)', padding: '0 4px', borderRadius: 9999, background: 'var(--brand)', color: '#FFFCF6', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{partialTasks.length}</span>
+                <ArrowsClockwise size={14} color="var(--brand-ink)" weight="fill" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-ink)' }}>회복</span>
+                <span className="tnum" style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9999, background: 'var(--brand-surface)', color: '#FFFCF6', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{partialTasks.length}</span>
               </button>
             )}
             <HeaderMenu />
@@ -385,16 +393,19 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
         {/* 첫 agenda fetch 가 끝나기 전엔 스켈레톤. 비었으면 배너 하나만(에러 or 안내),
             일정이 있으면 hero + row. 예전엔 배너 2개 + 빈 hero 가 겹쳐 3중으로 떴다. */}
         {agendaLoading ? (
-          <AgendaSkeleton />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <SkeletonBlock count={1} height={140} radius={24} />
+            <SkeletonBlock count={3} height={64} />
+          </div>
         ) : tasks.length === 0 ? (
           !usingRealAgenda ? (
             <DemoNotice storageKey="today-agenda">
               오늘 일정을 서버에서 불러오지 못했어요. 네트워크 상태를 확인하고 다시 시도해 주세요.
             </DemoNotice>
           ) : (
-            <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
+            <EmptyState>
               오늘 등록된 일정이 없어요. 주간 계획에서 일정을 추가하면 여기에 표시돼요.
-            </div>
+            </EmptyState>
           )
         ) : (
           <>
@@ -403,6 +414,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
               task={heroTask}
               done={doneTasks.length}
               total={tasks.length}
+              {...(heroTask ? metaFor(heroTask) : {})}
               onComplete={() => heroTask && (onMarkDone(heroTask.id), showToast('완료!'))}
               onPartial={() => heroTask && setPartialSheet(heroTask.id)}
               onFail={() => heroTask && (setFailSheet(heroTask.id), setFailTags([]), setFailMemo(''))}
@@ -418,6 +430,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
                   <TaskRow
                     key={t.id}
                     task={t}
+                    {...metaFor(t)}
                     // 대기/진행 row 클릭 = hero 로 promote (실제 시작 X)
                     onSelect={() => setSelectedTaskId(t.id)}
                     onFailedRecover={() => onFail(t.id, t.failReason || '')}
@@ -428,24 +441,27 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
           </>
         )}
 
-        {/* Habit Tracker */}
+        {/* Habit Tracker — 습관이 하나도 없으면 섹션을 통째로 접는다.
+            예전엔 제목 + 큰 점선 안내 박스가 화면 하단 40% 를 빈 채로 차지했다.
+            추가 진입점은 남겨야 하므로 얇은 링크 한 줄로 대체한다. */}
+        {!habitsLoading && habits.length === 0 && !addingHabit ? (
+          <button
+            onClick={() => setAddingHabit(true)}
+            style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--text-3)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 0' }}
+          >+ 습관 추가</button>
+        ) : (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>추적 습관 루틴 ({habits.length})</span>
             <button
               onClick={() => setAddingHabit(true)}
-              style={{ fontSize: 12, color: 'var(--brand)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ fontSize: 12, color: 'var(--brand-ink)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
             >+ 습관 추가</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {habitsLoading && [0, 1].map((i) => (
               <div key={`hsk${i}`} style={{ height: 52, borderRadius: 14, background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', opacity: 0.6 }} aria-hidden="true" />
             ))}
-            {!habitsLoading && habits.length === 0 && !addingHabit && (
-              <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-                아직 추적 중인 습관이 없어요. 위 <b>+ 습관 추가</b>로 만들어보세요.
-              </div>
-            )}
             {habits.map(h => {
               const done = h.doneDays >= h.targetDays;
               return (
@@ -465,11 +481,11 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
                   <button
                     onClick={() => checkHabit(h.id)}
                     disabled={done}
-                    style={{ padding: '8px 14px', borderRadius: 9999, border: 'none', background: done ? '#E5EFE3' : '#EEEAF6', color: done ? 'var(--success)' : '#7B68C8', fontSize: 13, fontWeight: 600, cursor: done ? 'default' : 'pointer', fontFamily: 'inherit', flexShrink: 0, transition: 'all 200ms' }}
+                    style={{ padding: '8px 14px', borderRadius: 9999, border: 'none', background: done ? '#E5EFE3' : '#EEEAF6', color: done ? 'var(--success-ink)' : '#7B68C8', fontSize: 13, fontWeight: 600, cursor: done ? 'default' : 'pointer', fontFamily: 'inherit', flexShrink: 0, transition: 'all 200ms' }}
                   >{done ? '완료' : '체크'}</button>
                   <button
                     onClick={() => removeHabit(h.id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 4, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-ink)', padding: 4, display: 'flex', alignItems: 'center', flexShrink: 0 }}
                   ><Trash size={16} /></button>
                 </div>
               );
@@ -490,7 +506,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
                     {[1, 2, 3, 4, 5, 6, 7].map((n) => {
                       const sel = newHabitFreq === n;
                       return (
-                        <button key={n} onClick={() => setNewHabitFreq(n)} className="tnum" style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${sel ? 'var(--brand)' : 'var(--sand-200)'}`, background: sel ? 'var(--brand)' : 'var(--surface-ground)', color: sel ? '#FFFCF6' : 'var(--text-2)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{n}</button>
+                        <button key={n} onClick={() => setNewHabitFreq(n)} className="tnum" style={{ flex: 1, height: 34, borderRadius: 9, border: `1px solid ${sel ? 'var(--brand)' : 'var(--sand-200)'}`, background: sel ? 'var(--brand-surface)' : 'var(--surface-ground)', color: sel ? '#FFFCF6' : 'var(--text-2)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{n}</button>
                       );
                     })}
                   </div>
@@ -503,17 +519,19 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => { setAddingHabit(false); setNewHabitName(''); setNewHabitFreq(3); setNewHabitCategory('health'); }} style={{ flex: 1, height: 38, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-3)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>취소</button>
-                  <button onClick={addHabit} disabled={!newHabitName.trim()} style={{ flex: 2, height: 38, borderRadius: 10, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontSize: 13, fontWeight: 700, cursor: newHabitName.trim() ? 'pointer' : 'not-allowed', opacity: newHabitName.trim() ? 1 : 0.4, fontFamily: 'inherit' }}>추가</button>
+                  <button onClick={addHabit} disabled={!newHabitName.trim()} style={{ flex: 2, height: 38, borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontSize: 13, fontWeight: 700, cursor: newHabitName.trim() ? 'pointer' : 'not-allowed', opacity: newHabitName.trim() ? 1 : 0.4, fontFamily: 'inherit' }}>추가</button>
                 </div>
               </div>
             )}
           </div>
         </div>
 
+        )}
+
         {/* All done */}
         {allDone && (
           <div style={{ background: '#E5EFE3', border: '1px solid #b4dfc8', borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--success)' }}>오늘 모두 완료했어요</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--success-ink)' }}>오늘 모두 완료했어요</div>
             <button onClick={onEvening} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: 'var(--success)', color: '#FFFCF6', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>저녁 체크인 하기 →</button>
           </div>
         )}
@@ -533,7 +551,7 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
             <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.01em', marginBottom: 14 }}>{detailTask.title}</div>
             {detailTask.whyNow && (
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>왜 지금</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-ink)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>왜 지금</div>
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.55 }}>{detailTask.whyNow}</p>
               </div>
             )}
@@ -572,11 +590,11 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
 
       {/* Partial sheet */}
       {partialSheet && partialTask && (
-        <PartialSheet
-          taskId={partialSheet}
+        <ProgressSheet
           taskTitle={partialTask.title}
           onSubmit={(pct) => { onPartial(partialSheet, pct); setPartialSheet(null); showToast('부분 완료 기록됨'); }}
           onClose={() => setPartialSheet(null)}
+          note={<>저장 시 <b>회복 대기</b> 상태로 넘어가요.</>}
         />
       )}
 
@@ -589,153 +607,5 @@ export function MergedTodayScreen({ tasks, onOpen, onMarkDone, onPartial, onFail
         </div>
       )}
     </div>
-  );
-}
-
-// ── Agenda Skeleton ───────────────────────────────────────────
-// 첫 /today/agenda fetch 가 settle 될 때까지 hero+task row 자리를 채우는
-// 가벼운 placeholder. 더미→실데이터 깜빡임 방지용. (전역 CSS 없이 인라인만.)
-function AgendaSkeleton() {
-  const box = (h: number, radius: number, bg: string): React.CSSProperties => ({
-    height: h,
-    borderRadius: radius,
-    background: bg,
-    opacity: 0.6,
-  });
-  return (
-    <div aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* hero 자리 */}
-      <div style={box(140, 24, 'var(--sand-100)')} />
-      {/* task row 자리 — 3개 muted placeholder */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {[0, 1, 2].map((i) => (
-          <div key={i} style={box(64, 12, 'var(--surface-raised)')} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Hero Task Card ────────────────────────────────────────────
-// 열품타 패턴 — 화면의 주인공. 제목 크게, CTA 하나.
-function HeroTaskCard({
-  task, done, total,
-  onComplete, onPartial, onFail, onStart, onDetail,
-}: {
-  task: Task | null;
-  done: number;
-  total: number;
-  onComplete: () => void;
-  onPartial: () => void;
-  onFail: () => void;
-  onStart: (id: string) => void;
-  onDetail: () => void;
-}) {
-  if (!task) {
-    return (
-      <div style={{ background: 'var(--surface-raised)', border: '1px dashed var(--sand-300)', borderRadius: 24, padding: '36px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: 'var(--text-2)' }}>오늘 할 일이 없어요</div>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>주간 계획에서 블록을 추가해보세요.</p>
-      </div>
-    );
-  }
-
-  const isActive = task.status === 'in_progress';
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-  return (
-    <div style={{ background: 'var(--surface-raised)', border: '1.5px solid var(--coral-200)', borderRadius: 24, padding: '24px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--brand)', fontFamily: 'var(--font-mono)' }}>
-          {isActive ? '진행 중' : '다음 할 일'}
-        </span>
-        <span className="tnum" style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{done} / {total} · {pct}%</span>
-      </div>
-
-      <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0, color: 'var(--text-1)' }}>{task.title}</h2>
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {task.carryover && (
-            <span style={{ height: 'var(--ctrl-xs)', padding: '0 6px', background: '#FBEEDA', border: '1px solid #F2D29A', borderRadius: 9999, fontSize: 10, color: 'var(--warning)', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>↩ 이월</span>
-          )}
-          {task.time && <span className="tnum" style={{ fontSize: 12, color: 'var(--text-2)' }}>{task.time}{task.dur ? ` · ${task.dur}` : ''}</span>}
-        </div>
-        {(task.whyNow || task.firstStep) && (
-          <button onClick={onDetail} style={{ marginTop: 10, alignSelf: 'flex-start', background: 'transparent', border: 'none', padding: 0, color: 'var(--brand)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 3 }}>
-            왜 지금? · 자세히 <CaretRight size={11} />
-          </button>
-        )}
-      </div>
-
-      {isActive ? (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={onComplete}
-            style={{ flex: 2, height: 52, borderRadius: 14, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-          >
-            <Check size={16} weight="bold" /> 완료
-          </button>
-          <button
-            onClick={onPartial}
-            aria-label="일부만 함"
-            style={{ width: 52, height: 52, borderRadius: 14, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', color: 'var(--text-2)', fontSize: 16, fontFamily: 'inherit', cursor: 'pointer' }}
-          >◑</button>
-          <button
-            onClick={onFail}
-            aria-label="잘 안됨"
-            style={{ width: 52, height: 52, borderRadius: 14, border: '1px solid var(--coral-200)', background: '#FAE2D8', color: 'var(--danger)', fontSize: 16, fontFamily: 'inherit', cursor: 'pointer' }}
-          >✗</button>
-        </div>
-      ) : (
-        <button
-          onClick={() => onStart(task.id)}
-          style={{ width: '100%', height: 52, borderRadius: 14, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-        >
-          시작하기 <CaretRight size={14} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Task Row (한 줄 list 아이템) ──────────────────────────────
-// 클릭 동작 분기:
-//   - done: 무반응
-//   - failed: 회복 제안 화면으로
-//   - partial_done / recovery_pending: 회복 제안 화면으로
-//   - todo: hero 로 promote (실제 시작은 hero CTA 에서)
-function TaskRow({
-  task, onSelect, onFailedRecover, onPartialRecover,
-}: {
-  task: Task;
-  onSelect: () => void;
-  onFailedRecover: () => void;
-  onPartialRecover: () => void;
-}) {
-  const done = task.status === 'done';
-  const failed = task.status === 'failed';
-  const partial = task.status === 'partial_done' || task.status === 'recovery_pending';
-  const inProgress = task.status === 'in_progress';
-  const onClick = done ? undefined : failed ? onFailedRecover : partial ? onPartialRecover : onSelect;
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={done}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-        padding: '10px 14px', borderRadius: 12, border: 'none',
-        background: 'transparent', cursor: done ? 'default' : 'pointer',
-        fontFamily: 'inherit', textAlign: 'left',
-      }}
-    >
-      <span style={{ width: 18, height: 18, borderRadius: 9999, flexShrink: 0, border: done ? 'none' : `1.5px solid ${failed ? 'var(--danger)' : inProgress || partial ? 'var(--brand)' : 'var(--sand-300)'}`, background: done ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {done && <Check size={11} weight="bold" color="#FFFCF6" />}
-        {failed && <span style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 700 }}>✗</span>}
-        {(partial || inProgress) && <span style={{ width: 8, height: 8, borderRadius: 9999, background: 'var(--brand)' }} />}
-      </span>
-      <span style={{ flex: 1, fontSize: 14, color: done ? 'var(--text-3)' : failed ? 'var(--danger)' : 'var(--text-1)', textDecoration: done ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: partial ? 600 : 500 }}>{task.title}</span>
-      {task.time && <span className="tnum" style={{ fontSize: 11, color: 'var(--text-4)', flexShrink: 0 }}>{task.time}</span>}
-    </button>
   );
 }
