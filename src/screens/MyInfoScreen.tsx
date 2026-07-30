@@ -79,7 +79,7 @@ export function MyInfoScreen() {
 
         {user && (
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 9999, background: 'var(--brand-soft)', color: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 9999, background: 'var(--brand-soft)', color: 'var(--brand-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>
               {user.name.slice(0, 1)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -312,7 +312,7 @@ function ChoiceGroup<T extends string | number>({
                 borderRadius: 9999,
                 border: `1.5px solid ${active ? 'var(--brand)' : 'var(--sand-200)'}`,
                 background: active ? 'var(--brand-soft)' : 'var(--surface-raised)',
-                color: active ? 'var(--brand)' : 'var(--text-2)',
+                color: active ? 'var(--brand-ink)' : 'var(--text-2)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',

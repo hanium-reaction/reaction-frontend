@@ -7,6 +7,7 @@ import type {
   AnonymizeRequest,
   ApiErrorPayload,
   ApiGoal,
+  ApproveInsertResult,
   AuthSession,
   CalendarConnection,
   CheckInRequest,
@@ -35,6 +36,7 @@ import type {
   Habit,
   HabitCreateRequest,
   HabitInstance,
+  HabitUpdateRequest,
   InboxCreateRequest,
   InboxItem,
   InboxResource,
@@ -45,6 +47,9 @@ import type {
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  PolicySnapshotResponse,
+  ProfileResponse,
+  ProfileUpdateRequest,
   PushSubscribeRequest,
   RecoveryDecisionRequest,
   RecoveryDecisionResponse,
@@ -57,17 +62,19 @@ import type {
   ReplanDiff,
   SlotAnswerRequest,
   SlotCatalogEntry,
+  SyncPreview,
   TimePolicy,
   TodayAgenda,
   ToneModeUpdateRequest,
   UserProfile,
   UserSettings,
-  ProfileSettings,
-  ProfileUpdate,
+  VapidPublicKeyResponse,
   HabitPenaltyAcceptResponse,
   HabitPenaltyListResponse,
   WeeklyGenerateRequest,
   WeeklyPlanResponse,
+  WeeklyReplanApproveResponse,
+  WeeklyReplanResponse,
   WeeklyReviewResponse,
 } from '../types/api';
 
@@ -154,10 +161,44 @@ function getToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
-export function setAccessToken(token: string | null): void {
+// 세션을 어떻게 얻었는지. 'real' = 실제 Google 로그인, 'stub' = 데모/개발용.
+// 401 자가치유가 실제 사용자를 데모 계정으로 갈아타게 만들면 안 되므로 구분해 둔다.
+const AUTH_KIND_KEY = 'reaction.authKind';
+export type AuthKind = 'real' | 'stub';
+
+export function setAccessToken(token: string | null, kind?: AuthKind): void {
   if (typeof window === 'undefined') return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  if (token) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    if (kind) window.localStorage.setItem(AUTH_KIND_KEY, kind);
+  } else {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(AUTH_KIND_KEY);
+  }
+}
+
+export function getAuthKind(): AuthKind | null {
+  if (typeof window === 'undefined') return null;
+  const v = window.localStorage.getItem(AUTH_KIND_KEY);
+  return v === 'real' || v === 'stub' ? v : null;
+}
+
+// 세션이 끝났음(되살릴 수 없는 401)을 앱 껍데기에 알린다.
+// 예전엔 401 이 각 화면의 개별 에러로만 끝나서, 세션이 만료되면 "데이터가 안 불러와지는"
+// 화면만 남고 재로그인 유도가 없었다.
+type AuthExpiredHandler = () => void;
+let authExpiredHandler: AuthExpiredHandler | null = null;
+export function onAuthExpired(handler: AuthExpiredHandler | null): void {
+  authExpiredHandler = handler;
+}
+
+// stub 자동 로그인을 허용하는가 — AppShell 부트스트랩과 api 레이어 자가치유가
+// 같은 판단을 써야 한다. 예전엔 api 레이어가 VITE_ALLOW_STUB_LOGIN 만 봐서,
+// `?login=1` 로 로그인 화면을 강제해도 자가치유가 먼저 자동 로그인해 무력화됐다.
+export function stubLoginAllowed(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (import.meta.env.VITE_ALLOW_STUB_LOGIN === 'false') return false;
+  return new URLSearchParams(window.location.search).get('login') !== '1';
 }
 
 // stub 로그인 idToken — 브라우저별 전용 계정(demo:<deviceId>), `?demo=stub` 이면 시드 계정.
@@ -188,9 +229,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, idempotencyKey, anonymous = false, _retry = false } = opts;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // 토큰을 실제로 실어보냈는지 — 아래 401 처리에서 "세션 만료" 와 "애초에 미로그인" 을
+  // 구분하는 데 쓴다. 구분하지 않으면 첫 방문자에게도 "로그인이 만료됐어요" 가 뜬다.
+  let sentToken = false;
   if (!anonymous) {
     const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      sentToken = true;
+    }
   }
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
@@ -206,12 +253,16 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   if (!res.ok) {
     // 401 자가치유: 인증 필요 호출인데 토큰이 없/만료면 stub 재로그인 후 1회 재시도.
     // (부트스트랩 타이밍/토큰 유실로 "인증 헤더 없음" 401 이 나던 문제 방지)
+    // stub 자가치유는 데모/개발 세션에만 적용한다. 실제 Google 로그인 사용자에게
+    // 적용하면 만료된 순간 조용히 '데모 계정' 으로 갈아타서, 로그인은 되어 있는데
+    // 남의(또는 빈) 데이터가 보이는 상태가 된다.
     if (
       res.status === 401 &&
       !anonymous &&
       !_retry &&
       typeof window !== 'undefined' &&
-      import.meta.env.VITE_ALLOW_STUB_LOGIN !== 'false'
+      getAuthKind() !== 'real' &&
+      stubLoginAllowed()
     ) {
       try {
         const session = await request<AuthSession>('/auth/google', {
@@ -219,11 +270,18 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
           body: { idToken: stubIdToken() },
           anonymous: true,
         });
-        setAccessToken(session.accessToken);
+        setAccessToken(session.accessToken, 'stub');
         return await request<T>(path, { ...opts, _retry: true });
       } catch {
         /* 재로그인 실패 — 아래에서 원래 401 을 그대로 던진다 */
       }
+    }
+
+    // 여기까지 온 401 은 되살릴 수 없다 — 토큰을 버리고 재로그인으로 보낸다.
+    // 토큰을 보내지 않았던 요청(= 애초에 로그인 상태가 아님)은 만료가 아니므로 알리지 않는다.
+    if (res.status === 401 && !anonymous && sentToken) {
+      setAccessToken(null);
+      authExpiredHandler?.();
     }
 
     let payload: ApiErrorPayload | null = null;
@@ -373,6 +431,16 @@ export const calendarApi = {
 
   freebusy: (from: string, to: string) =>
     request<FreeBusy>(`/calendar/freebusy?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+
+  // 백엔드 stub — 계획 → 캘린더 이벤트 미리보기/충돌 체크, 승인 삽입 (#25).
+  syncPreview: () => request<SyncPreview>('/calendar/sync-preview', { method: 'POST', body: {} }),
+
+  approveInsert: (idempotencyKey: string) =>
+    request<ApproveInsertResult>('/calendar/events/approve-insert', {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
+    }),
 };
 
 // ── Inbox (S24·S25) ───────────────────────────────────────────
@@ -413,6 +481,9 @@ export const habitsApi = {
 
   create: (body: HabitCreateRequest) =>
     request<Habit>('/habits', { method: 'POST', body }),
+
+  update: (habitId: string, body: HabitUpdateRequest) =>
+    request<Habit>(`/habits/${habitId}`, { method: 'PATCH', body }),
 
   remove: (habitId: string) =>
     request<void>(`/habits/${habitId}`, { method: 'DELETE' }),
@@ -489,6 +560,16 @@ export const plansApi = {
     request<BlockEditResponse>(`/plans/${planId}/blocks/${blockId}`, {
       method: 'PATCH',
       body,
+    }),
+
+  // 주간 forward 재계획(S16) — 다음 주부터 마감까지 미착수 블록을 다시 배치. 항상 Draft.
+  generateReplan: () => request<WeeklyReplanResponse>('/plans/replan', { method: 'POST', body: {} }),
+
+  approveReplan: (planId: string, idempotencyKey: string) =>
+    request<WeeklyReplanApproveResponse>(`/plans/replan/${planId}/approve`, {
+      method: 'POST',
+      body: {},
+      idempotencyKey,
     }),
 };
 
@@ -573,6 +654,16 @@ export const notificationsApi = {
 
   unsubscribe: () =>
     request<void>('/notifications/subscribe', { method: 'DELETE' }),
+
+  // FE 가 pushManager.subscribe(applicationServerKey) 에 쓸 서버 발급 공개키.
+  // publicKey=null 이면 서버 미설정 — 구독을 만들면 안 된다.
+  vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
+};
+
+// ── Policy Snapshot (#83) ─────────────────────────────────────
+export const policySnapshotApi = {
+  // 활성 스냅샷 없으면 404 — 호출부가 카운트-only 폴백을 유지한다.
+  current: () => request<PolicySnapshotResponse>('/policy-snapshot/current'),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
@@ -582,13 +673,14 @@ export const settingsApi = {
   updateToneMode: (body: ToneModeUpdateRequest) =>
     request<UserSettings>('/settings/tone-mode', { method: 'PATCH', body }),
 
-  // 지속형 프로필 메모리 — 인터뷰가 채운 에너지/톤/시간을 조회·편집 (#A-2).
-  getProfile: () => request<ProfileSettings>('/settings/profile'),
-  updateProfile: (body: ProfileUpdate) =>
-    request<ProfileSettings>('/settings/profile', { method: 'PATCH', body }),
-
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 지속형 프로필 메모리(에너지/시간·톤/빈도·회복 선호). 인터뷰 미완료 항목은 null.
+  getProfile: () => request<ProfileResponse>('/settings/profile'),
+
+  updateProfile: (body: ProfileUpdateRequest) =>
+    request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
 };
 
 export const privacyApi = {

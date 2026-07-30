@@ -66,6 +66,13 @@ export interface GoalCandidate {
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
+  approachNote?: string | null;
+  currentLevel?: string | null;
+  frequencyPerWeek?: number | null;
+  materialsNote?: string | null;
+  preferredTime?: string | null;
+  sessionLengthMin?: number | null;
+  weeklyHours?: number | null;
 }
 
 // 종료 턴(S03 확인 카드용) 요약 — 표현 계층일 뿐, First Plan 시드는 outcome 쪽.
@@ -234,6 +241,23 @@ export interface FreeBusy {
   busy: BusyInterval[];
 }
 
+// POST /calendar/sync-preview · POST /calendar/events/approve-insert — 백엔드 stub.
+export interface CalendarEventPreview {
+  title: string;
+  start: string; // KST ISO
+  end: string; // KST ISO
+  conflict: boolean;
+}
+
+export interface SyncPreview {
+  events: CalendarEventPreview[];
+  conflictCount: number;
+}
+
+export interface ApproveInsertResult {
+  insertedCount: number;
+}
+
 // ── Notifications (S08) ───────────────────────────────────────
 export interface NotificationSettings {
   morningBriefTime: string; // HH:MM
@@ -246,6 +270,12 @@ export interface NotificationSettingsUpdateRequest {
   morningBriefTime?: string;
   eveningReflectionTime?: string;
   preCardEnabled?: boolean;
+}
+
+// GET /notifications/vapid-public-key — publicKey=null 이면 서버에 VAPID 미설정,
+// FE 는 구독을 만들지 말아야 한다.
+export interface VapidPublicKeyResponse {
+  publicKey: string | null;
 }
 
 // ── Inbox (S24·S25) ───────────────────────────────────────────
@@ -313,6 +343,12 @@ export interface HabitCreateRequest {
   minutesPerSession: number;
   timePreference: TimePreference;
   priorityLevel: number;
+}
+
+// PATCH /habits/{habitId} — 제목·빈도만 부분 수정.
+export interface HabitUpdateRequest {
+  title?: string | null;
+  frequencyPerWeek?: number | null;
 }
 
 // ── Today / Execution (S10-S13) ───────────────────────────────
@@ -553,6 +589,39 @@ export interface ReplanApproveResponse {
   isDraft?: boolean;
 }
 
+// POST /plans/replan — 주간 forward 재계획 미리보기(Draft, S16). 위 실행 단위
+// replan(§S20, /replan/{executionId})과 별개 기능이라 이름 앞에 Weekly 를 붙인다
+// (백엔드도 같은 이유로 응답 스키마명을 WeeklyReplanApproveResponse 로 분리했다).
+export interface WeeklyReplanBlockPreview {
+  actionId: string;
+  title: string;
+  category: string;
+  start: string; // KST ISO
+  end: string; // KST ISO
+  replacesBlockId?: string | null;
+}
+
+export interface WeeklyReplanResponse {
+  planId: string;
+  windowStart: string;
+  horizon: string | null;
+  blocks: WeeklyReplanBlockPreview[];
+  generatedAt: string; // KST ISO
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+  warnings?: string[];
+}
+
+// POST /plans/replan/{planId}/approve
+export interface WeeklyReplanApproveResponse {
+  planId: string;
+  cancelledBlocks: number;
+  createdBlocks: number;
+  skippedBlocks: number;
+  activatedAt: string; // KST ISO
+  isDraft?: boolean; // 항상 false
+}
+
 // ── Plans (S16) — 주간 보기/블록 수정은 아직 contract 추정(미구현) ──
 export type WorkloadLevel = 'easy' | 'medium' | 'heavy';
 
@@ -614,28 +683,31 @@ export interface FirstPlanResponse {
   isDraft?: boolean;
 }
 
-// POST /plans/generate 요청 본문 (모두 선택 — 서버가 인터뷰 결과로 보완).
+// #milestones Phase 2 — 사용자가 확인·편집하는 마일스톤 초안 한 개.
+export interface MilestoneDraft {
+  title: string;
+  summary?: string;
+}
+
 // 계획 분량(밀도) 프리셋 — 재생성 시 사용자가 조절. light≈주3 / standard≈주5 / intense≈주8 세션.
+// 값은 스펙의 density 유니온과 동일하다. 이름을 붙여 호출부가 읽기 쉽게 한다.
 export type PlanDensity = 'light' | 'standard' | 'intense';
 
-// 중간 목표(마일스톤) — 사용자가 확인·편집하는 계획 뼈대 (Phase 2).
-export interface Milestone {
-  title: string;
-  summary: string;
-}
-
-// POST /plans/milestones 응답 (Stage A).
-export interface MilestoneListResponse {
-  milestones: Milestone[];
-  aiSource: 'llm' | 'rule';
-}
-
+// POST /plans/generate 요청 본문 (모두 선택 — 서버가 인터뷰 결과로 보완).
 export interface FirstPlanGenerateRequest {
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
   density?: PlanDensity; // 생략 시 서버 기본값 'standard'
-  milestones?: Milestone[]; // 사용자가 확정한 마일스톤 (있으면 분해가 branch 로 고정, Stage B)
+  scope?: 'week' | 'horizon'; // 기본 horizon
+  // 사용자가 확정한 마일스톤 (있으면 분해가 branch 로 고정, Stage B)
+  milestones?: MilestoneDraft[] | null;
+}
+
+// POST /plans/milestones 응답 — First Plan 생성 전 마일스톤 확인 단계(Stage A).
+export interface MilestoneListResponse {
+  milestones: MilestoneDraft[];
+  aiSource?: 'llm' | 'rule';
 }
 
 // POST /plans/{planId}/approve
@@ -748,41 +820,11 @@ export type EnergyCycle = 'morning' | 'afternoon' | 'evening' | 'night' | 'varie
 export type RecoveryTone = 'gentle' | 'normal' | 'encouraging';
 export type ReminderFrequency = 'minimal' | 'standard' | 'active';
 
-export interface BehavioralProfileView {
-  energyCycle: EnergyCycle;
-  attentionSpan: number;
-  timeChunkPreference: string;
-  preferredStartTime: string | null;
-  preferredEndTime: string | null;
-}
+// 스펙 파생 타입(ProfileResponse/ProfileUpdateRequest)이 정본이다.
+// 아래 두 이름은 #A-2 계열 화면 코드가 쓰던 것 — 같은 개념이라 별칭으로 남긴다.
+export type ProfileSettings = ProfileResponse;
+export type ProfileUpdate = ProfileUpdateRequest;
 
-export interface InteractionStyleView {
-  recoveryTone: RecoveryTone;
-  suggestionStyle: string;
-  explanationDepth: string;
-  reminderFrequency: ReminderFrequency;
-}
-
-export interface ProfileSettings {
-  behavioral: BehavioralProfileView | null;
-  interaction: InteractionStyleView | null;
-  downscopeUnitMin: number | null; // 회복 시 최소 단위(분)
-  restOk: boolean | null; // 회복 시 휴식 제안 수용
-  activityStart: string | null; // 계획을 잡아도 되는 활동 시간대 "HH:MM"
-  activityEnd: string | null; // 자정=24:00
-}
-
-export interface ProfileUpdate {
-  energyCycle?: EnergyCycle;
-  attentionSpan?: number;
-  timeChunkPreference?: string;
-  recoveryTone?: RecoveryTone;
-  reminderFrequency?: ReminderFrequency;
-  downscopeUnitMin?: number;
-  restOk?: boolean;
-  activityStart?: string;
-  activityEnd?: string;
-}
 
 export interface ToneModeUpdateRequest {
   toneMode: ToneMode;
@@ -803,6 +845,59 @@ export interface ConsentRecord {
 export interface ConsentUpdateRequest {
   type: ConsentType;
   granted: boolean;
+}
+
+// GET·PATCH /settings/profile — 지속형 프로필 메모리(behavioral/interaction/회복 선호).
+// 인터뷰가 아직 채우지 않은 항목은 null.
+export interface BehavioralProfileView {
+  energyCycle: 'morning' | 'afternoon' | 'evening' | 'night' | 'varies';
+  attentionSpan: number;
+  timeChunkPreference: '10' | '20' | '30' | '60' | '90';
+  preferredStartTime?: string | null;
+  preferredEndTime?: string | null;
+}
+
+export interface InteractionStyleView {
+  recoveryTone: 'gentle' | 'normal' | 'encouraging';
+  suggestionStyle: 'soft' | 'neutral' | 'firm';
+  explanationDepth: 'brief' | 'normal' | 'detailed';
+  reminderFrequency: 'minimal' | 'standard' | 'active';
+}
+
+export interface ProfileResponse {
+  activityStart?: string | null;
+  activityEnd?: string | null;
+  behavioral: BehavioralProfileView | null;
+  interaction: InteractionStyleView | null;
+  downscopeUnitMin?: number | null;
+  restOk?: boolean | null;
+}
+
+// PATCH /settings/profile — 지정 필드만 부분 갱신(미지정은 유지).
+export interface ProfileUpdateRequest {
+  activityStart?: string | null;
+  activityEnd?: string | null;
+  energyCycle?: BehavioralProfileView['energyCycle'];
+  attentionSpan?: number; // 5~240
+  timeChunkPreference?: BehavioralProfileView['timeChunkPreference'];
+  recoveryTone?: InteractionStyleView['recoveryTone'];
+  suggestionStyle?: InteractionStyleView['suggestionStyle'];
+  explanationDepth?: InteractionStyleView['explanationDepth'];
+  reminderFrequency?: InteractionStyleView['reminderFrequency'];
+  downscopeUnitMin?: number; // 1~120
+  restOk?: boolean;
+}
+
+// GET /policy-snapshot/current (#83) — 없으면 404, FE 는 카운트-only 폴백 유지.
+export interface PolicySnapshotResponse {
+  version: number;
+  source: string;
+  behavioralProfile: Record<string, unknown>;
+  executionConstraints: Record<string, unknown>;
+  interactionStyle: Record<string, unknown>;
+  recoveryPolicy: Record<string, unknown>;
+  reasonForUpdate: string | null;
+  validFrom: string; // date-time
 }
 
 // ── Web Push (S08·S25) ────────────────────────────────────────

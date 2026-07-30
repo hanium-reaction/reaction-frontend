@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { CaretLeft, CaretUp, CaretDown, Plus, X, Sparkle, ArrowRight, Path } from '@phosphor-icons/react';
 import { ApiError, plansApi } from '../lib/api';
 import { useNavigation } from '../contexts/NavigationContext';
-import type { Milestone } from '../types/api';
+import type { MilestoneDraft } from '../types/api';
 
 // 인터뷰 후, 계획을 세우기 전에 '중간 목표(마일스톤)' 뼈대를 사용자가 확인·편집하는 화면(Phase 2).
 // 확정하면 그 구조대로 계획이 생성되고, 건너뛰면 마일스톤 없이 자동 분해된다.
 export function MilestoneConfirmScreen() {
   const { interviewSessionId, setScreen, setPlannedMilestones } = useNavigation();
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestones, setMilestones] = useState<MilestoneDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -35,7 +35,7 @@ export function MilestoneConfirmScreen() {
     return () => { cancelled = true; };
   }, [interviewSessionId]);
 
-  const update = (i: number, patch: Partial<Milestone>) =>
+  const update = (i: number, patch: Partial<MilestoneDraft>) =>
     setMilestones((ms) => ms.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   const remove = (i: number) => setMilestones((ms) => ms.filter((_, idx) => idx !== i));
   const move = (i: number, dir: -1 | 1) =>
@@ -49,7 +49,10 @@ export function MilestoneConfirmScreen() {
   const add = () => setMilestones((ms) => [...ms, { title: '', summary: '' }]);
 
   const confirmAndPlan = () => {
-    const cleaned = milestones.map((m) => ({ title: m.title.trim(), summary: m.summary.trim() })).filter((m) => m.title);
+    // 스펙상 summary 는 optional — 없으면 빈 문자열로 보정한다(백엔드가 null 도 받는다).
+    const cleaned = milestones
+      .map((m) => ({ title: m.title.trim(), summary: (m.summary ?? '').trim() }))
+      .filter((m) => m.title);
     setPlannedMilestones(cleaned.length > 0 ? cleaned : null);
     setScreen('weekly-plan');
   };
@@ -89,14 +92,14 @@ export function MilestoneConfirmScreen() {
         ) : failed ? (
           <div style={{ background: 'var(--surface-raised)', border: '1px dashed var(--sand-300)', borderRadius: 14, padding: '20px 14px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.5 }}>중간 목표를 불러오지 못했어요. 마일스톤 없이 바로 계획을 세울 수 있어요.</div>
-            <button onClick={skip} style={{ alignSelf: 'center', padding: '9px 16px', borderRadius: 10, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>바로 계획 세우기</button>
+            <button onClick={skip} style={{ alignSelf: 'center', padding: '9px 16px', borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>바로 계획 세우기</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {milestones.map((m, i) => (
               <div key={i} style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', gap: 10 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, paddingTop: 2 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--brand-soft)', color: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{i + 1}</div>
+                  <div style={{ width: 22, height: 22, borderRadius: 7, background: 'var(--brand-soft)', color: 'var(--brand-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{i + 1}</div>
                   <button onClick={() => move(i, -1)} disabled={i === 0} style={iconBtn(i === 0)} aria-label="위로"><CaretUp size={13} /></button>
                   <button onClick={() => move(i, 1)} disabled={i === milestones.length - 1} style={iconBtn(i === milestones.length - 1)} aria-label="아래로"><CaretDown size={13} /></button>
                 </div>
@@ -132,7 +135,7 @@ export function MilestoneConfirmScreen() {
           <button
             onClick={confirmAndPlan}
             disabled={!canConfirm}
-            style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand)', color: '#FFFCF6', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: canConfirm ? 'pointer' : 'not-allowed', opacity: canConfirm ? 1 : 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: canConfirm ? 'pointer' : 'not-allowed', opacity: canConfirm ? 1 : 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
             이대로 계획 세우기 <ArrowRight size={16} weight="bold" />
           </button>
