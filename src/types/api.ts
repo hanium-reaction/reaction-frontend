@@ -165,7 +165,7 @@ export interface GoalNode {
 
 export interface GoalDecomposition {
   goalId: string;
-  rootNodeId: string;
+  rootNodeId: string | null;
   nodes: GoalNode[];
 }
 

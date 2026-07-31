@@ -269,24 +269,29 @@ export interface paths {
         patch: operations["update_goal_goals__goal_id__patch"];
         trace?: never;
     };
-    "/goals/{goal_id}/decompose": {
+    "/goals/{goal_id}/nodes": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Decompose Goal
-         * @description Goal Structuring 호출 → `goal_nodes` 트리.
+         * List Goal Nodes
+         * @description 이 목표의 **실제 분해 트리** — 계획 승인 시 영속된 `goal_nodes` 를 그대로 읽는다.
          *
-         *     Issue #22 본 PR 은 mock stub 응답 (LLM 통합은 PR #33 머지된 main 위 후속 PR).
-         *     실 구현 시 `prompts/planning/goal_decompose.v1.md` + `aiClient.run(...)` + HITL Draft Layer
-         *     (ADR-0005 §2.5.1).
+         *     이 자리에 있던 `POST /{goal_id}/decompose` 는 목표와 무관하게 하드코딩된 데모 트리
+         *     (캡스톤 → 설계/구현/발표)를 돌려줬고 FE 가 그걸 화면에 그렸다. 어떤 목표를 분해해도
+         *     같은 캡스톤 단계가 나왔다 — 안 보여주느니만 못한 상태라 제거하고, 실제 분해를 읽는
+         *     조회로 대체한다. 분해 자체는 First Plan(`planning/goal_decompose` + 마일스톤)이 이미
+         *     수행하고 승인 시 영속한다.
+         *
+         *     계획을 아직 승인하지 않은 목표는 트리가 없으므로 `nodes=[]` (404 아님 — 목표는 존재하고
+         *     분해만 아직 없는 정상 상태다). `rootNodeId` 도 그때는 null.
          */
-        post: operations["decompose_goal_goals__goal_id__decompose_post"];
+        get: operations["list_goal_nodes_goals__goal_id__nodes_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2348,7 +2353,9 @@ export interface components {
         };
         /**
          * GoalDecomposition
-         * @description POST /goals/{id}/decompose 응답 — Goal Structuring 결과.
+         * @description GET /goals/{id}/nodes 응답 — 계획 승인 시 영속된 실제 분해 트리.
+         *
+         *     계획을 아직 승인하지 않은 목표는 트리가 없다 → `nodes=[]`, `root_node_id=None`.
          */
         GoalDecomposition: {
             /** Goalid */
@@ -2356,7 +2363,7 @@ export interface components {
             /** Nodes */
             nodes: components["schemas"]["GoalNode"][];
             /** Rootnodeid */
-            rootNodeId: string;
+            rootNodeId: string | null;
         };
         /**
          * GoalNode
@@ -4293,7 +4300,7 @@ export interface operations {
             };
         };
     };
-    decompose_goal_goals__goal_id__decompose_post: {
+    list_goal_nodes_goals__goal_id__nodes_get: {
         parameters: {
             query?: never;
             header?: {
