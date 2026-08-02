@@ -292,10 +292,8 @@ export interface InboxItem {
   promotedGoalId: string | null;
   // 승격 대상 구분(#122) — 'action'(할 일로) / 'goal'(목표로). 없으면 goal 로 간주.
   promotedTo?: 'goal' | 'action' | null;
-  // 시스템이 넣은 추천 자료 항목 구분(#163, backend#171). 필드가 없으면 사용자 캡처로
-  // 간주하므로 BE 미배포 상태에서도 기존 동작 그대로다(안전한 no-op).
-  // ⚠️ BE 배포 후 `npm run gen:api` 로 실제 계약과 대조할 것.
-  source?: 'user' | 'system' | null;
+  // 시스템이 넣은 추천 자료 항목 구분(#163, backend#171). 기본값 'user'.
+  source: 'user' | 'system';
   resourceSlug?: string | null;
 }
 

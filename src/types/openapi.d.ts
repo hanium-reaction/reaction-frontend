@@ -237,6 +237,9 @@ export interface paths {
         /**
          * Create Goal
          * @description 신규 목표 — tier 한도 (Focus ≤3 / Maintain ≤5) enforce.
+         *
+         *     생성 직후 그 카테고리의 추천 자료를 인박스에 넣는다 (#171). best-effort — savepoint
+         *     안에서 돌기 때문에 자료 삽입이 실패해도 목표 생성은 그대로 성공한다.
          */
         post: operations["create_goal_goals_post"];
         delete?: never;
@@ -444,6 +447,32 @@ export interface paths {
          * @description 1줄 캡처 + AI category 추정 (LLM 1회, 8s timeout, 실패 시 룰 fallback).
          */
         post: operations["create_inbox_inbox_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/resources/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inbox Resource
+         * @description 시스템 항목이 가리키는 정적 자료 본문 (#171).
+         *
+         *     **인증만 필요하고 소유권 검사는 하지 않는다** — 자료는 사용자별 개인 데이터가 아니라
+         *     레포에 커밋된 정적 공용 콘텐츠라 소유권 개념이 없다. 인증은 라우터 단위로 걸려 있다.
+         *
+         *     `slug` 는 레지스트리의 dict 키 조회에만 쓰이고 경로와 결합되지 않으므로 경로 순회가
+         *     성립하지 않는다. 규격을 벗어난 slug 는 그냥 404 로 떨어진다.
+         */
+        get: operations["get_inbox_resource_inbox_resources__slug__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2625,10 +2654,33 @@ export interface components {
             promotedTo?: ("goal" | "action") | null;
             /** Rawtext */
             rawText: string;
+            /** Resourceslug */
+            resourceSlug?: string | null;
+            /**
+             * Source
+             * @default user
+             * @enum {string}
+             */
+            source: "user" | "system";
             /** Status */
             status: string;
             /** Usercategory */
             userCategory: string | null;
+        };
+        /**
+         * InboxResourceDetail
+         * @description GET /inbox/resources/{slug} — 시스템 항목이 가리키는 정적 자료 본문.
+         *
+         *     `markdown` 은 frontmatter 를 걷어낸 본문이다(파일 원문이 아니다). FE 는 첫 H1 이
+         *     `title` 과 같을 때만 본문에서 덜어내므로 **둘 다 가공 없이** 실어야 한다.
+         */
+        InboxResourceDetail: {
+            /** Markdown */
+            markdown: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
         };
         /**
          * InboxUpdateRequest
@@ -4641,6 +4693,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inbox_resource_inbox_resources__slug__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxResourceDetail"];
                 };
             };
             /** @description Validation Error */

@@ -2317,6 +2317,26 @@
             "title": "Rawtext",
             "type": "string"
           },
+          "resourceSlug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resourceslug"
+          },
+          "source": {
+            "default": "user",
+            "enum": [
+              "user",
+              "system"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -2342,6 +2362,30 @@
           "promotedGoalId"
         ],
         "title": "InboxItem",
+        "type": "object"
+      },
+      "InboxResourceDetail": {
+        "description": "GET /inbox/resources/{slug} — 시스템 항목이 가리키는 정적 자료 본문.\n\n`markdown` 은 frontmatter 를 걷어낸 본문이다(파일 원문이 아니다). FE 는 첫 H1 이\n`title` 과 같을 때만 본문에서 덜어내므로 **둘 다 가공 없이** 실어야 한다.",
+        "properties": {
+          "markdown": {
+            "title": "Markdown",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "markdown"
+        ],
+        "title": "InboxResourceDetail",
         "type": "object"
       },
       "InboxUpdateRequest": {
@@ -5487,7 +5531,7 @@
         ]
       },
       "post": {
-        "description": "신규 목표 — tier 한도 (Focus ≤3 / Maintain ≤5) enforce.",
+        "description": "신규 목표 — tier 한도 (Focus ≤3 / Maintain ≤5) enforce.\n\n생성 직후 그 카테고리의 추천 자료를 인박스에 넣는다 (#171). best-effort — savepoint\n안에서 돌기 때문에 자료 삽입이 실패해도 목표 생성은 그대로 성공한다.",
         "operationId": "create_goal_goals_post",
         "parameters": [
           {
@@ -6286,6 +6330,65 @@
           }
         },
         "summary": "Create Inbox",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/inbox/resources/{slug}": {
+      "get": {
+        "description": "시스템 항목이 가리키는 정적 자료 본문 (#171).\n\n**인증만 필요하고 소유권 검사는 하지 않는다** — 자료는 사용자별 개인 데이터가 아니라\n레포에 커밋된 정적 공용 콘텐츠라 소유권 개념이 없다. 인증은 라우터 단위로 걸려 있다.\n\n`slug` 는 레지스트리의 dict 키 조회에만 쓰이고 경로와 결합되지 않으므로 경로 순회가\n성립하지 않는다. 규격을 벗어난 slug 는 그냥 404 로 떨어진다.",
+        "operationId": "get_inbox_resource_inbox_resources__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxResourceDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Inbox Resource",
         "tags": [
           "inbox"
         ]
