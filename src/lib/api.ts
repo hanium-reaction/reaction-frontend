@@ -37,6 +37,8 @@ import type {
   HabitCreateRequest,
   HabitInstance,
   HabitUpdateRequest,
+  InboxAdoptedStep,
+  InboxAdoptStepRequest,
   InboxCreateRequest,
   InboxItem,
   InboxResource,
@@ -477,6 +479,10 @@ export const inboxApi = {
   // 추천 자료 본문(마크다운) 조회 (#163, backend#171). 미존재 slug 는 404.
   resource: (slug: string) =>
     request<InboxResource>(`/inbox/resources/${encodeURIComponent(slug)}`),
+
+  // 자료가 제안한 한 걸음을 오늘 할 일로 채택 (#171 후속). 자료는 promoted 로 바뀌지 않음.
+  adoptStep: (inboxId: string, body: InboxAdoptStepRequest) =>
+    request<InboxAdoptedStep>(`/inbox/${inboxId}/adopt-step`, { method: 'POST', body }),
 };
 
 // ── Habits (S27) ──────────────────────────────────────────────

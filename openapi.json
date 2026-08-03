@@ -2254,6 +2254,50 @@
         "title": "IdentityContext",
         "type": "object"
       },
+      "InboxAdoptStepRequest": {
+        "description": "POST /inbox/{id}/adopt-step — 자료의 몇 번째 한 걸음을 채택할지.",
+        "properties": {
+          "stepIndex": {
+            "minimum": 0.0,
+            "title": "Stepindex",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stepIndex"
+        ],
+        "title": "InboxAdoptStepRequest",
+        "type": "object"
+      },
+      "InboxAdoptedStep": {
+        "description": "채택 결과 — 오늘 할 일로 만들어진 카드.\n\n자료 항목 자체는 `promoted` 로 바뀌지 않는다. 한 걸음을 채택한 것이지 자료를\n승격한 게 아니고, 사용자가 나중에 다른 걸음을 또 채택하거나 다시 읽을 수 있다.",
+        "properties": {
+          "actionId": {
+            "title": "Actionid",
+            "type": "string"
+          },
+          "resourceSlug": {
+            "title": "Resourceslug",
+            "type": "string"
+          },
+          "targetDate": {
+            "title": "Targetdate",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actionId",
+          "title",
+          "targetDate",
+          "resourceSlug"
+        ],
+        "title": "InboxAdoptedStep",
+        "type": "object"
+      },
       "InboxCreateRequest": {
         "description": "POST /inbox — 1줄 캡처.",
         "properties": {
@@ -2365,7 +2409,7 @@
         "type": "object"
       },
       "InboxResourceDetail": {
-        "description": "GET /inbox/resources/{slug} — 시스템 항목이 가리키는 정적 자료 본문.\n\n`markdown` 은 frontmatter 를 걷어낸 본문이다(파일 원문이 아니다). FE 는 첫 H1 이\n`title` 과 같을 때만 본문에서 덜어내므로 **둘 다 가공 없이** 실어야 한다.",
+        "description": "GET /inbox/resources/{slug} — 시스템 항목이 가리키는 정적 자료 본문.\n\n`markdown` 은 frontmatter 를 걷어낸 본문이다(파일 원문이 아니다). FE 는 첫 H1 이\n`title` 과 같을 때만 본문에서 덜어내므로 **둘 다 가공 없이** 실어야 한다.\n\n`steps` 는 이 자료가 제안하는 한 걸음들 — 사용자가 골라 오늘 할 일로 채택한다\n(`POST /inbox/{id}/adopt-step`). 자료가 읽고 끝나지 않게 하는 유일한 출구다.",
         "properties": {
           "markdown": {
             "title": "Markdown",
@@ -2375,6 +2419,13 @@
             "title": "Slug",
             "type": "string"
           },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -2383,7 +2434,8 @@
         "required": [
           "slug",
           "title",
-          "markdown"
+          "markdown",
+          "steps"
         ],
         "title": "InboxResourceDetail",
         "type": "object"
@@ -6458,6 +6510,75 @@
           }
         },
         "summary": "Update Inbox",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/inbox/{inbox_id}/adopt-step": {
+      "post": {
+        "description": "자료가 제안한 '한 걸음'을 오늘 할 일로 채택한다 (#171 후속).\n\n자료를 읽고 끝나지 않게 하는 **유일한 출구**다. 여기서 만든 `ActionItem` 은\n`source='inbox'` + `inbox_item_id` 로 자료에 연결되므로, 그 뒤 체크인 → 21시 회고\n→ 실패 사유 → 회복 카드는 **기존 루프가 그대로** 처리한다. 회복을 새로 만들지 않는다\n(AGENTS §1: 회복 시점은 21시 일괄 회고만).\n\n자료 항목은 `promoted` 로 바꾸지 않는다 — 한 걸음을 채택한 것이지 자료를 승격한 게\n아니고, 나중에 다른 걸음을 또 채택하거나 다시 읽을 수 있어야 한다.",
+        "operationId": "adopt_resource_step_inbox__inbox_id__adopt_step_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "inbox_id",
+            "required": true,
+            "schema": {
+              "title": "Inbox Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxAdoptStepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxAdoptedStep"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Resource Step",
         "tags": [
           "inbox"
         ]

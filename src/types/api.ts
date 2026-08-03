@@ -306,11 +306,25 @@ export interface InboxResource {
   slug: string;
   title: string;
   markdown: string;
+  // 이 자료가 제안하는 한 걸음들 (#171 후속) — POST /inbox/{id}/adopt-step 로 채택.
+  steps: string[];
 }
 
 export interface InboxUpdateRequest {
   userCategory?: InboxCategory;
   status?: InboxStatus;
+}
+
+export interface InboxAdoptStepRequest {
+  stepIndex: number;
+}
+
+// 자료의 한 걸음을 채택해 만들어진 오늘 할 일 카드 (#171 후속).
+export interface InboxAdoptedStep {
+  actionId: string;
+  title: string;
+  targetDate: string;
+  resourceSlug: string;
 }
 
 // ── Habits (S27) ──────────────────────────────────────────────

@@ -499,6 +499,34 @@ export interface paths {
         patch: operations["update_inbox_inbox__inbox_id__patch"];
         trace?: never;
     };
+    "/inbox/{inbox_id}/adopt-step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Resource Step
+         * @description 자료가 제안한 '한 걸음'을 오늘 할 일로 채택한다 (#171 후속).
+         *
+         *     자료를 읽고 끝나지 않게 하는 **유일한 출구**다. 여기서 만든 `ActionItem` 은
+         *     `source='inbox'` + `inbox_item_id` 로 자료에 연결되므로, 그 뒤 체크인 → 21시 회고
+         *     → 실패 사유 → 회복 카드는 **기존 루프가 그대로** 처리한다. 회복을 새로 만들지 않는다
+         *     (AGENTS §1: 회복 시점은 21시 일괄 회고만).
+         *
+         *     자료 항목은 `promoted` 로 바꾸지 않는다 — 한 걸음을 채택한 것이지 자료를 승격한 게
+         *     아니고, 나중에 다른 걸음을 또 채택하거나 다시 읽을 수 있어야 한다.
+         */
+        post: operations["adopt_resource_step_inbox__inbox_id__adopt_step_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox/{inbox_id}/archive": {
         parameters: {
             query?: never;
@@ -2630,6 +2658,31 @@ export interface components {
             season: string;
         };
         /**
+         * InboxAdoptStepRequest
+         * @description POST /inbox/{id}/adopt-step — 자료의 몇 번째 한 걸음을 채택할지.
+         */
+        InboxAdoptStepRequest: {
+            /** Stepindex */
+            stepIndex: number;
+        };
+        /**
+         * InboxAdoptedStep
+         * @description 채택 결과 — 오늘 할 일로 만들어진 카드.
+         *
+         *     자료 항목 자체는 `promoted` 로 바뀌지 않는다. 한 걸음을 채택한 것이지 자료를
+         *     승격한 게 아니고, 사용자가 나중에 다른 걸음을 또 채택하거나 다시 읽을 수 있다.
+         */
+        InboxAdoptedStep: {
+            /** Actionid */
+            actionId: string;
+            /** Resourceslug */
+            resourceSlug: string;
+            /** Targetdate */
+            targetDate: string;
+            /** Title */
+            title: string;
+        };
+        /**
          * InboxCreateRequest
          * @description POST /inbox — 1줄 캡처.
          */
@@ -2673,12 +2726,17 @@ export interface components {
          *
          *     `markdown` 은 frontmatter 를 걷어낸 본문이다(파일 원문이 아니다). FE 는 첫 H1 이
          *     `title` 과 같을 때만 본문에서 덜어내므로 **둘 다 가공 없이** 실어야 한다.
+         *
+         *     `steps` 는 이 자료가 제안하는 한 걸음들 — 사용자가 골라 오늘 할 일로 채택한다
+         *     (`POST /inbox/{id}/adopt-step`). 자료가 읽고 끝나지 않게 하는 유일한 출구다.
          */
         InboxResourceDetail: {
             /** Markdown */
             markdown: string;
             /** Slug */
             slug: string;
+            /** Steps */
+            steps: string[];
             /** Title */
             title: string;
         };
@@ -4763,6 +4821,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adopt_resource_step_inbox__inbox_id__adopt_step_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                inbox_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxAdoptStepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxAdoptedStep"];
                 };
             };
             /** @description Validation Error */
