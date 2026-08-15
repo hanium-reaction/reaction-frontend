@@ -411,14 +411,39 @@ export interface AgendaCard {
   source: string;
   whyNow: string | null;
   firstStep: string | null;
+  // 이 카드를 취소할 수 있는가(BE 파생 필드). 판정 규칙(실행 이력·source·status)은
+  // BE 안에만 두고 FE 는 이 값만 본다 — 규칙을 복제하면 조용히 어긋난다.
+  cancellable: boolean;
+}
+
+// /today/agenda 안의 고정 일정 행. 관리 화면의 FixedSchedule 과 다른 스키마다 —
+// 여긴 이미 '오늘 요일에 걸린 것' 만 골라 오므로 daysOfWeek 가 없다.
+// (FixedSchedule 로 선언돼 있던 것을 바로잡음 — daysOfWeek 를 읽으면 undefined 였다.)
+export interface AgendaFixedSchedule {
+  scheduleId: string;
+  title: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}
+
+// /today/agenda 안의 습관 행. 주간 목록의 HabitInstance 와 다른 스키마다 —
+// 여긴 title 을 함께 주고 weekStart 는 없다(이미 '오늘' 기준이므로).
+// (HabitInstance[] 로 선언돼 있던 것을 바로잡음 — weekStart 는 undefined 였고,
+//  정작 백엔드가 주는 title 은 타입에 없어서 쓸 수 없었다.)
+export interface AgendaHabit {
+  instanceId: string;
+  habitId: string;
+  title: string;
+  targetCount: number;
+  doneCount: number;
 }
 
 export interface TodayAgenda {
   date: string;
   brief: MorningBrief | null;
   cards: AgendaCard[];
-  habits: HabitInstance[];
-  fixedSchedules: FixedSchedule[];
+  habits: AgendaHabit[];
+  fixedSchedules: AgendaFixedSchedule[];
 }
 
 export type CompletionStatus = 'done' | 'partial_done' | 'failed' | 'over_done';
@@ -803,8 +828,9 @@ export interface WeeklyReviewResponse {
 export interface WeeklyGenerateRequest {
   weekStart?: string;
 }
+// 페널티 근거 — 한 주의 달성/목표. 스펙에 weekStart 는 없다(주 식별은 배열 순서).
+// 예전엔 weekStart: string 이 필수로 선언돼 있었다 — 읽었다면 undefined 였다.
 export interface HabitWeekStat {
-  weekStart: string;
   doneCount: number;
   targetCount: number;
 }

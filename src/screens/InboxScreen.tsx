@@ -55,14 +55,16 @@ export function InboxScreen() {
     error: string | null;
     steps: string[];
   } | null>(null);
-  // 채택 진행 중인 걸음 인덱스 + 이미 담은 것들. BE 가 중복을 막지 않아 화면에서 알려준다.
   const [toast, setToast] = useState<{ msg: string; tone: 'neutral' | 'error' } | null>(null);
   const showToast = (msg: string, tone: 'neutral' | 'error' = 'neutral') => {
     setToast({ msg, tone });
     setTimeout(() => setToast(null), 2600);
   };
   const [adoptingIndex, setAdoptingIndex] = useState<number | null>(null);
-  const [adoptedIndexes, setAdoptedIndexes] = useState<number[]>([]);
+  // 걸음별로 담긴 카드의 actionId 목록. 개수만 세면 BE 가 dedup 을 넣는 순간 틀어진다.
+  // 이미 담은 걸음. `${inboxId}:${stepIndex}` 로 키를 잡아 시트를 닫았다 다시 열어도 남는다 —
+  // 열 때마다 비우면 시트만 다시 열면 또 담기니, 막는 의미가 없다.
+  const [adoptedKeys, setAdoptedKeys] = useState<Set<string>>(new Set());
 
   const fetchList = (status?: string) => {
     setIsLoading(true);
@@ -168,7 +170,6 @@ export function InboxScreen() {
     const slug = it.resourceSlug;
     if (!slug) return;
     setAdoptingIndex(null);
-    setAdoptedIndexes([]);
     setResource({ inboxId: it.inboxId, title: it.rawText, markdown: null, error: null, steps: [] });
     try {
       const res = await inboxApi.resource(slug);
@@ -197,7 +198,9 @@ export function InboxScreen() {
     setAdoptingIndex(stepIndex);
     try {
       const adopted = await inboxApi.adoptStep(resource.inboxId, stepIndex);
-      setAdoptedIndexes((xs) => (xs.includes(stepIndex) ? xs : [...xs, stepIndex]));
+      // BE 는 같은 걸음을 몇 번이든 새 카드로 만든다(BE #213) — 그리고 잘못 생긴 카드를
+      // 지울 엔드포인트가 없다(BE #214). 서버가 멱등해질 때까지 화면에서 두 번째 탭을 막는다.
+      setAdoptedKeys((s) => new Set(s).add(`${resource.inboxId}:${stepIndex}`));
       showToast(`오늘 할 일에 담았어요 — ${adopted.title}`);
     } catch (err: unknown) {
       // 시트는 닫지 않는다 — 사용자가 자료를 계속 읽거나 다른 걸음을 고를 수 있어야 한다.
@@ -375,7 +378,8 @@ export function InboxScreen() {
           steps={resource.steps}
           onAdoptStep={adoptStep}
           adoptingIndex={adoptingIndex}
-          adoptedIndexes={adoptedIndexes}
+          adoptedKeys={adoptedKeys}
+          inboxId={resource.inboxId}
           error={resource.error}
           onClose={() => setResource(null)}
         />

@@ -25,8 +25,16 @@ interface ResourceViewerSheetProps {
   onAdoptStep?: (stepIndex: number) => void;
   /** 채택 진행 중인 걸음 인덱스. 그 항목만 비활성·문구 변경. */
   adoptingIndex?: number | null;
-  /** 이미 오늘 담은 걸음. BE 가 중복을 막지 않으므로 화면에서 알려준다. */
-  adoptedIndexes?: number[];
+  /**
+   * 이미 담은 걸음의 키 집합(`${inboxId}:${stepIndex}`). 담긴 걸음은 다시 누를 수 없다.
+   *
+   * BE 가 같은 걸음을 몇 번이든 새 카드로 만들고(BE #213), 잘못 생긴 카드를 지울
+   * 엔드포인트도 없다(BE #214). 서버가 멱등해질 때까지는 화면이 막는 수밖에 없다.
+   * 다음 날 다시 담는 건 막히지 않는다 — 이 집합은 세션 안에서만 산다.
+   */
+  adoptedKeys?: Set<string>;
+  /** 지금 열린 자료의 inboxId. adoptedKeys 조회에만 쓴다. */
+  inboxId?: string;
 }
 
 // 코드·표처럼 넓은 요소는 자기 컨테이너에서만 가로 스크롤 — 본문(모바일)이 가로로 밀리지 않게.
@@ -48,7 +56,8 @@ export function ResourceViewerSheet({
   steps = [],
   onAdoptStep,
   adoptingIndex = null,
-  adoptedIndexes = [],
+  adoptedKeys,
+  inboxId = '',
 }: ResourceViewerSheetProps) {
   const bodyMd = markdown === null ? null : stripLeadingTitle(markdown, title);
   return (
@@ -143,14 +152,14 @@ export function ResourceViewerSheet({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {steps.map((step, i) => {
                 const busy = adoptingIndex === i;
-                const done = adoptedIndexes.includes(i);
+                const done = adoptedKeys?.has(`${inboxId}:${i}`) ?? false;
                 // 다른 걸음을 채택하는 중엔 전부 잠근다 — 연타로 카드가 여러 개 생기는 걸 막는다.
                 const locked = adoptingIndex !== null && !busy;
                 return (
                   <button
                     key={i}
                     onClick={() => onAdoptStep(i)}
-                    disabled={busy || locked}
+                    disabled={busy || locked || done}
                     style={{
                       display: 'flex',
                       alignItems: 'flex-start',
@@ -160,7 +169,7 @@ export function ResourceViewerSheet({
                       borderRadius: 12,
                       border: `1px solid ${done ? 'var(--coral-200)' : 'var(--sand-200)'}`,
                       background: done ? 'var(--brand-soft)' : 'var(--surface-raised)',
-                      cursor: busy || locked ? 'default' : 'pointer',
+                      cursor: busy || locked || done ? 'default' : 'pointer',
                       opacity: locked ? 0.5 : 1,
                       fontFamily: 'inherit',
                       textAlign: 'left',

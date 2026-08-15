@@ -508,7 +508,10 @@ export const inboxApi = {
     request<InboxAdoptedStep>(`/inbox/${inboxId}/adopt-step`, {
       method: 'POST',
       body: { stepIndex } satisfies InboxAdoptStepRequest,
-      // 같은 걸음을 두 번 눌러도 카드가 두 개 생기지 않게 한다.
+      // 이 키는 지금 아무것도 막지 못한다 — BE 미들웨어(_IDEMPOTENT_ROUTES)에 adopt-step 이
+      // 없어서 헤더가 그대로 무시된다. 연타로 인한 중복 요청은 UI 의 locked 가드가 막는다.
+      // ⚠️ BE 를 idempotent 로 바꾸려면 이 키에 날짜를 넣어야 한다(adopt-{id}-{idx}-{YYYY-MM-DD}).
+      // 지금처럼 영구 고정 키면 며칠 뒤 같은 걸음을 다시 담으려 해도 영영 막힌다. (#191)
       idempotencyKey: `adopt-${inboxId}-${stepIndex}`,
     }),
 };
@@ -543,6 +546,12 @@ export const todayApi = {
 
   getAction: (actionItemId: string) =>
     request<ActionItem>(`/today/actions/${actionItemId}`),
+
+  // 카드 취소 = soft delete (BE #214). 204, 그리고 이미 보관된 카드를 다시 취소해도 204 다
+  // — FE 가 5초 스낵바 뒤에 호출하므로 재시도가 실패로 보이면 안 된다.
+  // 되돌리기 엔드포인트는 없다. 5초 안에는 요청 자체를 안 보내는 방식으로 덮는다.
+  cancel: (actionItemId: string) =>
+    request<void>(`/today/actions/${actionItemId}/cancel`, { method: 'POST', body: {} }),
 
   start: (actionItemId: string) =>
     request<ExecutionStartResponse>(`/today/actions/${actionItemId}/start`, {
