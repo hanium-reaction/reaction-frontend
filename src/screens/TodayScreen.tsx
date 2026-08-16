@@ -21,6 +21,7 @@ import { EmptyState } from '../components/EmptyState';
 import { SkeletonBlock } from '../components/SkeletonBlock';
 import { Toast } from '../components/Toast';
 import { FixedScheduleStrip } from '../components/FixedScheduleStrip';
+import { NextUpStrip } from '../components/NextUpStrip';
 import { Gear, Target, DotsThreeVertical } from '@phosphor-icons/react';
 
 // Today 헤더 우상단 — 목표 관리·설정을 하나의 ⋮ 메뉴로 통합 (아이콘 2개 → 1개).
@@ -444,9 +445,41 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   const heroTask =
     tasks.find((t) => t.id === selectedTaskId) ?? activeTask ?? pendingTasks[0] ?? null;
 
+  // 히어로 카드가 화면 밖으로 나가면 상단 스트립을 띄운다(#214). 스트립이 가리키는 카드는
+  // 항상 heroTask 그 자체다 — 선정 로직을 복제하면 언젠가 조용히 어긋난다.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [heroVisible, setHeroVisible] = useState(true);
+  useEffect(() => {
+    const root = scrollRef.current;
+    const target = heroRef.current;
+    // 히어로가 없으면(빈 상태·로딩) 스트립도 뜰 이유가 없다 — 보이는 것으로 취급해 숨긴다.
+    if (!root || !target) {
+      setHeroVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => setHeroVisible(entry.isIntersecting),
+      { root, threshold: 0 },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [heroTask?.id, agendaLoading, tasks.length]);
+
   return (
     <div style={{ position: 'relative', height: '100%' }}>
-      <div style={{ height: '100%', overflowY: 'auto', padding: '12px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* 스크롤 흐름 밖(absolute)에 겹쳐 띄운다 — 나타날 때 아래 내용이 밀리지 않게. */}
+      {!agendaLoading && heroTask && (
+        <NextUpStrip
+          task={heroTask}
+          visible={!heroVisible}
+          {...metaFor(heroTask)}
+          done={doneTasks.length}
+          total={tasks.length}
+          onStart={(id) => onOpen(id)}
+        />
+      )}
+      <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '12px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         {/* Header — 한 줄로 압축. 열품타식 미니멀. */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
@@ -494,7 +527,9 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           )
         ) : (
           <>
-            {/* Hero — 지금 할 일. row 에서 promote 한 카드 또는 진행 중 카드. */}
+            {/* Hero — 지금 할 일. row 에서 promote 한 카드 또는 진행 중 카드.
+                ref 는 상단 스트립 노출 판정(IntersectionObserver)용. */}
+            <div ref={heroRef}>
             <HeroTaskCard
               task={heroTask}
               done={doneTasks.length}
@@ -506,6 +541,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
               onStart={(id) => onOpen(id)}
               onDetail={() => heroTask && setDetailTask(heroTask)}
             />
+            </div>
 
             {/* 나머지 카드 — 모두 한 줄 row 통일. hero 에 떠 있는 카드는 제외. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
