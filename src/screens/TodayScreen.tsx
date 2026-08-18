@@ -15,7 +15,7 @@ import { localDateStr } from '../lib/dates';
 import { categoryLabel, goalColor } from '../data';
 import { DemoNotice } from '../components/DemoNotice';
 import { HeroTaskCard } from '../components/HeroTaskCard';
-import { TaskRow } from '../components/TaskRow';
+import { TodayTimeline } from '../components/TodayTimeline';
 import { ProgressSheet } from '../components/ProgressSheet';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBlock } from '../components/SkeletonBlock';
@@ -445,6 +445,20 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   const heroTask =
     tasks.find((t) => t.id === selectedTaskId) ?? activeTask ?? pendingTasks[0] ?? null;
 
+  // C안: 히어로 아래 나머지 일은 카드 더미가 아니라 시간축으로 읽힌다.
+  // 시간 있는 항목만 먼저 오름차순, 미정 항목은 서버가 준 상대 순서를 유지한다.
+  const timelineTasks = tasks
+    .filter((t) => t.id !== heroTask?.id)
+    .map((task, index) => ({ task, index, meta: metaFor(task) }))
+    .sort((a, b) => {
+      const at = a.meta.time ?? a.task.time;
+      const bt = b.meta.time ?? b.task.time;
+      if (at && bt) return at.localeCompare(bt) || a.index - b.index;
+      if (at) return -1;
+      if (bt) return 1;
+      return a.index - b.index;
+    });
+
   // 히어로 카드가 화면 밖으로 나가면 상단 스트립을 띄운다(#214). 스트립이 가리키는 카드는
   // 항상 heroTask 그 자체다 — 선정 로직을 복제하면 언젠가 조용히 어긋난다.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -543,22 +557,13 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
             />
             </div>
 
-            {/* 나머지 카드 — 모두 한 줄 row 통일. hero 에 떠 있는 카드는 제외. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {tasks
-                .filter((t) => t.id !== heroTask?.id)
-                .map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    task={t}
-                    {...metaFor(t)}
-                    // 대기/진행 row 클릭 = hero 로 promote (실제 시작 X)
-                    onSelect={() => setSelectedTaskId(t.id)}
-                    onFailedRecover={() => onFail(t.id, t.failReason || '')}
-                    onPartialRecover={onOpenRecovery}
-                  />
-                ))}
-            </div>
+            {/* C안 — 나머지 할 일을 예정 시각 기준의 하루 타임라인으로 보여준다. */}
+            <TodayTimeline
+              items={timelineTasks.map(({ task, meta }) => ({ task, ...meta }))}
+              onSelect={setSelectedTaskId}
+              onFailedRecover={onFail}
+              onPartialRecover={onOpenRecovery}
+            />
           </>
         )}
 
