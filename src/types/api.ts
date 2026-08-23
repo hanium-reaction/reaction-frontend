@@ -950,6 +950,49 @@ export interface MilestoneListResponse {
   aiSource?: 'llm' | 'rule';
 }
 
+// 자료 검색·확정 3단계(#259·#260) — POST /plans/materials/search-query → search → confirm.
+// 확정한 텍스트는 goals.materials 슬롯에 쓰여 다음 계획 생성에 그대로 들어간다.
+export interface MaterialsQueryRequest {
+  interviewSessionId?: string | null;
+}
+
+export interface MaterialsQueryResponse {
+  goalTitle: string;
+  notice: string;
+  suggestedQuery: string;
+}
+
+export interface MaterialsSearchRequest {
+  query: string;
+}
+
+export interface MaterialSource {
+  title: string;
+  uri: string;
+}
+
+export interface MaterialsSearchResponse {
+  aiSource: 'llm' | 'rule';
+  isDraft: boolean;
+  notice: string;
+  remainingToday?: number | null;
+  searchQueries?: string[];
+  sources?: MaterialSource[];
+  status: 'found' | 'not_found' | 'blocked_copyright' | 'quota_exceeded' | 'unavailable';
+  text?: string | null;
+}
+
+export interface MaterialsConfirmRequest {
+  interviewSessionId?: string | null;
+  text: string;
+}
+
+export interface MaterialsConfirmResponse {
+  goalTitle: string;
+  notice: string;
+  savedChars: number;
+}
+
 // POST /plans/{planId}/approve
 export interface FirstPlanApproveResponse {
   planId: string;

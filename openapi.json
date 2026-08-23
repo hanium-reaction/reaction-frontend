@@ -3454,6 +3454,210 @@
         "title": "MandalaTreeResponse",
         "type": "object"
       },
+      "MaterialSource": {
+        "description": "검색이 실제로 참조한 출처 — 사용자에게 그대로 보여준다 (#259 ⑩).\n\n출처를 숨기고 자료를 쓰면 다른 판·다른 강의를 가져왔을 때 사용자가 알아챌 방법이 없다.",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "uri"
+        ],
+        "title": "MaterialSource",
+        "type": "object"
+      },
+      "MaterialsConfirmRequest": {
+        "description": "POST /plans/materials/confirm — \"이 자료 맞아요\".\n\n`text` 를 그대로 받는 이유: 사용자가 **고쳐서** 보낼 수 있어야 한다. 검색이 다른 판을\n가져왔거나 일부만 맞을 때 지우고 붙이는 게 HITL 의 핵심이다.",
+        "properties": {
+          "interviewSessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewsessionid"
+          },
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "MaterialsConfirmRequest",
+        "type": "object"
+      },
+      "MaterialsConfirmResponse": {
+        "description": "확정 결과 — 명시 승인이므로 Draft 가 아니다 (ADR-0005 §7.2).",
+        "properties": {
+          "goalTitle": {
+            "title": "Goaltitle",
+            "type": "string"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "savedChars": {
+            "title": "Savedchars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "goalTitle",
+          "savedChars",
+          "notice"
+        ],
+        "title": "MaterialsConfirmResponse",
+        "type": "object"
+      },
+      "MaterialsQueryRequest": {
+        "description": "POST /plans/materials/search-query.",
+        "properties": {
+          "interviewSessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interviewsessionid"
+          }
+        },
+        "title": "MaterialsQueryRequest",
+        "type": "object"
+      },
+      "MaterialsQueryResponse": {
+        "description": "제안된 검색어 — **아직 아무것도 검색하지 않았다.**\n\n`is_draft` 를 쓰지 않는 이유: 이건 AI 산출물이 아니라 목표 제목에서 규칙으로 만든\n문자열이다. LLM 도 외부 호출도 없으므로 Draft 표기 대상이 아니다.",
+        "properties": {
+          "goalTitle": {
+            "title": "Goaltitle",
+            "type": "string"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "suggestedQuery": {
+            "title": "Suggestedquery",
+            "type": "string"
+          }
+        },
+        "required": [
+          "suggestedQuery",
+          "goalTitle",
+          "notice"
+        ],
+        "title": "MaterialsQueryResponse",
+        "type": "object"
+      },
+      "MaterialsSearchRequest": {
+        "description": "POST /plans/materials/search — **사용자가 확인·편집한 검색어만** 받는다 (① 결정).\n\n목표 슬롯을 서버가 알아서 질의로 만들지 않는다. 무엇이 외부로 나가는지가 이 필드\n하나로 결정되고, 사용자가 1단계에서 그걸 봤다.",
+        "properties": {
+          "query": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "MaterialsSearchRequest",
+        "type": "object"
+      },
+      "MaterialsSearchResponse": {
+        "description": "검색 결과 — **저장되지 않았다.** 3단계 확정 전까지는 아무 데도 안 남는다.\n\n`is_draft=True` 가 그 계약이다 (AGENTS §1.4).",
+        "properties": {
+          "aiSource": {
+            "default": "llm",
+            "enum": [
+              "llm",
+              "rule"
+            ],
+            "title": "Aisource",
+            "type": "string"
+          },
+          "isDraft": {
+            "default": true,
+            "title": "Isdraft",
+            "type": "boolean"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "remainingToday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remainingtoday"
+          },
+          "searchQueries": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Searchqueries",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "found",
+              "not_found",
+              "blocked_copyright",
+              "quota_exceeded",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "status",
+          "notice"
+        ],
+        "title": "MaterialsSearchResponse",
+        "type": "object"
+      },
       "MilestoneDraft": {
         "description": "중간 목표(마일스톤) 한 개 — 사용자가 확인·편집하는 계획 뼈대 단위(#milestones Phase 2).\n\n사용자가 이 목록을 보고 수정/재배열/추가/삭제해 방향을 확정하면, 분해(Stage B)가 각\n마일스톤을 branch 로 고정하고 그 안에서만 세션(leaf)을 만든다.",
         "properties": {
@@ -9011,6 +9215,186 @@
           }
         },
         "summary": "Regenerate Mandala Branch",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/plans/materials/confirm": {
+      "post": {
+        "description": "\"이 자료 맞아요\" — 확정본을 `goals.materials` 슬롯에 쓴다 (② HITL 결정).\n\n여기서부터는 **붙여넣기와 구분되지 않는다.** 다음 계획 생성이 기존 경로로 이 값을\n집어가고, 자료 텍스트는 `materials_for_prompt` 의 울타리 안에 들어간다(#260).\n\n사용자가 고친 텍스트를 그대로 받는다 — 검색이 다른 판을 가져왔거나 일부만 맞을 때\n지우고 붙일 수 있어야 HITL 이다.",
+        "operationId": "confirm_materials_plans_materials_confirm_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialsConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialsConfirmResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Materials",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/plans/materials/search": {
+      "post": {
+        "description": "사용자가 확정한 검색어로 자료를 찾는다. 결과는 **Draft — 저장하지 않는다.**\n\n동시 요청을 락으로 직렬화하는 이유는 성능이 아니라 **예산**이다. 그라운딩은 건당\n과금인데, 두 요청이 나란히 들어오면 둘 다 잔량 검사를 통과한 뒤 둘 다 호출해\n상한을 넘길 수 있다(TOCTOU). 락 안에서 검사→호출→기록이 한 트랜잭션으로 끝난다.",
+        "operationId": "search_materials_plans_materials_search_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialsSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialsSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Materials",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
+    "/plans/materials/search-query": {
+      "post": {
+        "description": "검색어를 제안한다. **아직 아무것도 검색하지 않는다.**\n\n외부 호출이 0회라 과금도 예산 차감도 없다 — 사용자가 몇 번을 다시 열어봐도 무료다.",
+        "operationId": "propose_search_query_plans_materials_search_query_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialsQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialsQueryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Search Query",
         "tags": [
           "planning"
         ]

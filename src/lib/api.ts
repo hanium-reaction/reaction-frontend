@@ -57,6 +57,12 @@ import type {
   MandalaSubgoalsRequest,
   MandalaSubgoalsResponse,
   MandalaTreeResponse,
+  MaterialsConfirmRequest,
+  MaterialsConfirmResponse,
+  MaterialsQueryRequest,
+  MaterialsQueryResponse,
+  MaterialsSearchRequest,
+  MaterialsSearchResponse,
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
@@ -679,6 +685,18 @@ export const plansApi = {
       method: 'POST',
       body,
     }),
+
+  // 자료 검색·확정 1단계(#259) — 검색어 제안. 외부 호출 0회, 무료.
+  materialsSearchQuery: (body: MaterialsQueryRequest = {}) =>
+    request<MaterialsQueryResponse>('/plans/materials/search-query', { method: 'POST', body }),
+
+  // 2단계 — 확정된 검색어로 자료 검색. 결과는 Draft(비영속), 그라운딩 예산 소모.
+  materialsSearch: (body: MaterialsSearchRequest) =>
+    request<MaterialsSearchResponse>('/plans/materials/search', { method: 'POST', body }),
+
+  // 3단계(#260) — "이 자료 맞아요". goals.materials 슬롯에 영속, 다음 계획 생성에 반영.
+  materialsConfirm: (body: MaterialsConfirmRequest) =>
+    request<MaterialsConfirmResponse>('/plans/materials/confirm', { method: 'POST', body }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────

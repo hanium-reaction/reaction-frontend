@@ -1089,6 +1089,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plans/materials/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Materials
+         * @description "이 자료 맞아요" — 확정본을 `goals.materials` 슬롯에 쓴다 (② HITL 결정).
+         *
+         *     여기서부터는 **붙여넣기와 구분되지 않는다.** 다음 계획 생성이 기존 경로로 이 값을
+         *     집어가고, 자료 텍스트는 `materials_for_prompt` 의 울타리 안에 들어간다(#260).
+         *
+         *     사용자가 고친 텍스트를 그대로 받는다 — 검색이 다른 판을 가져왔거나 일부만 맞을 때
+         *     지우고 붙일 수 있어야 HITL 이다.
+         */
+        post: operations["confirm_materials_plans_materials_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Materials
+         * @description 사용자가 확정한 검색어로 자료를 찾는다. 결과는 **Draft — 저장하지 않는다.**
+         *
+         *     동시 요청을 락으로 직렬화하는 이유는 성능이 아니라 **예산**이다. 그라운딩은 건당
+         *     과금인데, 두 요청이 나란히 들어오면 둘 다 잔량 검사를 통과한 뒤 둘 다 호출해
+         *     상한을 넘길 수 있다(TOCTOU). 락 안에서 검사→호출→기록이 한 트랜잭션으로 끝난다.
+         */
+        post: operations["search_materials_plans_materials_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/search-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Search Query
+         * @description 검색어를 제안한다. **아직 아무것도 검색하지 않는다.**
+         *
+         *     외부 호출이 0회라 과금도 예산 차감도 없다 — 사용자가 몇 번을 다시 열어봐도 무료다.
+         */
+        post: operations["propose_search_query_plans_materials_search_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plans/milestones": {
         parameters: {
             query?: never;
@@ -3446,6 +3518,111 @@ export interface components {
             rootNodeId: string | null;
             /** Statement */
             statement: string;
+        };
+        /**
+         * MaterialSource
+         * @description 검색이 실제로 참조한 출처 — 사용자에게 그대로 보여준다 (#259 ⑩).
+         *
+         *     출처를 숨기고 자료를 쓰면 다른 판·다른 강의를 가져왔을 때 사용자가 알아챌 방법이 없다.
+         */
+        MaterialSource: {
+            /** Title */
+            title: string;
+            /** Uri */
+            uri: string;
+        };
+        /**
+         * MaterialsConfirmRequest
+         * @description POST /plans/materials/confirm — "이 자료 맞아요".
+         *
+         *     `text` 를 그대로 받는 이유: 사용자가 **고쳐서** 보낼 수 있어야 한다. 검색이 다른 판을
+         *     가져왔거나 일부만 맞을 때 지우고 붙이는 게 HITL 의 핵심이다.
+         */
+        MaterialsConfirmRequest: {
+            /** Interviewsessionid */
+            interviewSessionId?: string | null;
+            /** Text */
+            text: string;
+        };
+        /**
+         * MaterialsConfirmResponse
+         * @description 확정 결과 — 명시 승인이므로 Draft 가 아니다 (ADR-0005 §7.2).
+         */
+        MaterialsConfirmResponse: {
+            /** Goaltitle */
+            goalTitle: string;
+            /** Notice */
+            notice: string;
+            /** Savedchars */
+            savedChars: number;
+        };
+        /**
+         * MaterialsQueryRequest
+         * @description POST /plans/materials/search-query.
+         */
+        MaterialsQueryRequest: {
+            /** Interviewsessionid */
+            interviewSessionId?: string | null;
+        };
+        /**
+         * MaterialsQueryResponse
+         * @description 제안된 검색어 — **아직 아무것도 검색하지 않았다.**
+         *
+         *     `is_draft` 를 쓰지 않는 이유: 이건 AI 산출물이 아니라 목표 제목에서 규칙으로 만든
+         *     문자열이다. LLM 도 외부 호출도 없으므로 Draft 표기 대상이 아니다.
+         */
+        MaterialsQueryResponse: {
+            /** Goaltitle */
+            goalTitle: string;
+            /** Notice */
+            notice: string;
+            /** Suggestedquery */
+            suggestedQuery: string;
+        };
+        /**
+         * MaterialsSearchRequest
+         * @description POST /plans/materials/search — **사용자가 확인·편집한 검색어만** 받는다 (① 결정).
+         *
+         *     목표 슬롯을 서버가 알아서 질의로 만들지 않는다. 무엇이 외부로 나가는지가 이 필드
+         *     하나로 결정되고, 사용자가 1단계에서 그걸 봤다.
+         */
+        MaterialsSearchRequest: {
+            /** Query */
+            query: string;
+        };
+        /**
+         * MaterialsSearchResponse
+         * @description 검색 결과 — **저장되지 않았다.** 3단계 확정 전까지는 아무 데도 안 남는다.
+         *
+         *     `is_draft=True` 가 그 계약이다 (AGENTS §1.4).
+         */
+        MaterialsSearchResponse: {
+            /**
+             * Aisource
+             * @default llm
+             * @enum {string}
+             */
+            aiSource: "llm" | "rule";
+            /**
+             * Isdraft
+             * @default true
+             */
+            isDraft: boolean;
+            /** Notice */
+            notice: string;
+            /** Remainingtoday */
+            remainingToday?: number | null;
+            /** Searchqueries */
+            searchQueries?: string[];
+            /** Sources */
+            sources?: components["schemas"]["MaterialSource"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "found" | "not_found" | "blocked_copyright" | "quota_exceeded" | "unavailable";
+            /** Text */
+            text?: string | null;
         };
         /**
          * MilestoneDraft
@@ -6392,6 +6569,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MandalaDraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_materials_plans_materials_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialsConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialsConfirmResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_materials_plans_materials_search_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialsSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialsSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_search_query_plans_materials_search_query_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialsQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialsQueryResponse"];
                 };
             };
             /** @description Validation Error */
