@@ -5,7 +5,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { NavigationContext, STATE_TO_SCREEN } from '../contexts/NavigationContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { IosInstallCard } from '../components/IosInstallCard';
-import { ApiError, authApi, friendlyError, getAuthKind, onAuthExpired, onboardingApi, setAccessToken, stubLoginAllowed } from '../lib/api';
+import { ApiError, authApi, clearSession, friendlyError, getAccessToken, getAuthKind, getRefreshToken, initTokenStore, onAuthExpired, onboardingApi, setSession, stubLoginAllowed } from '../lib/api';
 import type { ScreenId, TabId } from '../types';
 import type { MilestoneDraft, OnboardingState, UserProfile } from '../types/api';
 
@@ -143,7 +143,8 @@ export function AppShell() {
     setAuthError(null);
     try {
       const session = await authApi.loginWithGoogle(idToken);
-      setAccessToken(session.accessToken, 'real');
+      // refreshToken 까지 함께 보관한다 — 이게 있어야 access 가 만료돼도 세션이 이어진다.
+      setSession(session, 'real');
       setNeedsLogin(false);
       setBootError(null);
       loadSessionAfterLogin(session.user);
@@ -156,13 +157,47 @@ export function AppShell() {
     }
   }, [loadSessionAfterLogin]);
 
+  // 로그아웃 — 서버 revoke 를 먼저 시도하고, 성공 여부와 무관하게 로컬 세션은 반드시 비운다.
+  //
+  // revoke 를 건너뛰면 발급된 refresh token 이 서버에서 14일 동안 살아 있다. 기기를
+  // 잃어버렸거나 공용 브라우저에서 로그아웃한 경우가 정확히 그 위험이다.
+  // 반대로 revoke 가 실패했다고 로컬 세션을 남겨 두면, 사용자는 로그아웃을 눌렀는데
+  // 로그인된 채로 남는다 — 그쪽이 더 나쁘다. 그래서 revoke 실패는 삼킨다.
+  //
+  // 웹에서 새로고침한 뒤라면 refresh 가 메모리에서 사라졌을 수 있다. 그때는 보낼 토큰이
+  // 없으니 로컬만 비운다(서버 토큰은 만료까지 남는다).
+  const handleLogout = useCallback(async () => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        await authApi.logout(refreshToken);
+      } catch {
+        /* 네트워크 오류나 이미 만료된 토큰 — 아래에서 로컬은 그대로 비운다 */
+      }
+    }
+    clearSession();
+    // 다음 로그인이 이전 사용자의 화면 상태를 물려받지 않게 되돌린다.
+    setUser(null);
+    setOnboardingState(null);
+    setScreen('intro');
+    setTab('today');
+    setInterviewSessionId(null);
+    setPlannedMilestones(null);
+    setInterviewReturnTo(null);
+    setMandalaGoalId(null);
+    setWeekOffset(0);
+    setAuthError(null);
+    setBootError(null);
+    setNeedsLogin(true);
+  }, []);
+
   // 데모 계정 명시적 진입 — 로그인 화면에서 사용자가 직접 눌렀을 때만(자동 아님).
   const handleDemoLogin = useCallback(async () => {
     setAuthBusy(true);
     setAuthError(null);
     try {
       const session = await authApi.loginWithGoogle(stubIdToken());
-      setAccessToken(session.accessToken, 'stub');
+      setSession(session, 'stub');
       setNeedsLogin(false);
       setBootError(null);
       loadSessionAfterLogin(session.user);
@@ -194,6 +229,11 @@ export function AppShell() {
     async function bootstrap() {
       const force = new URLSearchParams(window.location.search).get('force') as ScreenId | null;
 
+      // 네이티브는 토큰이 보안 저장소에 있어 읽기가 비동기다. 첫 API 호출 전에 메모리로
+      // 올려 두지 않으면 인증 헤더 없이 나가 401 을 맞는다. 웹에서는 즉시 반환한다.
+      await initTokenStore();
+      if (cancelled) return;
+
       // force 쿼리가 있으면 최우선. 없으면 진입 화면은 applyProfile 이 계정
       // onboarding_state 로 결정한다(#120). 부팅 중엔 초기값 'intro'(로딩 자리표시).
       if (force) setScreen(force);
@@ -207,11 +247,11 @@ export function AppShell() {
       // 새로고침 한 번이면 로그인 화면으로 돌아가는 증상. 로그인 종류를 직접 보고 판단한다.
       if (
         typeof window !== 'undefined' &&
-        window.localStorage.getItem('reaction.accessToken') &&
+        getAccessToken() &&
         getAuthKind() !== 'real' &&
         !window.localStorage.getItem('reaction.deviceId')
       ) {
-        setAccessToken(null);
+        clearSession();
       }
 
       try {
@@ -229,7 +269,7 @@ export function AppShell() {
             // api 레이어 자가치유와 같은 판단을 쓴다(stubLoginAllowed).
             if (stubLoginAllowed()) {
               const session = await authApi.loginWithGoogle(stubIdToken());
-              setAccessToken(session.accessToken, 'stub');
+              setSession(session, 'stub');
               profile = session.user;
             } else {
               // 실제 로그인 필요 — 로그인 화면으로 전환하고 부팅을 종료한다(아래 finally).
@@ -288,7 +328,7 @@ export function AppShell() {
 
   return (
     <NavigationContext.Provider
-      value={{ screen, tab, setScreen, setTab, user, onboardingState, isBootstrapping, weekOffset, setWeekOffset, interviewSessionId, setInterviewSessionId, plannedMilestones, setPlannedMilestones, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId }}
+      value={{ screen, tab, setScreen, setTab, user, onboardingState, isBootstrapping, weekOffset, setWeekOffset, interviewSessionId, setInterviewSessionId, plannedMilestones, setPlannedMilestones, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId, logout: handleLogout }}
     >
       <ToastProvider>
         {/* 뷰포트에 맞는 트리 하나만 마운트(둘 다 마운트 후 CSS 로만 숨기면 데이터 페칭이 2배로 나감). */}
