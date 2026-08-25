@@ -57,6 +57,7 @@ import type {
   MandalaApproveResponse,
   MandalaDraftResponse,
   MandalaGenerateRequest,
+  MandalaHabitLinkRequest,
   MandalaNode,
   MandalaNodeUpdateRequest,
   MandalaPromoteRequest,
@@ -361,10 +362,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
-  loginWithGoogle: (idToken: string) =>
+  // inviteCode — 신규 가입에만 필요(#324). 기존 사용자 로그인은 무시된다.
+  loginWithGoogle: (idToken: string, inviteCode?: string) =>
     request<AuthSession>('/auth/google', {
       method: 'POST',
-      body: { idToken },
+      body: inviteCode ? { idToken, inviteCode } : { idToken },
       anonymous: true,
     }),
 
@@ -466,6 +468,14 @@ export const goalsApi = {
   // 축(depth=1) → 학기 목표 승격(U10). 이미 승격됐으면 기존 Goal 을 그대로 반환(멱등).
   promoteMandalaNode: (nodeId: string, body: MandalaPromoteRequest) =>
     request<ApiGoal>(`/goals/mandala/nodes/${nodeId}/promote`, { method: 'POST', body }),
+
+  // 셀(leaf, depth=2) → 반복형 전환(U12). 이미 링크된 습관이 있으면 그대로 반환(멱등).
+  linkMandalaHabit: (nodeId: string, body: MandalaHabitLinkRequest) =>
+    request<Habit>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'POST', body }),
+
+  // 반복형 → 프로젝트형으로 되돌리기 — 링크된 습관을 soft delete. 링크 없으면 그냥 204(멱등).
+  unlinkMandalaHabit: (nodeId: string) =>
+    request<void>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'DELETE' }),
 };
 
 // ── Time Policies (S07) ───────────────────────────────────────
@@ -764,18 +774,13 @@ export const recoveryApi = {
     }),
 
   // reEngagementAnchorAt — PARK/CARRY_OVER 카드를 accepted 로 결정할 때 "다음에 다시
-  // 볼 시점"(#221). 백엔드에 `re_engagement_anchor_at` 컬럼·저장 로직이 아직 없고
-  // openapi 스펙에도 없어(0건, 확인함) 지금 보내면 4xx 를 유발한다. 그래서 인자로는
-  // 받아 두되 body 엔 아직 싣지 않는다 — 스펙에 필드가 생기면 아래 스프레드 뒤에
-  // `reEngagementAnchorAt` 한 줄만 추가해 연결한다.
-  decide: (body: RecoveryDecisionRequest, idempotencyKey: string, reEngagementAnchorAt?: string | null) => {
-    void reEngagementAnchorAt; // TODO(#221): 스펙에 필드 추가되면 request body 에 연결
-    return request<RecoveryDecisionResponse>('/recovery/decisions', {
+  // 볼 시점"(#221, backend#327). PARK/CARRY_OVER 외 그룹에 보내면 422.
+  decide: (body: RecoveryDecisionRequest, idempotencyKey: string, reEngagementAnchorAt?: string | null) =>
+    request<RecoveryDecisionResponse>('/recovery/decisions', {
       method: 'POST',
-      body,
+      body: reEngagementAnchorAt ? { ...body, reEngagementAnchorAt } : body,
       idempotencyKey,
-    });
-  },
+    }),
 };
 
 export const replanApi = {
@@ -806,6 +811,12 @@ export const notificationsApi = {
   // FE 가 pushManager.subscribe(applicationServerKey) 에 쓸 서버 발급 공개키.
   // publicKey=null 이면 서버 미설정 — 구독을 만들면 안 된다.
   vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
+
+  // 이 알림을 열었다고 표시(멱등, 최초 1회만 openedAt 채움). notificationId 는 push
+  // payload 의 id 를 그대로 넘긴다. ⚠️ 호출하는 FE 콜백(notificationclick 핸들러)은
+  // 아직 없다 — 인프라만 준비된 상태.
+  markOpened: (notificationId: string) =>
+    request<void>(`/notifications/${notificationId}/opened`, { method: 'POST', body: {} }),
 };
 
 // ── Policy Snapshot (#83) ─────────────────────────────────────

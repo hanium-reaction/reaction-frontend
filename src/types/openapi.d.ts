@@ -16,6 +16,9 @@ export interface paths {
         /**
          * Login With Google
          * @description Google id_token 검증 → user upsert → JWT 발급.
+         *
+         *     기존 사용자(email 이미 존재)는 게이트를 전혀 거치지 않는다 — lock 도 신규 가입
+         *     판정 이후에만 잡는다(로그인은 이미 30명 안에 있던 사람이라 경합 대상이 아니다).
          */
         post: operations["login_with_google_auth_google_post"];
         delete?: never;
@@ -272,6 +275,41 @@ export interface paths {
         patch: operations["update_mandala_node_goals_mandala_nodes__node_id__patch"];
         trace?: never;
     };
+    "/goals/mandala/nodes/{node_id}/habit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Mandala Habit
+         * @description 셀(leaf) → 반복형 전환(U12, ADR-0008 §1). 새 `Habit` 을 만들어 이 칸에 링크한다.
+         *
+         *     "코딩테스트 1일 1문제"·"쓰레기 줍기" 처럼 끝이 없는 칸은 계획(action_item)으로 내려보내지
+         *     않고 이 링크로 주간 횟수(habit_instances.done_count)만 추적한다.
+         *
+         *     **칸(leaf, depth=2)만 대상이다** — 축·중앙은 8칸을 아우르는 단위라 반복 횟수 개념이 안
+         *     맞는다(depth≠2 면 422, `promote` 의 depth≠1 가드와 같은 자리). 이미 이 칸에 링크된 활성
+         *     습관이 있으면 새로 만들지 않고 그 습관을 그대로 반환한다(멱등 — `promote` 와 같은 이유,
+         *     두 번 눌러도 중복 습관이 쌓이면 안 된다).
+         */
+        post: operations["link_mandala_habit_goals_mandala_nodes__node_id__habit_post"];
+        /**
+         * Unlink Mandala Habit
+         * @description 반복형 → 프로젝트형으로 되돌리기(ADR-0008 §1) — 링크된 습관을 soft delete.
+         *
+         *     칸(goal_node) 자체는 그대로 남는다. 링크가 없으면(이미 프로젝트형) 그냥 204 —
+         *     "이미 그 상태"를 에러로 보지 않는다.
+         */
+        delete: operations["unlink_mandala_habit_goals_mandala_nodes__node_id__habit_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/goals/mandala/nodes/{node_id}/promote": {
         parameters: {
             query?: never;
@@ -340,7 +378,7 @@ export interface paths {
         head?: never;
         /**
          * Update Goal
-         * @description 목표 부분 수정. tier 변경 시 한도 재검사.
+         * @description 목표 부분 수정. tier 변경 시 한도 재검사, category 변경 시 값 검증(#326).
          */
         patch: operations["update_goal_goals__goal_id__patch"];
         trace?: never;
@@ -929,6 +967,32 @@ export interface paths {
         get: operations["get_vapid_public_key_notifications_vapid_public_key_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{notification_id}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Notification Opened
+         * @description 이 알림을 열었다고 표시 (멱등 — 최초 1회만 `openedAt` 을 채운다).
+         *
+         *     `notificationId` 는 push payload 의 `id` 필드를 그대로 넘긴다 — 서버가 발송 **전에**
+         *     미리 만들어 실어 보낸 값이라(`notify_sweeps.py`), 이 발송 이력 행의 PK 와 항상 같다.
+         *
+         *     ⚠️ **이 endpoint 를 호출하는 FE 콜백(push `notificationclick` 핸들러)은 아직 없다.**
+         *     인프라만 미리 준비해 둔 것 — 배선되기 전까지는 아무도 이 경로를 타지 않는다.
+         */
+        post: operations["mark_notification_opened_notifications__notification_id__opened_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2104,6 +2168,8 @@ export interface components {
             estimatedMinutes: number;
             /** Firststep */
             firstStep: string | null;
+            /** Missedcheckin */
+            missedCheckIn: boolean;
             /** Priority */
             priority: number;
             /** Source */
@@ -2483,13 +2549,18 @@ export interface components {
         };
         /**
          * FailureTagRequest
-         * @description POST /reflection/failure-tags/{executionId} — 실패 사유 0~2개 + 메모.
+         * @description POST /reflection/failure-tags/{executionId} — 실패 사유 0~2개 + 메모 + 정서 1문항.
+         *
+         *     `task_aversiveness`(#299, FE #222): 이 일이 얼마나 하기 싫었는지 1(전혀 안 싫음)~5(매우
+         *     싫음). 선택 사항 — 강제하면 회고 이탈이 늘 것으로 보고 FE 가 선택으로 뒀다.
          */
         FailureTagRequest: {
             /** Memo */
             memo?: string | null;
             /** Tagcodes */
             tagCodes: string[];
+            /** Taskaversiveness */
+            taskAversiveness?: number | null;
         };
         /**
          * FailureTagResponse
@@ -2592,6 +2663,8 @@ export interface components {
              * @default true
              */
             isDraft: boolean;
+            /** Milestones */
+            milestones?: components["schemas"]["MilestoneDraft"][];
             /** Planid */
             planId: string;
             /** Policyviolations */
@@ -2809,9 +2882,15 @@ export interface components {
         };
         /**
          * GoalUpdateRequest
-         * @description PATCH /goals/{id} 요청 — 제목·마감·우선순위·tier 변경.
+         * @description PATCH /goals/{id} 요청 — 제목·마감·우선순위·tier·category 변경.
+         *
+         *     `category` 는 `GoalCreateRequest.category` 와 같은 허용값·정규화 규칙을 쓴다(#326,
+         *     FE #216 차단 해소). 생략하면 기존 category 유지 — 재인터뷰 제안 트리거는 FE 가 저장
+         *     성공 후 실제로 값이 달라졌을 때만 띄운다(자동 재계획·강제 이동 없음).
          */
         GoalUpdateRequest: {
+            /** Category */
+            category?: string | null;
             /** Deadline */
             deadline?: string | null;
             /** Goaltier */
@@ -2835,7 +2914,7 @@ export interface components {
         };
         /**
          * GoogleLoginRequest
-         * @description POST /auth/google 요청 — Google id_token.
+         * @description POST /auth/google 요청 — Google id_token (+ 신규 가입만 `inviteCode` 필요, #324).
          */
         GoogleLoginRequest: {
             /**
@@ -2843,6 +2922,11 @@ export interface components {
              * @description Google OAuth id_token
              */
             idToken: string;
+            /**
+             * Invitecode
+             * @description 신규 가입에만 필요. 기존 사용자 로그인은 무시된다.
+             */
+            inviteCode?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2858,6 +2942,8 @@ export interface components {
             category: string;
             /** Frequencyperweek */
             frequencyPerWeek: number;
+            /** Goalnodeid */
+            goalNodeId?: string | null;
             /** Habitid */
             habitId: string;
             /** Minutespersession */
@@ -3358,6 +3444,53 @@ export interface components {
             subgoals: components["schemas"]["MandalaSubgoal"][];
         };
         /**
+         * MandalaHabitLinkRequest
+         * @description POST /goals/mandala/nodes/{nodeId}/habit(U12) 요청 — 반복형 칸으로 전환(ADR-0008 §1).
+         *
+         *     "코딩테스트 1일 1문제"·"쓰레기 줍기" 처럼 끝이 없는 leaf 칸에 새 `Habit` 을 만들어
+         *     링크한다. 계획(action_item)을 만들지 않고 이후 주간 횟수(habit_instances.done_count)로만
+         *     추적한다. `title` 을 생략하면 칸 제목을 그대로 쓴다.
+         */
+        MandalaHabitLinkRequest: {
+            /**
+             * Category
+             * @default other
+             * @enum {string}
+             */
+            category: "study" | "health" | "routine" | "self_dev" | "relationship" | "other";
+            /** Frequencyperweek */
+            frequencyPerWeek: number;
+            /** Minutespersession */
+            minutesPerSession: number;
+            /**
+             * Prioritylevel
+             * @default 3
+             */
+            priorityLevel: number;
+            /**
+             * Timepreference
+             * @default anytime
+             * @enum {string}
+             */
+            timePreference: "morning" | "afternoon" | "evening" | "anytime";
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * MandalaHabitWeekStat
+         * @description 만다라 반복형 칸 1개의 이번 주 체크인 현황.
+         */
+        MandalaHabitWeekStat: {
+            /** Axistitle */
+            axisTitle?: string | null;
+            /** Celltitle */
+            cellTitle: string;
+            /** Donecount */
+            doneCount: number;
+            /** Targetcount */
+            targetCount: number;
+        };
+        /**
          * MandalaNode
          * @description 만다라 노드 1개(U8 응답 원소, U9 응답 그대로) — `GoalNode` additive 확장(§6.2).
          *
@@ -3372,6 +3505,8 @@ export interface components {
             coverage: number | null;
             /** Depth */
             depth: number;
+            /** Habitid */
+            habitId: string | null;
             /** Isleaf */
             isLeaf: boolean;
             /** Locked */
@@ -3518,6 +3653,27 @@ export interface components {
             rootNodeId: string | null;
             /** Statement */
             statement: string;
+        };
+        /**
+         * MandalaWeeklySummary
+         * @description `GET /reviews/weekly` 의 '이번 주 만다라트' 절 (ADR-0008 §8 "E").
+         *
+         *     조회 시점에 파생한다(저장 안 함) — 궁극목표가 없거나 아직 승인된 만다라 트리가 없으면
+         *     응답 자체에서 생략된다(`null`).
+         */
+        MandalaWeeklySummary: {
+            /** Completedthisweek */
+            completedThisWeek: number;
+            /** Completedtotal */
+            completedTotal: number;
+            /** Habits */
+            habits?: components["schemas"]["MandalaHabitWeekStat"][];
+            /** Totalleaves */
+            totalLeaves: number;
+            /** Touchedthisweek */
+            touchedThisWeek: number;
+            /** Untouchedaxistitles */
+            untouchedAxisTitles?: string[];
         };
         /**
          * MaterialSource
@@ -3667,6 +3823,22 @@ export interface components {
             fallbackUsed: boolean;
             /** Headline */
             headline: string;
+        };
+        /**
+         * NextCycleProposal
+         * @description 다음 2주 열기 제안 1건 (ADR-0008 §8 "G") — 승인은 기존 `/plans/generate`(빈 바디)
+         *     + `/plans/{id}/approve` 를 그대로 쓴다. 이 카드는 새 엔드포인트를 만들지 않는다.
+         */
+        NextCycleProposal: {
+            /** Axistitle */
+            axisTitle?: string | null;
+            /**
+             * Goalid
+             * Format: uuid
+             */
+            goalId: string;
+            /** Goaltitle */
+            goalTitle: string;
         };
         /**
          * NoTouchWindow
@@ -3891,14 +4063,20 @@ export interface components {
          * @description 회복 옵션 카드 1장 — recovery_attempts 1행과 대응 (user_decision='pending').
          */
         RecoveryCard: {
+            /** Acknowledgment */
+            acknowledgment?: string | null;
             /** Allowrestmode */
             allowRestMode: boolean;
             /** Attemptid */
             attemptId: string;
+            /** Copingclause */
+            copingClause?: string | null;
             /** Labelko */
             labelKo: string;
             /** Minrecoveryunitminutes */
             minRecoveryUnitMinutes: number;
+            /** Obstacle */
+            obstacle?: string | null;
             /**
              * Optiongroup
              * @enum {string}
@@ -3921,6 +4099,11 @@ export interface components {
          *       AI 원문(`suggested_action_text`)은 보존한다 — "얼마나 고쳐 썼나"가 AI 품질 지표다.
          *       새 카드를 만들지 않는 그룹(RESCHEDULE/PARK)은 문구를 담을 곳이 없어 422.
          *     - `decision="skipped"` → 모든 pending 카드 skipped ("오늘은 쉬기").
+         *
+         *     `re_engagement_anchor_at`(#327, FE #221): PARK/CARRY_OVER 수락에만 유효(그 외 그룹에
+         *     보내면 422 — 조용히 버리면 사용자가 지정한 시점이 사라진 걸 못 알아챈다). 생략하면
+         *     서버가 전략별 기본값(`orchestrator.recovery.re_engagement_anchor_at`)을 계산한다.
+         *     시간대 정보(예: `+09:00`)를 포함한 ISO 8601 이어야 한다.
          */
         RecoveryDecisionRequest: {
             /** Acceptedattemptid */
@@ -3936,6 +4119,8 @@ export interface components {
             editedActionText?: string | null;
             /** Executionid */
             executionId: string;
+            /** Reengagementanchorat */
+            reEngagementAnchorAt?: string | null;
         };
         /**
          * RecoveryDecisionResponse
@@ -3951,6 +4136,8 @@ export interface components {
              * @default false
              */
             isDraft: boolean;
+            /** Reengagementanchorat */
+            reEngagementAnchorAt?: string | null;
             /** Rejectedattemptids */
             rejectedAttemptIds: string[];
             /** Resultingactionitemid */
@@ -3991,8 +4178,9 @@ export interface components {
          * ReflectionBatchItem
          * @description POST /reflection/batch 항목 — 미체크 실행 1건의 최종 결과 + 선택적 실패 사유.
          *
-         *     `failure_tags`/`memo` 는 `completion_status` 가 failed/partial_done 일 때만 유효
-         *     (그 외 값과 함께 오면 422). `memo` 는 서버가 at-rest 암호화한다.
+         *     `failure_tags`/`memo`/`task_aversiveness`(#299) 는 `completion_status` 가
+         *     failed/partial_done 일 때만 유효(그 외 값과 함께 오면 422). `memo` 는 서버가 at-rest
+         *     암호화한다. `task_aversiveness` 는 태그 선택 여부와 무관하게 독립적으로 유효하다.
          */
         ReflectionBatchItem: {
             /**
@@ -4006,6 +4194,8 @@ export interface components {
             failureTags?: string[];
             /** Memo */
             memo?: string | null;
+            /** Taskaversiveness */
+            taskAversiveness?: number | null;
         };
         /**
          * ReflectionBatchRequest
@@ -4293,6 +4483,23 @@ export interface components {
             slotKey: string;
         };
         /**
+         * StaleAxisProposal
+         * @description 3주 연속 손 못 댄 축 — "줄이거나 바꾸자" 제안 1건 (ADR-0008 §6, §8 "H").
+         *
+         *     수정 수단은 이미 있는 것을 그대로 쓴다 — 이 카드는 새 엔드포인트를 만들지 않는다.
+         *     칸/축 텍스트는 `PATCH /goals/mandala/nodes/{id}`, 축 8칸 재생성은
+         *     `POST /plans/mandala/{planId}/regenerate-branch`.
+         */
+        StaleAxisProposal: {
+            /**
+             * Axisid
+             * Format: uuid
+             */
+            axisId: string;
+            /** Axistitle */
+            axisTitle: string;
+        };
+        /**
          * StartSessionRequest
          * @description POST /interview/sessions 요청 — kind 생략 시 계획 인터뷰(하위호환, U0b).
          */
@@ -4400,6 +4607,24 @@ export interface components {
              * @enum {string}
              */
             toneMode: "gentle" | "strict" | "encouraging";
+        };
+        /**
+         * TopFailureContext
+         * @description 실패 사유 상위 3개(BCT 2.3 Self-monitoring, 근거 A5) — #301.
+         *
+         *     `labelKo` 는 `/reflection/failure-tags` 와 같은 마스터(`failure_reason_tags`)에서 온다
+         *     (이중 관리 방지). `share` 는 0~1 비율이고, LIMIT 이전(태그 전체)을 분모로 하므로 반환된
+         *     3건의 share 합이 1.0 이 아닐 수 있다(태그가 4개 이상인 주).
+         */
+        TopFailureContext: {
+            /** Count */
+            count: number;
+            /** Labelko */
+            labelKo: string;
+            /** Share */
+            share: number;
+            /** Tagcode */
+            tagCode: string;
         };
         /**
          * UltimateGoalOutcome
@@ -4649,6 +4874,9 @@ export interface components {
              * Format: date-time
              */
             generatedAt: string;
+            mandala?: components["schemas"]["MandalaWeeklySummary"] | null;
+            /** Nextcycleproposals */
+            nextCycleProposals?: components["schemas"]["NextCycleProposal"][];
             /** Oneliner */
             oneLiner?: string | null;
             /** Peakwindow */
@@ -4663,6 +4891,10 @@ export interface components {
             resilienceRate?: number | null;
             /** Restartsuccessrate */
             restartSuccessRate?: number | null;
+            /** Staleaxisproposals */
+            staleAxisProposals?: components["schemas"]["StaleAxisProposal"][];
+            /** Topfailurecontexts */
+            topFailureContexts?: components["schemas"]["TopFailureContext"][];
             /**
              * Weekend
              * Format: date
@@ -5198,6 +5430,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MandalaNode"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_mandala_habit_goals_mandala_nodes__node_id__habit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MandalaHabitLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Habit"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_mandala_habit_goals_mandala_nodes__node_id__habit_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6327,6 +6627,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VapidPublicKeyResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_notification_opened_notifications__notification_id__opened_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

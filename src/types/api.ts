@@ -158,6 +158,8 @@ export interface GoalUpdateRequest {
   deadline?: string | null; // YYYY-MM-DD
   priorityLevel?: number;
   goalTier?: GoalTier;
+  // GoalCreateRequest.category 와 같은 허용값·정규화 규칙(#326). 생략하면 기존 유지.
+  category?: string | null;
 }
 
 export interface GoalCreateRequest {
@@ -231,6 +233,8 @@ export interface MandalaNode {
   locked: boolean;
   completedAt: string | null; // date-time
   promotedGoalId: string | null;
+  // 반복형(U12)으로 전환된 칸이면 링크된 Habit id, 아니면 null.
+  habitId: string | null;
   // 매 조회 시 파생(컬럼 캐시 아님) — U9 단일 노드 편집 응답에서는 둘 다 null.
   progress: number | null;
   coverage: number | null;
@@ -256,6 +260,17 @@ export interface MandalaNodeUpdateRequest {
 // POST /goals/mandala/nodes/{nodeId}/promote (U10) — 축(depth=1) → 학기 목표.
 export interface MandalaPromoteRequest {
   goalTier: GoalTier;
+}
+
+// POST /goals/mandala/nodes/{nodeId}/habit (U12) — 셀(leaf, depth=2) → 반복형 전환.
+// title 생략 시 칸 제목을 그대로 쓴다.
+export interface MandalaHabitLinkRequest {
+  title?: string | null;
+  category?: HabitCategory | string;
+  frequencyPerWeek: number; // 1~7
+  minutesPerSession: number;
+  timePreference?: TimePreference;
+  priorityLevel?: number; // 1~5
 }
 
 // 확정된 하위목표(축) 1개 — 항상 정확히 8개(orderIndex 0~7).
@@ -533,6 +548,8 @@ export interface Habit {
   minutesPerSession: number;
   timePreference: TimePreference | string;
   priorityLevel: number;
+  // 만다라 칸(leaf)에서 전환된 습관이면 그 노드 id, 아니면 null(U12, ADR-0008 §1).
+  goalNodeId: string | null;
 }
 
 export interface HabitInstance {
@@ -611,6 +628,8 @@ export interface AgendaCard {
   // 이 카드를 취소할 수 있는가(BE 파생 필드). 판정 규칙(실행 이력·source·status)은
   // BE 안에만 두고 FE 는 이 값만 본다 — 규칙을 복제하면 조용히 어긋난다.
   cancellable: boolean;
+  // 알림 스윕이 놓친(발송 실패/지연) 체크인인가(BE 파생 필드).
+  missedCheckIn: boolean;
 }
 
 // /today/agenda 안의 고정 일정 행. 관리 화면의 FixedSchedule 과 다른 스키마다 —
@@ -707,6 +726,8 @@ export interface FailureTagMaster {
 export interface FailureTagRequest {
   tagCodes: (FailureTagCode | string)[];
   memo?: string | null; // 클라이언트 암호화 메모(선택)
+  // 이 일이 얼마나 하기 싫었는지 1(전혀 안 싫음)~5(매우 싫음), 선택 (#299).
+  taskAversiveness?: number | null;
 }
 
 export interface FailureTagResponse {
@@ -734,6 +755,8 @@ export interface ReflectionBatchItem {
   completionStatus: CompletionStatus;
   failureTags?: FailureTagCode[]; // 최대 2
   memo?: string | null; // 최대 300자, 서버 암호화
+  // 태그 선택 여부와 무관하게 독립적으로 유효 (#299). 1(전혀 안 싫음)~5(매우 싫음).
+  taskAversiveness?: number | null;
 }
 
 // POST /reflection/batch — [모두 완료] 일괄 처리. Idempotency-Key 필수. 상한 50건.
@@ -784,6 +807,9 @@ export interface RecoveryDecisionRequest {
   acceptedAttemptId?: string | null;
   editedActionText?: string | null; // decision='edited' 일 때 1~300자
   decisionReason?: string | null;
+  // PARK/CARRY_OVER 수락에만 유효(그 외 그룹에 보내면 422). 생략하면 서버가 전략별
+  // 기본값을 계산한다(#327). 시간대 포함 ISO 8601(예: +09:00) 이어야 한다.
+  reEngagementAnchorAt?: string | null;
 }
 
 export interface RecoveryDecisionResponse {
@@ -793,6 +819,7 @@ export interface RecoveryDecisionResponse {
   skippedAttemptIds: string[];
   resultingActionItemId: string | null;
   isDraft?: boolean;
+  reEngagementAnchorAt?: string | null;
 }
 
 // GET /replan/{executionId} — S20 before/after diff (Draft Layer, 백엔드 #20-B 구현됨).
@@ -921,6 +948,7 @@ export interface FirstPlanResponse {
   warnings?: string[];
   aiSource?: string;
   isDraft?: boolean;
+  milestones?: MilestoneDraft[];
 }
 
 // #milestones Phase 2 — 사용자가 확인·편집하는 마일스톤 초안 한 개.
@@ -1059,6 +1087,38 @@ export interface TopFailureContext {
   share: number;
 }
 
+// 만다라 반복형 칸 1개의 이번 주 체크인 현황 (`GET /reviews/weekly` "E" 절).
+export interface MandalaHabitWeekStat {
+  axisTitle?: string | null;
+  cellTitle: string;
+  doneCount: number;
+  targetCount: number;
+}
+
+// `GET /reviews/weekly` 의 "이번 주 만다라트" 절(ADR-0008 §8 "E"). 조회 시점에 파생 —
+// 궁극목표가 없거나 승인된 만다라 트리가 없으면 응답에서 null.
+export interface MandalaWeeklySummary {
+  completedThisWeek: number;
+  completedTotal: number;
+  totalLeaves: number;
+  touchedThisWeek: number;
+  habits?: MandalaHabitWeekStat[];
+  untouchedAxisTitles?: string[];
+}
+
+// 다음 2주 열기 제안 1건(ADR-0008 §8 "G"). 승인은 기존 /plans/generate + /plans/{id}/approve.
+export interface NextCycleProposal {
+  goalId: string;
+  goalTitle: string;
+  axisTitle?: string | null;
+}
+
+// 3주 연속 손 못 댄 축 — "줄이거나 바꾸자" 제안 1건(ADR-0008 §6, §8 "H").
+export interface StaleAxisProposal {
+  axisId: string;
+  axisTitle: string;
+}
+
 // ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
 export interface WeeklyReviewResponse {
   weekStart: string;
@@ -1076,9 +1136,10 @@ export interface WeeklyReviewResponse {
   peakWindow?: string | null;
   drainWindow?: string | null;
   policyUpdateCandidates?: unknown[] | null;
-  // #225 — 백엔드 엔드포인트 노출 대기(openapi.json 에 아직 없음). 응답에 필드가 없으면
-  // undefined 로 와서 화면 쪽 섹션이 자동으로 숨는다(가짜 데이터 렌더 금지).
   topFailureContexts?: TopFailureContext[] | null;
+  mandala?: MandalaWeeklySummary | null;
+  nextCycleProposals?: NextCycleProposal[];
+  staleAxisProposals?: StaleAxisProposal[];
 }
 export interface WeeklyGenerateRequest {
   weekStart?: string;
@@ -1102,7 +1163,9 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  previousFrequency: number;
+  newFrequency: number;
+  message: string;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──
