@@ -788,6 +788,12 @@ export const notificationsApi = {
   // FE 가 pushManager.subscribe(applicationServerKey) 에 쓸 서버 발급 공개키.
   // publicKey=null 이면 서버 미설정 — 구독을 만들면 안 된다.
   vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
+
+  // 알림을 실제로 열었다는 기록(#258, BE #335). 204 이고 멱등이라 재호출도 안전하다.
+  // "보냈다"까지만 알던 것을 "닿았다"까지 알게 해, 주 3건인 알림 예산을 데이터로
+  // 조정할 근거를 만든다.
+  opened: (notificationId: string) =>
+    request<void>(`/notifications/${notificationId}/opened`, { method: 'POST' }),
 };
 
 // ── Policy Snapshot (#83) ─────────────────────────────────────

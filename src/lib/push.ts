@@ -83,3 +83,44 @@ export async function registerServiceWorker(): Promise<void> {
     /* 무시 */
   }
 }
+
+/** 이 주소에 실려 온 알림 id — service worker 가 새 창을 열 때 붙여 준다. */
+const NOTIF_PARAM = 'notif';
+
+/**
+ * 알림 열람을 서버에 기록한다(#258).
+ *
+ * service worker 는 localStorage 에 접근할 수 없어 액세스 토큰을 못 읽는다. 그래서
+ * SW 가 직접 부르지 않고 여기로 id 만 넘어온다 — 창이 이미 떠 있으면 postMessage 로,
+ * 새로 열렸으면 주소의 `?notif=` 로. 어느 쪽이든 호출은 앱이 한다.
+ *
+ * 로그인 뒤에 시작해야 한다(401 이면 기록이 남지 않는다). 실패는 삼킨다 — 열람 기록
+ * 하나 때문에 화면에 오류를 띄울 이유가 없고, endpoint 가 멱등이라 다음 기회에 또 부르면 된다.
+ */
+export function startNotificationOpenReporting(): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const report = (id: string) => {
+    if (!id) return;
+    notificationsApi.opened(id).catch(() => { /* 열람 기록 실패는 조용히 넘긴다 */ });
+  };
+
+  // 1) 새 창으로 열린 경우 — 주소에서 집어가고 흔적은 지운다.
+  //    남겨두면 새로고침할 때마다 같은 id 를 다시 보낸다(멱등이라 해롭진 않지만 요청 낭비).
+  const url = new URL(window.location.href);
+  const fromUrl = url.searchParams.get(NOTIF_PARAM);
+  if (fromUrl) {
+    report(fromUrl);
+    url.searchParams.delete(NOTIF_PARAM);
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }
+
+  // 2) 이미 떠 있던 창 — SW 가 보낸 메시지를 받는다.
+  if (!('serviceWorker' in navigator)) return () => {};
+  const onMessage = (e: MessageEvent) => {
+    const d = e.data;
+    if (d && d.type === 'notification-opened' && typeof d.id === 'string') report(d.id);
+  };
+  navigator.serviceWorker.addEventListener('message', onMessage);
+  return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+}

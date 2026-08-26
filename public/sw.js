@@ -26,22 +26,37 @@ self.addEventListener('push', (event) => {
     body,
     icon: '/icon.svg',
     badge: '/icon.svg',
-    data: data.url || '/',
+    // 예전엔 url 문자열만 담아서 알림 id 가 여기서 버려졌고, 그래서 "열었다"를
+    // 서버에 기록할 방법이 없었다(#258). 객체로 담아 id 를 클릭까지 끌고 간다.
+    data: { id: data.id || null, url: data.url || '/' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && typeof event.notification.data === 'string')
-    ? event.notification.data
-    : '/';
+  const raw = event.notification.data;
+  // 구버전 알림(문자열 url)도 아직 트레이에 남아 있을 수 있다.
+  const url = (typeof raw === 'string' ? raw : raw && raw.url) || '/';
+  const id = (raw && typeof raw === 'object' && raw.id) || null;
+
+  // 열람 기록은 SW 가 직접 못 보낸다 — 액세스 토큰이 localStorage 에 있고
+  // service worker 는 거기에 접근할 수 없다. 그래서 앱 쪽에 id 를 넘기고
+  // 앱이 POST /notifications/{id}/opened 를 부른다(#258).
+  //   · 창이 이미 있으면 postMessage
+  //   · 없으면 열 주소에 ?notif= 를 붙여 앱이 부팅하며 집어가게 한다
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((cs) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
       for (const c of cs) {
-        if ('focus' in c) return c.focus();
+        if ('focus' in c) {
+          if (id) c.postMessage({ type: 'notification-opened', id });
+          return c.focus();
+        }
       }
-      return self.clients.openWindow(url);
+      const target = id
+        ? url + (url.includes('?') ? '&' : '?') + 'notif=' + encodeURIComponent(id)
+        : url;
+      return self.clients.openWindow(target);
     }),
   );
 });
