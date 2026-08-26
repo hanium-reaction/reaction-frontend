@@ -6,6 +6,7 @@ import { NavigationContext, STATE_TO_SCREEN } from '../contexts/NavigationContex
 import { ToastProvider } from '../contexts/ToastContext';
 import { IosInstallCard } from '../components/IosInstallCard';
 import { ApiError, authApi, clearSession, friendlyError, getAccessToken, getAuthKind, getRefreshToken, initTokenStore, onAuthExpired, onboardingApi, setSession, stubLoginAllowed } from '../lib/api';
+import { startNotificationOpenReporting } from '../lib/push';
 import type { ScreenId, TabId } from '../types';
 import type { MilestoneDraft, OnboardingState, UserProfile } from '../types/api';
 
@@ -209,6 +210,15 @@ export function AppShell() {
       setAuthBusy(false);
     }
   }, [loadSessionAfterLogin]);
+
+  // 알림을 실제로 열었는지 서버에 기록한다(#258). service worker 는 토큰을 못 읽어서
+  // 직접 부르지 못하고, id 만 이쪽으로 넘겨 준다. 로그인 뒤에만 의미가 있으므로
+  // 사용자가 붙은 다음에 시작한다.
+  const hasUser = !!user;
+  useEffect(() => {
+    if (!hasUser) return;
+    return startNotificationOpenReporting();
+  }, [hasUser]);
 
   // 되살릴 수 없는 401 = 세션 종료. 토큰은 api 레이어에서 이미 버렸다.
   // 여기서 로그인 화면으로 돌려보내지 않으면 "데이터만 안 나오는 화면" 에 갇힌다.
