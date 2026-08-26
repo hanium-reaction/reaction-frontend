@@ -38,7 +38,10 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description refresh 의 jti 를 revoke set 에 등록. 잘못된 토큰이어도 멱등 204.
+         * @description refresh 의 jti 를 revoke set 에 등록 + 쿠키 삭제. 잘못된/없는 토큰이어도 멱등 204.
+         *
+         *     쿠키는 토큰 유효성과 무관하게 항상 지운다(#323) — 브라우저에 남은 쿠키를 정리하는
+         *     게 목적이라, revoke 대상 jti 를 못 찾는 경우(토큰 없음/깨짐)에도 해야 할 일이다.
          */
         post: operations["logout_auth_logout_post"];
         delete?: never;
@@ -79,6 +82,17 @@ export interface paths {
         /**
          * Refresh Access Token
          * @description refresh → 새 access. refresh 회전 X (refresh 자체 재발급 안 함).
+         *
+         *     토큰 출처는 본문 우선, 없으면 `reaction_refresh` 쿠키(#323) — 웹이 쿠키로 옮겨가도
+         *     네이티브(본문만 보냄)와 과거 웹 클라이언트(둘 다 안 옮긴 상태)가 계속 동작해야 한다.
+         *     둘 다 없으면 애초에 세션이 없는 것이므로 401.
+         *
+         *     사용자 존재 확인(#321) — 이전에는 jti revoke 여부만 보고 `decoded.user_id` 로 바로
+         *     access 를 재발급했다. 계정 삭제(`POST /settings/delete-account`)는 개별 jti 를
+         *     모르므로(다중 기기 발급분을 전부 추적하지 않는다) revoke set 에 등록할 수 없다 —
+         *     대신 `UserRepo.get_by_id` 의 `archived_at IS NULL` 필터로 막는다. `get_current_user`
+         *     가 이미 같은 필터로 access token 을 막고 있으니, 여기도 같은 기준을 적용해야
+         *     "삭제된 계정은 refresh 로도 못 살아난다"가 성립한다.
          */
         post: operations["refresh_access_token_auth_refresh_post"];
         delete?: never;
@@ -383,6 +397,46 @@ export interface paths {
         patch: operations["update_goal_goals__goal_id__patch"];
         trace?: never;
     };
+    "/goals/{goal_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Goal
+         * @description 목표 완료 확정 — "이 목표 끝난 거 맞아요?" 에 대한 사용자 확인 (ADR-0007 6b).
+         *
+         *     마일스톤이 다 끝나면 주간 리뷰가 `goalCompletionProposals` 로 제안하지만, **여기에
+         *     가드를 걸지 않는다.** 마일스톤 완료 표시와 같은 이유다 — 다른 경로로 달성했거나 방향이
+         *     바뀌어 여기서 접는 경우가 있고, 그 판단은 AI 가 아니라 사용자 몫이다(§3).
+         *
+         *     완료는 **보관(soft delete)이 아니다.** `archived_at` 을 건드리지 않아 목록에 남고,
+         *     FE 가 `status` 로 배지를 단다. 끝낸 것과 치운 것은 다른 뜻이다.
+         *
+         *     완료가 실제로 뜻하는 바 두 가지가 함께 성립한다:
+         *     - **tier 한도(Focus≤3)를 더 안 먹는다** — 성실히 완주할수록 새 목표를 못 만들면 곤란하다.
+         *     - **새 계획 후보에서 빠진다** — 안 그러면 "완료" 배지를 단 채 다음 주기 카드가 쏟아진다.
+         *
+         *     멱등 — 같은 값을 다시 보내도 200. `completed=false` 로 되돌릴 수 있다(오조작 복구).
+         *
+         *     ⚠️ **진행 중(`active`)인 목표만 완료할 수 있다.** `proposed` 를 완료로 보내면 해제할 때
+         *     `active` 로 나와 계획 승인 없이 승격되고, 잠정 목표 만료 cron 대상에서도 빠진다.
+         *
+         *     ⚠️ **되돌리기는 tier 한도를 다시 검사한다.** 완료하면 한도 집계에서 빠지므로, 안 재면
+         *     "완료 → 새 목표 생성 → 완료 해제" 로 Focus≤3 을 넘길 수 있다(AGENTS §1 잠금 결정).
+         *     한도가 찼으면 422 `GOAL_TIER_LIMIT_EXCEEDED` — 먼저 다른 목표를 정리해야 한다.
+         */
+        post: operations["complete_goal_goals__goal_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/goals/{goal_id}/mandala": {
         parameters: {
             query?: never;
@@ -432,6 +486,37 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/goals/{goal_id}/nodes/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Milestone Completion
+         * @description 마일스톤 완료 표시 — ADR-0007 §3 이 정한 **유일한 저장 예외**.
+         *
+         *     진척도는 저장하지 않고 `action_items.status` 에서 파생한다(§3). 마일스톤 완료만
+         *     예외인 이유는 롤업으로 표현할 수 없는 두 상태가 있어서다: "세션은 다 했는데 아직
+         *     아니다" 와 "세션은 안 했지만 다른 경로로 달성했다". **그 판단은 AI 가 아니라 사용자
+         *     몫**이라 자동 판정하지 않고 이 endpoint 로만 찍는다.
+         *
+         *     `nodeType="milestone"` 인 계획 트리 노드만 받는다(저장소에서 좁힌다). subgoal/leaf 는
+         *     404 — leaf 에 완료를 찍게 하면 `action_items.status` 와 진실이 갈린다. 만다라 칸도
+         *     404, 그쪽은 `PATCH /goals/mandala/nodes/{nodeId}` 다.
+         *
+         *     `completed=false` 로 되돌릴 수 있다(오조작 복구). 멱등 — 같은 값을 다시 보내도 200.
+         */
+        patch: operations["update_milestone_completion_goals__goal_id__nodes__node_id__patch"];
         trace?: never;
     };
     "/goals/{goal_id}/park": {
@@ -1239,6 +1324,13 @@ export interface paths {
          * @description Stage A(#milestones) — 목표를 중간 목표 3~5개로. 사용자가 확인·편집 후 generate 로 넘긴다.
          *
          *     입력은 generate 와 동일(interviewSessionId/outcome + density). LLM 1콜 + 룰 폴백이라 가볍다.
+         *
+         *     **이미 확정·영속된 뼈대가 있으면 LLM 을 돌리지 않고 그걸 그대로 돌려준다**
+         *     (`aiSource="saved"`, ADR-0007 PR-2.5). 마일스톤은 매 주기 교체되는 leaf 트리와 달리
+         *     마감까지 살아남는 층이라(§1), 2주기에 새로 지어내면 사용자가 1주기에 확정한 뼈대와
+         *     다른 목록이 나오고 — 그 새 목록으로 계획이 만들어지는데 승인 경로는 이미 마일스톤이
+         *     있다는 이유로 저장을 건너뛰므로 — DB 의 뼈대와 실제 계획이 갈라진 채 굳는다.
+         *     부수 효과로 2주기 이후 이 endpoint 의 LLM 콜이 0 이 된다.
          */
         post: operations["generate_milestones_plans_milestones_post"];
         delete?: never;
@@ -1452,6 +1544,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/policy-snapshot/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Policy Update
+         * @description 사용자 승인 후 새 버전 INSERT — HITL 게이트가 여기다.
+         *
+         *     본문은 `preview-update` 응답을 그대로(=룰 그대로) 또는 사용자가 고친 값이다. 서버가
+         *     후보를 다시 계산해 덮어쓰지 않는다 — 그러면 사용자가 화면에서 본 값과 저장된 값이
+         *     달라질 수 있다(미리보기와 적용 사이에 KPI 가 갱신되면). **본 것이 저장된다.**
+         */
+        post: operations["apply_policy_update_policy_snapshot_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policy-snapshot/current": {
         parameters: {
             query?: never;
@@ -1466,6 +1582,79 @@ export interface paths {
         get: operations["get_current_policy_policy_snapshot_current_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy-snapshot/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy History
+         * @description 버전 이력 — 최신이 앞. 비어 있으면 `items: []` (404 아님).
+         *
+         *     `current` 와 달리 404 를 내지 않는다: "아직 정책이 없다" 는 이력 화면에서 **정상 상태**
+         *     이고, 빈 목록으로 표현하는 게 클라이언트에 더 쉽다.
+         */
+        get: operations["get_policy_history_policy_snapshot_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy-snapshot/preview-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Policy Update
+         * @description 다음 버전 후보 — **저장하지 않는다** (AGENTS §1 자동 적용 금지).
+         *
+         *     입력은 가장 최근 주간 요약(`period_summaries`). 아직 한 주도 집계 안 됐으면 KPI 없이
+         *     현재 값을 그대로 후보로 돌려준다(`changes: []`) — 그 자체가 "바꿀 근거가 아직 없다"다.
+         */
+        post: operations["preview_policy_update_policy_snapshot_preview_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy-snapshot/rollback/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rollback Policy
+         * @description 지난 버전의 값을 **새 버전으로** 되살린다.
+         *
+         *     옛 행의 `is_active` 를 다시 켜지 않는 이유: 그러면 그 행의 `valid_from` 이 최초 활성화
+         *     시각 그대로라 **언제 롤백했는지가 이력에서 사라진다.** 정책 이력은 감사 기록이므로
+         *     (ADR-0001 §3.2 append-only) 값을 복사한 새 행을 만들어 타임라인을 온전히 남긴다.
+         *     버전 번호는 계속 늘어난다 — v5 에서 v2 로 롤백하면 v2 의 값을 가진 v6 이 생긴다.
+         *
+         *     없는 버전은 404, 이미 활성인 버전은 409(같은 값을 한 번 더 쌓을 이유가 없다).
+         */
+        post: operations["rollback_policy_policy_snapshot_rollback__version__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1807,6 +1996,40 @@ export interface paths {
          *       `is_anonymized`/`anonymized_at` set. hard delete 아님(행 보존).
          */
         post: operations["anonymize_settings_anonymize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/delete-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Account
+         * @description 계정 삭제 — 2단계 확인 (#321, FE #237 §4, Play Store 정책 요구).
+         *
+         *     `anonymize`(S28, 계정은 유지한 채 과거 텍스트만 마스킹)와는 다른 작업이다 — 이건 앱에
+         *     다시 들어올 수 없게 만드는 것까지 포함한다. hard delete 는 하지 않는다(AGENTS §2) —
+         *     같은 `anonymize_user()` PII 마스킹 위에 `archived_at` 을 얹어 **soft delete** 한다.
+         *
+         *     `archived_at` 을 세우는 순간 `UserRepo.get_by_id`/`get_by_email` 의 `archived_at IS NULL`
+         *     필터에 걸려, 이미 발급된 access token 은 다음 요청의 `get_current_user` 에서 그대로
+         *     401 `AUTH_INVALID_TOKEN` 이 된다 — 별도 access-token 블랙리스트가 필요 없다. refresh
+         *     token 은 `/auth/refresh` 가 이제 같은 필터로 사용자 존재를 확인하므로(이 PR 에서 함께
+         *     고침) 동일하게 막힌다.
+         *
+         *     email 도 함께 마스킹한다 — `email` 에 hard UNIQUE 제약이 있어(파샬 인덱스 아님) 원본을
+         *     남기면 그 이메일로 재가입이 영영 불가능해진다. `user.id` 는 유일하므로 유니크 제약을
+         *     깨지 않는 결정적 sentinel 로 치환.
+         */
+        post: operations["delete_account_settings_delete_account_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2491,6 +2714,38 @@ export interface components {
             ok: boolean;
         };
         /**
+         * DeleteAccountRequest
+         * @description POST /settings/delete-account 요청. `anonymize` 와 동일한 2단계 확인 모양.
+         */
+        DeleteAccountRequest: {
+            /** Confirmationtoken */
+            confirmationToken?: string | null;
+        };
+        /**
+         * DeleteAccountResponse
+         * @description 계정 삭제 응답. `status` 로 단계 구분.
+         *
+         *     - `confirmation_required` — 토큰 발급(미적용).
+         *     - `deleted` — 적용 완료. 이 응답을 받은 뒤로 이 access token 은 다음 요청부터
+         *       `AUTH_INVALID_TOKEN` 이다(계정 조회 자체가 soft-delete 필터에 걸린다) — 클라이언트는
+         *       곧바로 로그아웃 처리할 것.
+         */
+        DeleteAccountResponse: {
+            /** Confirmationtoken */
+            confirmationToken?: string | null;
+            /** Deletedat */
+            deletedAt?: string | null;
+            /** Expiresat */
+            expiresAt?: string | null;
+            /** Message */
+            message: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "confirmation_required" | "deleted";
+        };
+        /**
          * ExecutionEventResponse
          * @description POST /today/focus/{id}/pause·resume 응답 — 집중 세션 일시정지/재개 (#83).
          *
@@ -2799,6 +3054,35 @@ export interface components {
             whyNow?: string | null;
         };
         /**
+         * GoalCompletionProposal
+         * @description "이 목표 끝난 거 맞아요?" 제안 1건 (ADR-0007 6b).
+         *
+         *     마일스톤이 **전부** 완료된 목표에 대해 나간다. `NextCycleProposal` 과 **배타적**이다 —
+         *     같은 가드(`has_open_milestone`)의 양쪽 갈래라, 한 목표가 두 카드에 동시에 뜨지 않는다.
+         *
+         *     확정은 `POST /goals/{goalId}/complete`.
+         */
+        GoalCompletionProposal: {
+            /**
+             * Goalid
+             * Format: uuid
+             */
+            goalId: string;
+            /** Goaltitle */
+            goalTitle: string;
+        };
+        /**
+         * GoalCompletionRequest
+         * @description POST /goals/{goalId}/complete 요청 — 목표 완료 확정/해제 (ADR-0007 6b).
+         *
+         *     마일스톤 완료 표시(`PATCH /goals/{goalId}/nodes/{nodeId}`)와 **같은 모양**으로 뒀다 —
+         *     둘 다 "끝났다" 를 사용자가 확정하는 HITL 이고, 둘 다 오조작을 되돌릴 수 있어야 한다.
+         */
+        GoalCompletionRequest: {
+            /** Completed */
+            completed: boolean;
+        };
+        /**
          * GoalCreateRequest
          * @description POST /goals 요청.
          */
@@ -2841,6 +3125,8 @@ export interface components {
          *     `orderIndex` 없이는 FE 가 8칸 중 몇 번째인지 알 수 없다). 기존 소비 코드는 무변경.
          */
         GoalNode: {
+            /** Completedat */
+            completedAt?: string | null;
             /** Depth */
             depth: number;
             /** Isleaf */
@@ -3310,11 +3596,11 @@ export interface components {
         JsonValue: unknown;
         /**
          * LogoutRequest
-         * @description POST /auth/logout 요청.
+         * @description POST /auth/logout 요청. `refreshToken` 생략 가능 — `RefreshRequest` 와 동일한 이유(#323).
          */
         LogoutRequest: {
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken?: string | null;
         };
         /**
          * MandalaApproveRequest
@@ -3781,6 +4067,18 @@ export interface components {
             text?: string | null;
         };
         /**
+         * MilestoneCompletionRequest
+         * @description PATCH /goals/{goalId}/nodes/{nodeId} 요청 — 마일스톤 완료 표시 (ADR-0007 §3 예외).
+         *
+         *     제목·요약은 여기서 못 고친다. 뼈대 편집은 마일스톤 확인 화면 → `generate` →
+         *     `approve` 경로 하나로 모여 있고(ADR-0007 PR-6a), 여기서도 고칠 수 있게 하면 같은
+         *     사실을 바꾸는 길이 둘이 된다.
+         */
+        MilestoneCompletionRequest: {
+            /** Completed */
+            completed: boolean;
+        };
+        /**
          * MilestoneDraft
          * @description 중간 목표(마일스톤) 한 개 — 사용자가 확인·편집하는 계획 뼈대 단위(#milestones Phase 2).
          *
@@ -3806,7 +4104,7 @@ export interface components {
              * @default llm
              * @enum {string}
              */
-            aiSource: "llm" | "rule";
+            aiSource: "llm" | "rule" | "saved";
             /** Milestones */
             milestones: components["schemas"]["MilestoneDraft"][];
         };
@@ -3902,6 +4200,133 @@ export interface components {
             currentState: string;
             /** Suggestednextscreen */
             suggestedNextScreen: string;
+        };
+        /**
+         * PolicyApplyRequest
+         * @description POST /policy-snapshot/apply — 사용자가 승인(또는 수정)한 4 영역.
+         *
+         *     `preview-update` 응답을 그대로 되보내면 룰 그대로 적용이고, 값을 고쳐 보내면 사용자
+         *     수정본이 적용된다 — `source` 로 어느 쪽인지 FE 가 알려준다(`/recovery/decisions` 의
+         *     accepted/edited 와 같은 관례: 사용자가 고쳤는지는 화면이 가장 잘 안다).
+         */
+        PolicyApplyRequest: {
+            /** Behavioralprofile */
+            behavioralProfile: {
+                [key: string]: unknown;
+            };
+            /** Executionconstraints */
+            executionConstraints: {
+                [key: string]: unknown;
+            };
+            /** Interactionstyle */
+            interactionStyle: {
+                [key: string]: unknown;
+            };
+            /** Reasonforupdate */
+            reasonForUpdate?: string | null;
+            /** Recoverypolicy */
+            recoveryPolicy: {
+                [key: string]: unknown;
+            };
+            /**
+             * Source
+             * @default rule
+             * @enum {string}
+             */
+            source: "rule" | "user_manual";
+        };
+        /**
+         * PolicyChangeItem
+         * @description 승인 화면에 보여줄 변경 한 줄 — **근거를 숫자로** 담는다.
+         */
+        PolicyChangeItem: {
+            /** After */
+            after: unknown;
+            /** Area */
+            area: string;
+            /** Before */
+            before: unknown;
+            /** Field */
+            field: string;
+            /** Why */
+            why: string;
+        };
+        /**
+         * PolicyHistoryItem
+         * @description GET /policy-snapshot/history 항목 — 4 영역 payload 는 빼고 메타만.
+         *
+         *     이력 화면은 "언제 무엇 때문에 바뀌었나" 를 보는 자리라, 버전마다 JSONB 4개를 전부
+         *     실어 보내면 응답만 커지고 화면은 안 쓴다. 특정 버전의 내용이 필요하면 롤백 미리보기
+         *     (`preview-update` 는 다음 버전용이므로) 대신 `history` 로 고르고 `rollback` 한다.
+         */
+        PolicyHistoryItem: {
+            /** Isactive */
+            isActive: boolean;
+            /** Reasonforupdate */
+            reasonForUpdate: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Validfrom
+             * Format: date-time
+             */
+            validFrom: string;
+            /** Validto */
+            validTo: string | null;
+            /** Version */
+            version: number;
+        };
+        /** PolicyHistoryResponse */
+        PolicyHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["PolicyHistoryItem"][];
+        };
+        /**
+         * PolicyPreviewResponse
+         * @description POST /policy-snapshot/preview-update — 다음 버전 후보 (Draft Layer).
+         *
+         *     **아무것도 저장하지 않는다** (AGENTS §1 자동 적용 금지). `isDraft=true` 로 내려가고,
+         *     사용자가 `POST /policy-snapshot/apply` 를 눌러야 INSERT 된다.
+         *
+         *     `changes` 가 비면 이번 주엔 바꿀 게 없다는 뜻이다 — FE 는 그때 [적용] 을 비활성화하면
+         *     된다(억지로 새 버전을 만들 이유가 없다).
+         */
+        PolicyPreviewResponse: {
+            /**
+             * Aisource
+             * @default llm
+             * @enum {string}
+             */
+            aiSource: "llm" | "rule";
+            /** Baseversion */
+            baseVersion: number | null;
+            /** Behavioralprofile */
+            behavioralProfile: {
+                [key: string]: unknown;
+            };
+            /** Changes */
+            changes: components["schemas"]["PolicyChangeItem"][];
+            /** Executionconstraints */
+            executionConstraints: {
+                [key: string]: unknown;
+            };
+            /** Interactionstyle */
+            interactionStyle: {
+                [key: string]: unknown;
+            };
+            /**
+             * Isdraft
+             * @default true
+             */
+            isDraft: boolean;
+            /** Nextversion */
+            nextVersion: number;
+            /** Reasonforupdate */
+            reasonForUpdate: string | null;
+            /** Recoverypolicy */
+            recoveryPolicy: {
+                [key: string]: unknown;
+            };
         };
         /**
          * PolicySnapshotResponse
@@ -4173,6 +4598,12 @@ export interface components {
              * @default true
              */
             isDraft: boolean;
+            /**
+             * Recoverymode
+             * @default standard
+             * @enum {string}
+             */
+            recoveryMode: "standard" | "goal_renegotiation";
         };
         /**
          * ReflectionBatchItem
@@ -4247,10 +4678,14 @@ export interface components {
         /**
          * RefreshRequest
          * @description POST /auth/refresh 요청.
+         *
+         *     `refreshToken` 생략 가능(#323) — 웹은 `reaction_refresh` httpOnly 쿠키로 대신 보낼 수
+         *     있다(로그인 시 서버가 body 와 쿠키에 **둘 다** 내려준다, 이행 기간). 본문·쿠키 둘 다
+         *     없으면 401 `AUTH_INVALID_TOKEN`.
          */
         RefreshRequest: {
             /** Refreshtoken */
-            refreshToken: string;
+            refreshToken?: string | null;
         };
         /**
          * ReplanApproveResponse
@@ -4874,6 +5309,8 @@ export interface components {
              * Format: date-time
              */
             generatedAt: string;
+            /** Goalcompletionproposals */
+            goalCompletionProposals?: components["schemas"]["GoalCompletionProposal"][];
             mandala?: components["schemas"]["MandalaWeeklySummary"] | null;
             /** Nextcycleproposals */
             nextCycleProposals?: components["schemas"]["NextCycleProposal"][];
@@ -4953,7 +5390,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                reaction_refresh?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -5015,7 +5454,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                reaction_refresh?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -5650,6 +6091,43 @@ export interface operations {
             };
         };
     };
+    complete_goal_goals__goal_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalCompletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_mandala_tree_goals__goal_id__mandala_get: {
         parameters: {
             query?: never;
@@ -5703,6 +6181,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoalDecomposition"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_milestone_completion_goals__goal_id__nodes__node_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                goal_id: string;
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestoneCompletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalNode"];
                 };
             };
             /** @description Validation Error */
@@ -7285,6 +7801,41 @@ export interface operations {
             };
         };
     };
+    apply_policy_update_policy_snapshot_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicySnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_current_policy_policy_snapshot_current_get: {
         parameters: {
             query?: never;
@@ -7298,6 +7849,101 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicySnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_history_policy_snapshot_history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_policy_update_policy_snapshot_preview_update_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_policy_policy_snapshot_rollback__version__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7837,6 +8483,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnonymizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_account_settings_delete_account_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteAccountResponse"];
                 };
             };
             /** @description Validation Error */

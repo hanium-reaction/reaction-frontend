@@ -36,8 +36,10 @@ import type {
   TimePolicyCreateRequest,
   TimePolicyUpdateRequest,
   FreeBusy,
+  GoalCompletionRequest,
   GoalCreateRequest,
   GoalDecomposition,
+  GoalNode,
   GoalsByTier,
   GoalUpdateRequest,
   Habit,
@@ -71,11 +73,17 @@ import type {
   MaterialsQueryResponse,
   MaterialsSearchRequest,
   MaterialsSearchResponse,
+  MilestoneCompletionRequest,
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
+  PolicyApplyRequest,
+  PolicyHistoryResponse,
+  PolicyPreviewResponse,
   PolicySnapshotResponse,
   ProfileResponse,
   ProfileUpdateRequest,
@@ -452,6 +460,16 @@ export const goalsApi = {
   nodes: (goalId: string) =>
     request<GoalDecomposition>(`/goals/${goalId}/nodes`),
 
+  // 목표 완료 확정/해제(ADR-0007 6b). 멱등 — completed=false 로 되돌릴 수 있다(오조작 복구).
+  // ⚠️ 진행 중(active)인 목표만 완료 가능. 되돌리면 tier 한도를 다시 검사(422 GOAL_TIER_LIMIT_EXCEEDED).
+  complete: (goalId: string, body: GoalCompletionRequest) =>
+    request<ApiGoal>(`/goals/${goalId}/complete`, { method: 'POST', body }),
+
+  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 인 노드만 대상, 그 외는 404.
+  // 멱등 — completed=false 로 되돌릴 수 있다.
+  updateMilestoneCompletion: (goalId: string, nodeId: string, body: MilestoneCompletionRequest) =>
+    request<GoalNode>(`/goals/${goalId}/nodes/${nodeId}`, { method: 'PATCH', body }),
+
   // 궁극목표(U1) upsert — 인터뷰 산출물을 Goal(status=active, tier=parked) 로 확정.
   // 이미 있으면(사용자당 1개) 같은 행을 갱신 — 409 없이 재호출해도 안전.
   upsertUltimate: (body: UltimateGoalRequest = {}) =>
@@ -823,6 +841,22 @@ export const notificationsApi = {
 export const policySnapshotApi = {
   // 활성 스냅샷 없으면 404 — 호출부가 카운트-only 폴백을 유지한다.
   current: () => request<PolicySnapshotResponse>('/policy-snapshot/current'),
+
+  // 다음 버전 후보 — 아무것도 저장하지 않는다. changes=[] 면 이번 주엔 바꿀 게 없다는 뜻.
+  previewUpdate: () =>
+    request<PolicyPreviewResponse>('/policy-snapshot/preview-update', { method: 'POST', body: {} }),
+
+  // 사용자 승인 후 새 버전 INSERT — HITL 게이트. preview-update 응답을 그대로(rule) 또는
+  // 사용자가 고친 값(user_manual)을 보낸다.
+  apply: (body: PolicyApplyRequest) =>
+    request<PolicySnapshotResponse>('/policy-snapshot/apply', { method: 'POST', body }),
+
+  // 버전 이력 — 최신이 앞. 정책이 아직 없으면 items: [](404 아님).
+  history: () => request<PolicyHistoryResponse>('/policy-snapshot/history'),
+
+  // 지난 버전의 값을 새 버전으로 되살린다. 없는 버전 404, 이미 활성인 버전 409.
+  rollback: (version: number) =>
+    request<PolicySnapshotResponse>(`/policy-snapshot/rollback/${version}`, { method: 'POST', body: {} }),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
@@ -840,6 +874,11 @@ export const settingsApi = {
 
   updateProfile: (body: ProfileUpdateRequest) =>
     request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
+
+  // 계정 삭제 — 2단계 확인(#321). status="deleted" 응답을 받으면 access token 이 다음
+  // 요청부터 즉시 무효화되므로 호출부는 곧바로 로그아웃 처리할 것.
+  deleteAccount: (body: DeleteAccountRequest) =>
+    request<DeleteAccountResponse>('/settings/delete-account', { method: 'POST', body }),
 };
 
 // ── Health ────────────────────────────────────────────────────
