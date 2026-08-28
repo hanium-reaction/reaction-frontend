@@ -2230,6 +2230,12 @@ export interface paths {
          *
          *     카드의 미종결 scheduled_block 이 있으면 사용, 없으면 즉석 블록 생성
          *     (source='user_edit'). 같은 카드의 in_progress 실행이 있으면 409.
+         *
+         *     카드는 **행 잠금으로 읽는다**(#368). 계획 교체·목표 완료가 같은 카드를 보관하는
+         *     중이면 여기서 기다렸다가 `archived_at IS NULL` 재평가에 걸려 404 로 끝난다 —
+         *     execution_events·scheduled_block 을 만들기 **전에** 걸러야 한다. 상태만 조건부로
+         *     막으면 실행 행이 남고, `list_pending_reflection` 은 `action_items` 에 join 하지
+         *     않으므로 그 실행이 회고 화면까지 새어 나간다.
          */
         post: operations["start_action_today_actions__action_id__start_post"];
         delete?: never;
@@ -2750,6 +2756,36 @@ export interface components {
              * @enum {string}
              */
             status: "confirmation_required" | "deleted";
+        };
+        /**
+         * EffortMinutes
+         * @description 이번 주를 **분**으로 본 요약 (ADR-0009 D5).
+         *
+         *     `adherenceRate`(건수 비율) 옆에 나란히 둔다. 계획 세션 길이가 작업 내용을 따라가면
+         *     건수와 시간이 갈라진다 — 15분짜리 9개를 끝내고 3시간짜리 1개를 못 하면 건수로는 90%
+         *     지만 실제로는 절반도 못 한 주다.
+         *
+         *     `actualMinutes` 를 `completedMinutes` 와 나누면 "예상이 맞았나" 가 나온다
+         *     (1.0 = 예상대로, 1.3 = 30% 더 걸렸다). 둘 다 **완료한 실행**만 센다.
+         */
+        EffortMinutes: {
+            /**
+             * Actualminutes
+             * @default 0
+             */
+            actualMinutes: number;
+            /** Adherencerate */
+            adherenceRate?: number | null;
+            /**
+             * Completedminutes
+             * @default 0
+             */
+            completedMinutes: number;
+            /**
+             * Plannedminutes
+             * @default 0
+             */
+            plannedMinutes: number;
         };
         /**
          * ExecutionEventResponse
@@ -5310,6 +5346,7 @@ export interface components {
             consistencyDays?: number | null;
             /** Drainwindow */
             drainWindow?: string | null;
+            effort?: components["schemas"]["EffortMinutes"];
             /**
              * Generatedat
              * Format: date-time

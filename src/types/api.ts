@@ -1137,6 +1137,15 @@ export interface StaleAxisProposal {
   axisTitle: string;
 }
 
+// 이번 주를 분(minute)으로 본 요약(ADR-0009 D5). adherenceRate(건수 비율) 옆에 두는 용도 —
+// completedMinutes/actualMinutes 는 둘 다 완료한 실행만 센다.
+export interface EffortMinutes {
+  plannedMinutes: number;
+  completedMinutes: number;
+  actualMinutes: number;
+  adherenceRate?: number | null;
+}
+
 // ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
 export interface WeeklyReviewResponse {
   weekStart: string;
@@ -1159,6 +1168,7 @@ export interface WeeklyReviewResponse {
   nextCycleProposals?: NextCycleProposal[];
   staleAxisProposals?: StaleAxisProposal[];
   goalCompletionProposals?: GoalCompletionProposal[];
+  effort?: EffortMinutes;
 }
 export interface WeeklyGenerateRequest {
   weekStart?: string;
