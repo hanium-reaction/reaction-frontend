@@ -155,11 +155,10 @@ export interface GoalsByTier {
 
 export interface GoalUpdateRequest {
   title?: string;
+  category?: string;
   deadline?: string | null; // YYYY-MM-DD
   priorityLevel?: number;
   goalTier?: GoalTier;
-  // GoalCreateRequest.category 와 같은 허용값·정규화 규칙(#326). 생략하면 기존 유지.
-  category?: string | null;
 }
 
 export interface GoalCreateRequest {
@@ -180,30 +179,12 @@ export interface GoalNode {
   orderIndex: number;
   nodeType: MandalaNodeType;
   isLeaf: boolean;
-  // 마일스톤 완료 표시(PATCH /goals/{goalId}/nodes/{nodeId}) — nodeType="milestone" 에서만 채워짐.
-  completedAt?: string | null;
 }
 
 export interface GoalDecomposition {
   goalId: string;
   rootNodeId: string;
   nodes: GoalNode[];
-}
-
-// POST /goals/{goalId}/complete 요청 — 목표 완료 확정/해제 (ADR-0007 6b).
-export interface GoalCompletionRequest {
-  completed: boolean;
-}
-
-// 마일스톤이 전부 완료된 목표에 대한 "이 목표 끝난 거 맞아요?" 제안 1건(ADR-0007 6b).
-export interface GoalCompletionProposal {
-  goalId: string;
-  goalTitle: string;
-}
-
-// PATCH /goals/{goalId}/nodes/{nodeId} 요청 — 마일스톤 완료 표시(ADR-0007 §3 예외).
-export interface MilestoneCompletionRequest {
-  completed: boolean;
 }
 
 // ── 궁극목표 / 만다라 (U1-U10) ─────────────────────────────────
@@ -251,7 +232,6 @@ export interface MandalaNode {
   locked: boolean;
   completedAt: string | null; // date-time
   promotedGoalId: string | null;
-  // 반복형(U12)으로 전환된 칸이면 링크된 Habit id, 아니면 null.
   habitId: string | null;
   // 매 조회 시 파생(컬럼 캐시 아님) — U9 단일 노드 편집 응답에서는 둘 다 null.
   progress: number | null;
@@ -278,17 +258,6 @@ export interface MandalaNodeUpdateRequest {
 // POST /goals/mandala/nodes/{nodeId}/promote (U10) — 축(depth=1) → 학기 목표.
 export interface MandalaPromoteRequest {
   goalTier: GoalTier;
-}
-
-// POST /goals/mandala/nodes/{nodeId}/habit (U12) — 셀(leaf, depth=2) → 반복형 전환.
-// title 생략 시 칸 제목을 그대로 쓴다.
-export interface MandalaHabitLinkRequest {
-  title?: string | null;
-  category?: HabitCategory | string;
-  frequencyPerWeek: number; // 1~7
-  minutesPerSession: number;
-  timePreference?: TimePreference;
-  priorityLevel?: number; // 1~5
 }
 
 // 확정된 하위목표(축) 1개 — 항상 정확히 8개(orderIndex 0~7).
@@ -555,6 +524,28 @@ export interface InboxUpdateRequest {
   status?: InboxStatus;
 }
 
+export type InboxAdviceCategory = 'recovery' | 'today' | 'goal' | 'habit';
+export type InboxAdviceActionType = 'OPEN_TODAY' | 'OPEN_WEEKLY_PLAN' | 'OPEN_GOAL';
+
+export interface InboxAdviceAction {
+  type: InboxAdviceActionType;
+  label: string;
+  targetId?: string | null;
+}
+
+export interface InboxCoachingAdvice {
+  adviceId: string;
+  category: InboxAdviceCategory;
+  title: string;
+  body: string;
+  rationale: string;
+  evidence: string[];
+  action: InboxAdviceAction;
+  generatedAt: string;
+  source: 'rules';
+  fallbackUsed: boolean;
+}
+
 // ── Habits (S27) ──────────────────────────────────────────────
 export type TimePreference = 'morning' | 'afternoon' | 'evening' | 'anytime';
 
@@ -566,8 +557,16 @@ export interface Habit {
   minutesPerSession: number;
   timePreference: TimePreference | string;
   priorityLevel: number;
-  // 만다라 칸(leaf)에서 전환된 습관이면 그 노드 id, 아니면 null(U12, ADR-0008 §1).
-  goalNodeId: string | null;
+  goalNodeId?: string | null;
+}
+
+export interface MandalaHabitLinkRequest {
+  title?: string | null;
+  category: HabitCategory | string;
+  frequencyPerWeek: number;
+  minutesPerSession: number;
+  timePreference: TimePreference;
+  priorityLevel: number;
 }
 
 export interface HabitInstance {
@@ -646,8 +645,6 @@ export interface AgendaCard {
   // 이 카드를 취소할 수 있는가(BE 파생 필드). 판정 규칙(실행 이력·source·status)은
   // BE 안에만 두고 FE 는 이 값만 본다 — 규칙을 복제하면 조용히 어긋난다.
   cancellable: boolean;
-  // 알림 스윕이 놓친(발송 실패/지연) 체크인인가(BE 파생 필드).
-  missedCheckIn: boolean;
 }
 
 // /today/agenda 안의 고정 일정 행. 관리 화면의 FixedSchedule 과 다른 스키마다 —
@@ -744,8 +741,7 @@ export interface FailureTagMaster {
 export interface FailureTagRequest {
   tagCodes: (FailureTagCode | string)[];
   memo?: string | null; // 클라이언트 암호화 메모(선택)
-  // 이 일이 얼마나 하기 싫었는지 1(전혀 안 싫음)~5(매우 싫음), 선택 (#299).
-  taskAversiveness?: number | null;
+  taskAversiveness?: number | null; // 1~5, 선택
 }
 
 export interface FailureTagResponse {
@@ -773,8 +769,6 @@ export interface ReflectionBatchItem {
   completionStatus: CompletionStatus;
   failureTags?: FailureTagCode[]; // 최대 2
   memo?: string | null; // 최대 300자, 서버 암호화
-  // 태그 선택 여부와 무관하게 독립적으로 유효 (#299). 1(전혀 안 싫음)~5(매우 싫음).
-  taskAversiveness?: number | null;
 }
 
 // POST /reflection/batch — [모두 완료] 일괄 처리. Idempotency-Key 필수. 상한 50건.
@@ -810,6 +804,7 @@ export interface RecoveryProposalsResponse {
   executionId: string;
   cards: RecoveryCard[];
   aiSource?: string;
+  recoveryMode: 'standard' | 'goal_renegotiation';
   isDraft?: boolean;
 }
 
@@ -825,9 +820,7 @@ export interface RecoveryDecisionRequest {
   acceptedAttemptId?: string | null;
   editedActionText?: string | null; // decision='edited' 일 때 1~300자
   decisionReason?: string | null;
-  // PARK/CARRY_OVER 수락에만 유효(그 외 그룹에 보내면 422). 생략하면 서버가 전략별
-  // 기본값을 계산한다(#327). 시간대 포함 ISO 8601(예: +09:00) 이어야 한다.
-  reEngagementAnchorAt?: string | null;
+  reEngagementAnchorAt?: string | null; // timezone 포함 ISO 8601
 }
 
 export interface RecoveryDecisionResponse {
@@ -837,7 +830,6 @@ export interface RecoveryDecisionResponse {
   skippedAttemptIds: string[];
   resultingActionItemId: string | null;
   isDraft?: boolean;
-  reEngagementAnchorAt?: string | null;
 }
 
 // GET /replan/{executionId} — S20 before/after diff (Draft Layer, 백엔드 #20-B 구현됨).
@@ -966,7 +958,6 @@ export interface FirstPlanResponse {
   warnings?: string[];
   aiSource?: string;
   isDraft?: boolean;
-  milestones?: MilestoneDraft[];
 }
 
 // #milestones Phase 2 — 사용자가 확인·편집하는 마일스톤 초안 한 개.
@@ -996,20 +987,10 @@ export interface MilestoneListResponse {
   aiSource?: 'llm' | 'rule';
 }
 
-// 자료 검색·확정 3단계(#259·#260) — POST /plans/materials/search-query → search → confirm.
-// 확정한 텍스트는 goals.materials 슬롯에 쓰여 다음 계획 생성에 그대로 들어간다.
-export interface MaterialsQueryRequest {
-  interviewSessionId?: string | null;
-}
-
 export interface MaterialsQueryResponse {
+  suggestedQuery: string;
   goalTitle: string;
   notice: string;
-  suggestedQuery: string;
-}
-
-export interface MaterialsSearchRequest {
-  query: string;
 }
 
 export interface MaterialSource {
@@ -1017,26 +998,28 @@ export interface MaterialSource {
   uri: string;
 }
 
+export type MaterialsSearchStatus =
+  | 'found'
+  | 'not_found'
+  | 'blocked_copyright'
+  | 'quota_exceeded'
+  | 'unavailable';
+
 export interface MaterialsSearchResponse {
+  status: MaterialsSearchStatus;
+  text?: string | null;
+  sources?: MaterialSource[];
+  searchQueries?: string[];
+  remainingToday?: number | null;
+  notice: string;
   aiSource: 'llm' | 'rule';
   isDraft: boolean;
-  notice: string;
-  remainingToday?: number | null;
-  searchQueries?: string[];
-  sources?: MaterialSource[];
-  status: 'found' | 'not_found' | 'blocked_copyright' | 'quota_exceeded' | 'unavailable';
-  text?: string | null;
-}
-
-export interface MaterialsConfirmRequest {
-  interviewSessionId?: string | null;
-  text: string;
 }
 
 export interface MaterialsConfirmResponse {
   goalTitle: string;
-  notice: string;
   savedChars: number;
+  notice: string;
 }
 
 // POST /plans/{planId}/approve
@@ -1093,60 +1076,30 @@ export interface BlockEditResponse {
   goalId?: string | null;
 }
 
-// 최근 27일(4주) 창에서 가장 자주 겹치는 실패 사유 태그 1건 — 빈도(count)·비중(share, 0~1
-// 또는 0~100 둘 다 허용) (#225). 쿼리는 reaction-backend 에서 실 Postgres 로 검증됐지만
-// (tests/test_recovery_evidence_sql.py) 아직 API 엔드포인트로 노출되지 않았다 — 필드 모양은
-// FailureTagMaster(tagCode/labelKo) 응답 관례를 따라 잠정 추정한 것. 백엔드가 엔드포인트를
-// 열면 이 타입과 WeeklyReviewResponse.topFailureContexts 만 실제 계약과 맞춰주면 된다.
-export interface TopFailureContext {
-  tagCode: FailureTagCode | string;
-  labelKo: string;
-  count: number;
-  share: number;
-}
-
-// 만다라 반복형 칸 1개의 이번 주 체크인 현황 (`GET /reviews/weekly` "E" 절).
-export interface MandalaHabitWeekStat {
-  axisTitle?: string | null;
+// ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
+export interface MandalaWeeklyHabit {
+  axisTitle: string | null;
   cellTitle: string;
   doneCount: number;
   targetCount: number;
 }
-
-// `GET /reviews/weekly` 의 "이번 주 만다라트" 절(ADR-0008 §8 "E"). 조회 시점에 파생 —
-// 궁극목표가 없거나 승인된 만다라 트리가 없으면 응답에서 null.
 export interface MandalaWeeklySummary {
   completedThisWeek: number;
   completedTotal: number;
   totalLeaves: number;
   touchedThisWeek: number;
-  habits?: MandalaHabitWeekStat[];
-  untouchedAxisTitles?: string[];
+  untouchedAxisTitles: string[];
+  habits: MandalaWeeklyHabit[];
 }
-
-// 다음 2주 열기 제안 1건(ADR-0008 §8 "G"). 승인은 기존 /plans/generate + /plans/{id}/approve.
 export interface NextCycleProposal {
   goalId: string;
   goalTitle: string;
   axisTitle?: string | null;
 }
-
-// 3주 연속 손 못 댄 축 — "줄이거나 바꾸자" 제안 1건(ADR-0008 §6, §8 "H").
 export interface StaleAxisProposal {
   axisId: string;
   axisTitle: string;
 }
-
-// 이번 주를 분(minute)으로 본 요약(ADR-0009 D5). adherenceRate(건수 비율) 옆에 두는 용도 —
-// completedMinutes/actualMinutes 는 둘 다 완료한 실행만 센다.
-export interface EffortMinutes {
-  plannedMinutes: number;
-  completedMinutes: number;
-  actualMinutes: number;
-  adherenceRate?: number | null;
-}
-
-// ── Reviews (S21·S22) — GET /reviews/weekly (#21 구현됨) ───────
 export interface WeeklyReviewResponse {
   weekStart: string;
   weekEnd: string;
@@ -1163,12 +1116,9 @@ export interface WeeklyReviewResponse {
   peakWindow?: string | null;
   drainWindow?: string | null;
   policyUpdateCandidates?: unknown[] | null;
-  topFailureContexts?: TopFailureContext[] | null;
   mandala?: MandalaWeeklySummary | null;
   nextCycleProposals?: NextCycleProposal[];
   staleAxisProposals?: StaleAxisProposal[];
-  goalCompletionProposals?: GoalCompletionProposal[];
-  effort?: EffortMinutes;
 }
 export interface WeeklyGenerateRequest {
   weekStart?: string;
@@ -1192,9 +1142,7 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  previousFrequency: number;
-  newFrequency: number;
-  message: string;
+  newFrequency?: number;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──
@@ -1223,20 +1171,6 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
-}
-
-// POST /settings/delete-account 요청 — anonymize 와 동일한 2단계 확인 모양.
-export interface DeleteAccountRequest {
-  confirmationToken?: string | null;
-}
-
-// status: confirmation_required(토큰 발급, 미적용) | deleted(적용 완료 — 클라이언트는 곧바로 로그아웃 처리할 것).
-export interface DeleteAccountResponse {
-  status: 'confirmation_required' | 'deleted';
-  message: string;
-  confirmationToken?: string | null;
-  deletedAt?: string | null;
-  expiresAt?: string | null;
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
@@ -1303,53 +1237,6 @@ export interface PolicySnapshotResponse {
   recoveryPolicy: Record<string, unknown>;
   reasonForUpdate: string | null;
   validFrom: string; // date-time
-}
-
-// 승인 화면에 보여줄 변경 한 줄 — 근거를 숫자로 담는다.
-export interface PolicyChangeItem {
-  area: string;
-  field: string;
-  before: unknown;
-  after: unknown;
-  why: string;
-}
-
-// POST /policy-snapshot/preview-update 응답 — 다음 버전 후보(Draft Layer). 아무것도 저장하지 않는다.
-export interface PolicyPreviewResponse {
-  baseVersion: number | null;
-  nextVersion: number;
-  changes: PolicyChangeItem[];
-  reasonForUpdate: string | null;
-  behavioralProfile: Record<string, unknown>;
-  executionConstraints: Record<string, unknown>;
-  interactionStyle: Record<string, unknown>;
-  recoveryPolicy: Record<string, unknown>;
-  aiSource?: 'llm' | 'rule';
-  isDraft?: boolean;
-}
-
-// POST /policy-snapshot/apply 요청 — preview-update 응답을 그대로(rule) 또는 사용자가 고친 값(user_manual).
-export interface PolicyApplyRequest {
-  behavioralProfile: Record<string, unknown>;
-  executionConstraints: Record<string, unknown>;
-  interactionStyle: Record<string, unknown>;
-  recoveryPolicy: Record<string, unknown>;
-  reasonForUpdate?: string | null;
-  source?: 'rule' | 'user_manual';
-}
-
-// GET /policy-snapshot/history 항목 — 4 영역 payload 는 빼고 메타만.
-export interface PolicyHistoryItem {
-  version: number;
-  source: string;
-  isActive: boolean;
-  reasonForUpdate: string | null;
-  validFrom: string; // date-time
-  validTo: string | null; // date-time
-}
-
-export interface PolicyHistoryResponse {
-  items: PolicyHistoryItem[];
 }
 
 // ── Web Push (S08·S25) ────────────────────────────────────────

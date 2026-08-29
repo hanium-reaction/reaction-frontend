@@ -30,16 +30,17 @@ import type {
   FirstPlanGenerateRequest,
   FirstPlanResponse,
   MilestoneListResponse,
+  MaterialsQueryResponse,
+  MaterialsSearchResponse,
+  MaterialsConfirmResponse,
   FixedSchedule,
   FixedScheduleCreateRequest,
   FixedScheduleUpdateRequest,
   TimePolicyCreateRequest,
   TimePolicyUpdateRequest,
   FreeBusy,
-  GoalCompletionRequest,
   GoalCreateRequest,
   GoalDecomposition,
-  GoalNode,
   GoalsByTier,
   GoalUpdateRequest,
   Habit,
@@ -53,37 +54,26 @@ import type {
   InboxAdoptStepRequest,
   InboxAdoptedStep,
   InboxUpdateRequest,
+  InboxCoachingAdvice,
   InterviewKind,
   InterviewSession,
   MandalaApproveRequest,
   MandalaApproveResponse,
   MandalaDraftResponse,
   MandalaGenerateRequest,
-  MandalaHabitLinkRequest,
   MandalaNode,
+  MandalaHabitLinkRequest,
   MandalaNodeUpdateRequest,
   MandalaPromoteRequest,
   MandalaRegenerateBranchRequest,
   MandalaSubgoalsRequest,
   MandalaSubgoalsResponse,
   MandalaTreeResponse,
-  MaterialsConfirmRequest,
-  MaterialsConfirmResponse,
-  MaterialsQueryRequest,
-  MaterialsQueryResponse,
-  MaterialsSearchRequest,
-  MaterialsSearchResponse,
-  MilestoneCompletionRequest,
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
-  DeleteAccountRequest,
-  DeleteAccountResponse,
-  PolicyApplyRequest,
-  PolicyHistoryResponse,
-  PolicyPreviewResponse,
   PolicySnapshotResponse,
   ProfileResponse,
   ProfileUpdateRequest,
@@ -370,11 +360,10 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
-  // inviteCode — 신규 가입에만 필요(#324). 기존 사용자 로그인은 무시된다.
-  loginWithGoogle: (idToken: string, inviteCode?: string) =>
+  loginWithGoogle: (idToken: string) =>
     request<AuthSession>('/auth/google', {
       method: 'POST',
-      body: inviteCode ? { idToken, inviteCode } : { idToken },
+      body: { idToken },
       anonymous: true,
     }),
 
@@ -460,16 +449,6 @@ export const goalsApi = {
   nodes: (goalId: string) =>
     request<GoalDecomposition>(`/goals/${goalId}/nodes`),
 
-  // 목표 완료 확정/해제(ADR-0007 6b). 멱등 — completed=false 로 되돌릴 수 있다(오조작 복구).
-  // ⚠️ 진행 중(active)인 목표만 완료 가능. 되돌리면 tier 한도를 다시 검사(422 GOAL_TIER_LIMIT_EXCEEDED).
-  complete: (goalId: string, body: GoalCompletionRequest) =>
-    request<ApiGoal>(`/goals/${goalId}/complete`, { method: 'POST', body }),
-
-  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 인 노드만 대상, 그 외는 404.
-  // 멱등 — completed=false 로 되돌릴 수 있다.
-  updateMilestoneCompletion: (goalId: string, nodeId: string, body: MilestoneCompletionRequest) =>
-    request<GoalNode>(`/goals/${goalId}/nodes/${nodeId}`, { method: 'PATCH', body }),
-
   // 궁극목표(U1) upsert — 인터뷰 산출물을 Goal(status=active, tier=parked) 로 확정.
   // 이미 있으면(사용자당 1개) 같은 행을 갱신 — 409 없이 재호출해도 안전.
   upsertUltimate: (body: UltimateGoalRequest = {}) =>
@@ -487,11 +466,9 @@ export const goalsApi = {
   promoteMandalaNode: (nodeId: string, body: MandalaPromoteRequest) =>
     request<ApiGoal>(`/goals/mandala/nodes/${nodeId}/promote`, { method: 'POST', body }),
 
-  // 셀(leaf, depth=2) → 반복형 전환(U12). 이미 링크된 습관이 있으면 그대로 반환(멱등).
   linkMandalaHabit: (nodeId: string, body: MandalaHabitLinkRequest) =>
     request<Habit>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'POST', body }),
 
-  // 반복형 → 프로젝트형으로 되돌리기 — 링크된 습관을 soft delete. 링크 없으면 그냥 204(멱등).
   unlinkMandalaHabit: (nodeId: string) =>
     request<void>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'DELETE' }),
 };
@@ -557,6 +534,8 @@ export const calendarApi = {
 
 // ── Inbox (S24·S25) ───────────────────────────────────────────
 export const inboxApi = {
+  coachingAdvice: () => request<InboxCoachingAdvice[]>('/inbox/coaching-advice'),
+
   list: (status?: string) =>
     request<InboxItem[]>(status ? `/inbox?status=${encodeURIComponent(status)}` : '/inbox'),
 
@@ -666,6 +645,21 @@ export const todayApi = {
 
 // ── Plans (S06·S14·S15·S16) — generate/get/approve 는 백엔드 #18 구현됨 ──
 export const plansApi = {
+  materialsQuery: (interviewSessionId?: string | null) =>
+    request<MaterialsQueryResponse>('/plans/materials/search-query', {
+      method: 'POST', body: { interviewSessionId: interviewSessionId ?? null },
+    }),
+
+  materialsSearch: (query: string) =>
+    request<MaterialsSearchResponse>('/plans/materials/search', {
+      method: 'POST', body: { query },
+    }),
+
+  materialsConfirm: (text: string, interviewSessionId?: string | null) =>
+    request<MaterialsConfirmResponse>('/plans/materials/confirm', {
+      method: 'POST', body: { text, interviewSessionId: interviewSessionId ?? null },
+    }),
+
   // Idempotency-Key 동봉 시 같은 키 재요청은 동일 planId 를 돌려준다(재시도 안전, #6).
   generate: (body: FirstPlanGenerateRequest = {}, idempotencyKey?: string) =>
     request<FirstPlanResponse>('/plans/generate', { method: 'POST', body, idempotencyKey }),
@@ -728,18 +722,6 @@ export const plansApi = {
       method: 'POST',
       body,
     }),
-
-  // 자료 검색·확정 1단계(#259) — 검색어 제안. 외부 호출 0회, 무료.
-  materialsSearchQuery: (body: MaterialsQueryRequest = {}) =>
-    request<MaterialsQueryResponse>('/plans/materials/search-query', { method: 'POST', body }),
-
-  // 2단계 — 확정된 검색어로 자료 검색. 결과는 Draft(비영속), 그라운딩 예산 소모.
-  materialsSearch: (body: MaterialsSearchRequest) =>
-    request<MaterialsSearchResponse>('/plans/materials/search', { method: 'POST', body }),
-
-  // 3단계(#260) — "이 자료 맞아요". goals.materials 슬롯에 영속, 다음 계획 생성에 반영.
-  materialsConfirm: (body: MaterialsConfirmRequest) =>
-    request<MaterialsConfirmResponse>('/plans/materials/confirm', { method: 'POST', body }),
 };
 
 // ── Reviews (S21·S22) — 백엔드 #21 구현됨 ─────────────────────
@@ -791,14 +773,13 @@ export const recoveryApi = {
       body: { executionId } satisfies RecoveryGenerateRequest,
     }),
 
-  // reEngagementAnchorAt — PARK/CARRY_OVER 카드를 accepted 로 결정할 때 "다음에 다시
-  // 볼 시점"(#221, backend#327). PARK/CARRY_OVER 외 그룹에 보내면 422.
-  decide: (body: RecoveryDecisionRequest, idempotencyKey: string, reEngagementAnchorAt?: string | null) =>
-    request<RecoveryDecisionResponse>('/recovery/decisions', {
+  decide: (body: RecoveryDecisionRequest, idempotencyKey: string, reEngagementAnchorAt?: string | null) => {
+    return request<RecoveryDecisionResponse>('/recovery/decisions', {
       method: 'POST',
-      body: reEngagementAnchorAt ? { ...body, reEngagementAnchorAt } : body,
+      body: { ...body, reEngagementAnchorAt },
       idempotencyKey,
-    }),
+    });
+  },
 };
 
 export const replanApi = {
@@ -830,33 +811,17 @@ export const notificationsApi = {
   // publicKey=null 이면 서버 미설정 — 구독을 만들면 안 된다.
   vapidPublicKey: () => request<VapidPublicKeyResponse>('/notifications/vapid-public-key'),
 
-  // 이 알림을 열었다고 표시(멱등, 최초 1회만 openedAt 채움). notificationId 는 push
-  // payload 의 id 를 그대로 넘긴다. ⚠️ 호출하는 FE 콜백(notificationclick 핸들러)은
-  // 아직 없다 — 인프라만 준비된 상태.
+  // 알림 클릭 기록. 백엔드가 멱등(재호출도 204)으로 보장한다.
   markOpened: (notificationId: string) =>
-    request<void>(`/notifications/${notificationId}/opened`, { method: 'POST', body: {} }),
+    request<void>(`/notifications/${encodeURIComponent(notificationId)}/opened`, {
+      method: 'POST',
+    }),
 };
 
 // ── Policy Snapshot (#83) ─────────────────────────────────────
 export const policySnapshotApi = {
   // 활성 스냅샷 없으면 404 — 호출부가 카운트-only 폴백을 유지한다.
   current: () => request<PolicySnapshotResponse>('/policy-snapshot/current'),
-
-  // 다음 버전 후보 — 아무것도 저장하지 않는다. changes=[] 면 이번 주엔 바꿀 게 없다는 뜻.
-  previewUpdate: () =>
-    request<PolicyPreviewResponse>('/policy-snapshot/preview-update', { method: 'POST', body: {} }),
-
-  // 사용자 승인 후 새 버전 INSERT — HITL 게이트. preview-update 응답을 그대로(rule) 또는
-  // 사용자가 고친 값(user_manual)을 보낸다.
-  apply: (body: PolicyApplyRequest) =>
-    request<PolicySnapshotResponse>('/policy-snapshot/apply', { method: 'POST', body }),
-
-  // 버전 이력 — 최신이 앞. 정책이 아직 없으면 items: [](404 아님).
-  history: () => request<PolicyHistoryResponse>('/policy-snapshot/history'),
-
-  // 지난 버전의 값을 새 버전으로 되살린다. 없는 버전 404, 이미 활성인 버전 409.
-  rollback: (version: number) =>
-    request<PolicySnapshotResponse>(`/policy-snapshot/rollback/${version}`, { method: 'POST', body: {} }),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
@@ -874,11 +839,6 @@ export const settingsApi = {
 
   updateProfile: (body: ProfileUpdateRequest) =>
     request<ProfileResponse>('/settings/profile', { method: 'PATCH', body }),
-
-  // 계정 삭제 — 2단계 확인(#321). status="deleted" 응답을 받으면 access token 이 다음
-  // 요청부터 즉시 무효화되므로 호출부는 곧바로 로그아웃 처리할 것.
-  deleteAccount: (body: DeleteAccountRequest) =>
-    request<DeleteAccountResponse>('/settings/delete-account', { method: 'POST', body }),
 };
 
 // ── Health ────────────────────────────────────────────────────
