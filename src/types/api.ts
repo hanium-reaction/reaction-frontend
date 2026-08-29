@@ -155,7 +155,8 @@ export interface GoalsByTier {
 
 export interface GoalUpdateRequest {
   title?: string;
-  category?: string;
+  // GoalCreateRequest.category 와 같은 허용값·정규화 규칙(#326). 생략하면 기존 유지.
+  category?: string | null;
   deadline?: string | null; // YYYY-MM-DD
   priorityLevel?: number;
   goalTier?: GoalTier;
@@ -572,13 +573,15 @@ export interface Habit {
   goalNodeId?: string | null;
 }
 
+// POST /goals/mandala/nodes/{nodeId}/habit (U12) — 셀(leaf, depth=2) → 반복형 전환.
+// title 생략 시 칸 제목을 그대로 쓴다. frequencyPerWeek/minutesPerSession 만 필수.
 export interface MandalaHabitLinkRequest {
   title?: string | null;
-  category: HabitCategory | string;
-  frequencyPerWeek: number;
+  category?: HabitCategory | string; // 기본값 'other'
+  frequencyPerWeek: number; // 1~7
   minutesPerSession: number;
-  timePreference: TimePreference;
-  priorityLevel: number;
+  timePreference?: TimePreference; // 기본값 'anytime'
+  priorityLevel?: number; // 1~5, 기본값 3
 }
 
 export interface HabitInstance {
@@ -1117,6 +1120,22 @@ export interface StaleAxisProposal {
   axisId: string;
   axisTitle: string;
 }
+// 실패 사유 상위 3개(BCT 2.3 Self-monitoring, 근거 A5) — #301. share 는 0~1 비율이고
+// LIMIT 이전(태그 전체)을 분모로 하므로 반환된 3건의 share 합이 1.0 이 아닐 수 있다.
+export interface TopFailureContext {
+  tagCode: FailureTagCode | string;
+  labelKo: string;
+  count: number;
+  share: number;
+}
+// 이번 주를 분(minute)으로 본 요약(ADR-0009 D5) — adherenceRate(건수 비율) 옆에 나란히 둔다.
+// completedMinutes/actualMinutes 는 둘 다 완료한 실행만 센다.
+export interface EffortMinutes {
+  plannedMinutes: number;
+  completedMinutes: number;
+  actualMinutes: number;
+  adherenceRate?: number | null;
+}
 export interface WeeklyReviewResponse {
   weekStart: string;
   weekEnd: string;
@@ -1137,6 +1156,8 @@ export interface WeeklyReviewResponse {
   nextCycleProposals?: NextCycleProposal[];
   goalCompletionProposals?: GoalCompletionProposal[];
   staleAxisProposals?: StaleAxisProposal[];
+  topFailureContexts?: TopFailureContext[];
+  effort?: EffortMinutes;
 }
 export interface WeeklyGenerateRequest {
   weekStart?: string;
@@ -1160,7 +1181,9 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  previousFrequency: number;
+  newFrequency: number;
+  message: string;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──

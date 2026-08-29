@@ -368,10 +368,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
-  loginWithGoogle: (idToken: string) =>
+  // inviteCode — 신규 가입에만 필요(#324). 기존 사용자 로그인은 무시된다.
+  loginWithGoogle: (idToken: string, inviteCode?: string) =>
     request<AuthSession>('/auth/google', {
       method: 'POST',
-      body: { idToken },
+      body: inviteCode ? { idToken, inviteCode } : { idToken },
       anonymous: true,
     }),
 
