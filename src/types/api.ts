@@ -179,12 +179,24 @@ export interface GoalNode {
   orderIndex: number;
   nodeType: MandalaNodeType;
   isLeaf: boolean;
+  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 만 값을 가질 수 있다.
+  completedAt?: string | null;
 }
 
 export interface GoalDecomposition {
   goalId: string;
   rootNodeId: string;
   nodes: GoalNode[];
+}
+
+// POST /goals/{goalId}/complete 요청 — 목표 완료 확정/해제(ADR-0007 6b). completed=false 로 되돌릴 수 있다.
+export interface GoalCompletionRequest {
+  completed: boolean;
+}
+
+// PATCH /goals/{goalId}/nodes/{nodeId} 요청 — 마일스톤 완료 표시(ADR-0007 §3 예외).
+export interface MilestoneCompletionRequest {
+  completed: boolean;
 }
 
 // ── 궁극목표 / 만다라 (U1-U10) ─────────────────────────────────
@@ -1096,6 +1108,11 @@ export interface NextCycleProposal {
   goalTitle: string;
   axisTitle?: string | null;
 }
+// "이 목표 끝난 거 맞아요?" 제안 — NextCycleProposal 과 배타적(has_open_milestone 의 양쪽 갈래).
+export interface GoalCompletionProposal {
+  goalId: string;
+  goalTitle: string;
+}
 export interface StaleAxisProposal {
   axisId: string;
   axisTitle: string;
@@ -1118,6 +1135,7 @@ export interface WeeklyReviewResponse {
   policyUpdateCandidates?: unknown[] | null;
   mandala?: MandalaWeeklySummary | null;
   nextCycleProposals?: NextCycleProposal[];
+  goalCompletionProposals?: GoalCompletionProposal[];
   staleAxisProposals?: StaleAxisProposal[];
 }
 export interface WeeklyGenerateRequest {
@@ -1171,6 +1189,20 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// POST /settings/delete-account — anonymize 와 동일한 2단계 확인 모양. anonymize 와 달리
+// 계정 자체를 soft delete 해 재로그인을 막는다(#321).
+export interface DeleteAccountRequest {
+  confirmationToken?: string | null;
+}
+
+export interface DeleteAccountResponse {
+  status: 'confirmation_required' | 'deleted';
+  message: string;
+  confirmationToken?: string | null;
+  deletedAt?: string | null; // date-time
+  expiresAt?: string | null; // date-time
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
@@ -1237,6 +1269,54 @@ export interface PolicySnapshotResponse {
   recoveryPolicy: Record<string, unknown>;
   reasonForUpdate: string | null;
   validFrom: string; // date-time
+}
+
+// POST /policy-snapshot/apply 요청 — preview-update 응답을 그대로(source='rule') 또는
+// 사용자가 고친 값(source='user_manual')을 되보낸다.
+export interface PolicyApplyRequest {
+  behavioralProfile: Record<string, unknown>;
+  executionConstraints: Record<string, unknown>;
+  interactionStyle: Record<string, unknown>;
+  recoveryPolicy: Record<string, unknown>;
+  reasonForUpdate?: string | null; // ≤200자
+  source?: 'rule' | 'user_manual';
+}
+
+// 승인 화면에 보여줄 변경 한 줄 — 근거를 숫자로 담는다.
+export interface PolicyChangeItem {
+  area: string;
+  field: string;
+  before: unknown;
+  after: unknown;
+  why: string;
+}
+
+// POST /policy-snapshot/preview-update 응답 — 다음 버전 후보(Draft, 저장하지 않음).
+export interface PolicyPreviewResponse {
+  baseVersion: number | null;
+  nextVersion: number;
+  changes: PolicyChangeItem[];
+  reasonForUpdate: string | null;
+  behavioralProfile: Record<string, unknown>;
+  executionConstraints: Record<string, unknown>;
+  interactionStyle: Record<string, unknown>;
+  recoveryPolicy: Record<string, unknown>;
+  isDraft?: boolean;
+  aiSource?: 'llm' | 'rule';
+}
+
+// GET /policy-snapshot/history 항목 — 4 영역 payload 는 빼고 메타만.
+export interface PolicyHistoryItem {
+  version: number;
+  source: string;
+  isActive: boolean;
+  reasonForUpdate: string | null;
+  validFrom: string; // date-time
+  validTo: string | null; // date-time
+}
+
+export interface PolicyHistoryResponse {
+  items: PolicyHistoryItem[];
 }
 
 // ── Web Push (S08·S25) ────────────────────────────────────────

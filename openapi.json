@@ -2563,6 +2563,110 @@
         "title": "InboxAdoptedStep",
         "type": "object"
       },
+      "InboxAdviceAction": {
+        "description": "조언을 확인한 사용자가 직접 선택할 수 있는 다음 화면.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetid"
+          },
+          "type": {
+            "enum": [
+              "OPEN_TODAY",
+              "OPEN_WEEKLY_PLAN",
+              "OPEN_GOAL"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "label"
+        ],
+        "title": "InboxAdviceAction",
+        "type": "object"
+      },
+      "InboxCoachingAdvice": {
+        "description": "사용자 기록에서 서버가 산출한 근거 기반 Inbox 조언.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/InboxAdviceAction"
+          },
+          "adviceId": {
+            "title": "Adviceid",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "recovery",
+              "today",
+              "goal",
+              "habit"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "fallbackUsed": {
+            "default": false,
+            "title": "Fallbackused",
+            "type": "boolean"
+          },
+          "generatedAt": {
+            "format": "date-time",
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "source": {
+            "const": "rules",
+            "default": "rules",
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "adviceId",
+          "category",
+          "title",
+          "body",
+          "rationale",
+          "evidence",
+          "action",
+          "generatedAt"
+        ],
+        "title": "InboxCoachingAdvice",
+        "type": "object"
+      },
       "InboxCreateRequest": {
         "description": "POST /inbox — 1줄 캡처.",
         "properties": {
@@ -8859,6 +8963,60 @@
           }
         },
         "summary": "Create Inbox",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
+    "/inbox/coaching-advice": {
+      "get": {
+        "description": "사용자 목표·습관·실행 기록에서 최대 3개의 근거 기반 조언을 만든다.",
+        "operationId": "get_coaching_advice_inbox_coaching_advice_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InboxCoachingAdvice"
+                  },
+                  "title": "Response Get Coaching Advice Inbox Coaching Advice Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Coaching Advice",
         "tags": [
           "inbox"
         ]

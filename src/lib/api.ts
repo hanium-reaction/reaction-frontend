@@ -21,6 +21,8 @@ import type {
   CheckInResponse,
   ConsentRecord,
   ConsentUpdateRequest,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
   ExecutionEvent,
   ExecutionStartResponse,
   FailureTagMaster,
@@ -39,8 +41,10 @@ import type {
   TimePolicyCreateRequest,
   TimePolicyUpdateRequest,
   FreeBusy,
+  GoalCompletionRequest,
   GoalCreateRequest,
   GoalDecomposition,
+  GoalNode,
   GoalsByTier,
   GoalUpdateRequest,
   Habit,
@@ -69,11 +73,15 @@ import type {
   MandalaSubgoalsRequest,
   MandalaSubgoalsResponse,
   MandalaTreeResponse,
+  MilestoneCompletionRequest,
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  PolicyApplyRequest,
+  PolicyHistoryResponse,
+  PolicyPreviewResponse,
   PolicySnapshotResponse,
   ProfileResponse,
   ProfileUpdateRequest,
@@ -471,6 +479,14 @@ export const goalsApi = {
 
   unlinkMandalaHabit: (nodeId: string) =>
     request<void>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'DELETE' }),
+
+  // 목표 완료 확정/해제(ADR-0007 6b) — completed=false 로 되돌릴 수 있다(오조작 복구).
+  complete: (goalId: string, body: GoalCompletionRequest) =>
+    request<ApiGoal>(`/goals/${goalId}/complete`, { method: 'POST', body }),
+
+  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 만 받는다, subgoal/leaf 는 404.
+  updateMilestoneCompletion: (goalId: string, nodeId: string, body: MilestoneCompletionRequest) =>
+    request<GoalNode>(`/goals/${goalId}/nodes/${nodeId}`, { method: 'PATCH', body }),
 };
 
 // ── Time Policies (S07) ───────────────────────────────────────
@@ -822,6 +838,23 @@ export const notificationsApi = {
 export const policySnapshotApi = {
   // 활성 스냅샷 없으면 404 — 호출부가 카운트-only 폴백을 유지한다.
   current: () => request<PolicySnapshotResponse>('/policy-snapshot/current'),
+
+  // 다음 버전 후보 — 저장하지 않는다(AGENTS §1 자동 적용 금지). apply 전 미리보기.
+  previewUpdate: () =>
+    request<PolicyPreviewResponse>('/policy-snapshot/preview-update', { method: 'POST', body: {} }),
+
+  // 사용자 승인 후 새 버전 INSERT — HITL 게이트. preview-update 응답을 그대로(source='rule')
+  // 또는 사용자가 고친 값(source='user_manual')으로 보낸다.
+  apply: (body: PolicyApplyRequest) =>
+    request<PolicySnapshotResponse>('/policy-snapshot/apply', { method: 'POST', body }),
+
+  // 버전 이력 — 최신이 앞. 비어 있으면 items: []("정책 없음" 은 여기선 정상 상태, 404 아님).
+  history: () => request<PolicyHistoryResponse>('/policy-snapshot/history'),
+
+  // 지난 버전 값을 새 버전으로 되살린다(append-only 감사 기록). 없는 버전은 404, 이미
+  // 활성인 버전은 409.
+  rollback: (version: number) =>
+    request<PolicySnapshotResponse>(`/policy-snapshot/rollback/${version}`, { method: 'POST' }),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
@@ -833,6 +866,10 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 계정 삭제(2단계 확인, #321) — anonymize 와 달리 재로그인을 막는 soft delete 까지 포함.
+  deleteAccount: (body: DeleteAccountRequest = {}) =>
+    request<DeleteAccountResponse>('/settings/delete-account', { method: 'POST', body }),
 
   // 지속형 프로필 메모리(에너지/시간·톤/빈도·회복 선호). 인터뷰 미완료 항목은 null.
   getProfile: () => request<ProfileResponse>('/settings/profile'),

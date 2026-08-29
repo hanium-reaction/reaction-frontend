@@ -681,6 +681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inbox/coaching-advice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Coaching Advice
+         * @description 사용자 목표·습관·실행 기록에서 최대 3개의 근거 기반 조언을 만든다.
+         */
+        get: operations["get_coaching_advice_inbox_coaching_advice_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox/resources/{slug}": {
         parameters: {
             query?: never;
@@ -3446,6 +3466,59 @@ export interface components {
             resourceSlug: string;
             /** Targetdate */
             targetDate: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * InboxAdviceAction
+         * @description 조언을 확인한 사용자가 직접 선택할 수 있는 다음 화면.
+         */
+        InboxAdviceAction: {
+            /** Label */
+            label: string;
+            /** Targetid */
+            targetId?: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "OPEN_TODAY" | "OPEN_WEEKLY_PLAN" | "OPEN_GOAL";
+        };
+        /**
+         * InboxCoachingAdvice
+         * @description 사용자 기록에서 서버가 산출한 근거 기반 Inbox 조언.
+         */
+        InboxCoachingAdvice: {
+            action: components["schemas"]["InboxAdviceAction"];
+            /** Adviceid */
+            adviceId: string;
+            /** Body */
+            body: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "recovery" | "today" | "goal" | "habit";
+            /** Evidence */
+            evidence: string[];
+            /**
+             * Fallbackused
+             * @default false
+             */
+            fallbackUsed: boolean;
+            /**
+             * Generatedat
+             * Format: date-time
+             */
+            generatedAt: string;
+            /** Rationale */
+            rationale: string;
+            /**
+             * Source
+             * @default rules
+             * @constant
+             */
+            source: "rules";
             /** Title */
             title: string;
         };
@@ -6583,6 +6656,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_coaching_advice_inbox_coaching_advice_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxCoachingAdvice"][];
                 };
             };
             /** @description Validation Error */
