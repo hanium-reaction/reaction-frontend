@@ -19,6 +19,8 @@ export interface WeekGridBlock {
   muted?: boolean;
   /** 드래그 중 — 점선 + 그림자로 들린 느낌을 준다. */
   dragging?: boolean;
+  /** 드래그 중에는 시간 레이아웃을 다시 계산하지 않고 포인터를 그대로 따라간다. */
+  dragOffset?: { x: number; y: number };
   /** 고정 일정(수업·알바 등). 옮길 수 없으니 grab 커서를 주지 않는다. */
   fixed?: boolean;
 }
@@ -245,6 +247,9 @@ export function WeekGrid({
       borderRadius: radius,
       padding: '3px 4px',
       overflow: 'hidden',
+      transform: b.dragging && b.dragOffset
+        ? `translate3d(${b.dragOffset.x}px, ${b.dragOffset.y}px, 0)`
+        : undefined,
     };
 
     // 좁은 열(폰에서 7일을 한 화면에 넣으면 50px 안팎)의 제목을 8px 로 떨어뜨리면
@@ -294,11 +299,9 @@ export function WeekGrid({
       <button
         key={b.id + (seg.tail ? '-tail' : '')}
         onPointerDown={(e) => onBlockPointerDown?.(e, b)}
-        onClick={(e) => {
-          // 포인터 탭은 호출부의 pointerup 이 처리한다. 키보드/보조기술이 만든
-          // detail=0 클릭만 별도 경로로 열어 중복 실행을 피한다.
-          if (e.detail === 0) onBlockActivate?.(b);
-        }}
+        // 탭·마우스·키보드 상세 열기를 표준 click 한 경로로 통일한다. 좁은 겹침 카드에서
+        // pointerup 이 취소되더라도 브라우저가 click 을 확정했다면 상세가 열려야 한다.
+        onClick={() => onBlockActivate?.(b)}
         aria-label={`${b.title}${b.subLabel ? `, ${b.subLabel}` : ''}${laneCount > 1 ? `, 같은 시간대 일정 ${laneCount}개` : ''}. 탭하면 수정, 모바일에서는 길게 눌러 끌면 이동`}
         style={{
           ...common,

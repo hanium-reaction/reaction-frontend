@@ -286,17 +286,20 @@ export function WeeklyCalendarScreenV2() {
   // 화면 Block → WeekGrid 가 받는 모양. 드래그 중이면 고스트 위치로 미리 옮겨 그린다.
   const toGridBlock = (b: BlockWithStatus): WeekGridBlock => {
     const dragging = dragGhost?.id === b.id;
-    const tMin = dragging ? dragGhost!.minute : parseMin(b.time);
+    const targetMin = dragging ? dragGhost!.minute : parseMin(b.time);
     return {
       id: b.id,
-      col: dragging ? dragGhost!.day : b.day,
-      startMin: tMin,
+      // 드래그 중 col/startMin 을 바꾸면 겹침 레이아웃이 매 프레임 다시 짜여 카드가
+      // 포인터에서 튄다. 원래 슬롯에서 raw pointer delta 만큼만 이동하고 drop 때 snap한다.
+      col: b.day,
+      startMin: parseMin(b.time),
       durMin: b.dur,
       title: b.title,
       glyph: b.status === 'done' ? '✓ ' : b.status === 'failed' ? '✗ ' : b.carryover ? '↩ ' : undefined,
-      subLabel: `${dragging ? formatHHMM(tMin) : b.time}·${b.dur}분`,
+      subLabel: `${dragging ? formatHHMM(targetMin) : b.time}·${b.dur}분`,
       colors: blockStyle(b),
       dragging,
+      dragOffset: dragging ? { x: dragGhost!.dx, y: dragGhost!.dy } : undefined,
       fixed: b.fixed,
     };
   };
@@ -306,9 +309,18 @@ export function WeeklyCalendarScreenV2() {
   // 그리드 root ref — pointermove 시 root 기준 상대 좌표 계산.
   const gridRef = useRef<HTMLDivElement>(null);
   // 현재 드래그 중인 블록의 임시 위치 (커밋 전). 드래그 끝나면 null.
-  const [dragGhost, setDragGhost] = useState<{ id: string; day: number; minute: number } | null>(null);
+  const [dragGhost, setDragGhost] = useState<{
+    id: string;
+    day: number;
+    minute: number;
+    dx: number;
+    dy: number;
+  } | null>(null);
   // 더블탭/터치 보정용 — 단순 클릭과 드래그 시작을 구분.
   const dragMovedRef = useRef(false);
+  // 드래그를 끝낸 직후 브라우저가 합성하는 click 만 막는다. 다음 정상 탭까지 막지 않도록
+  // 같은 이벤트 루프가 끝나면 자동 해제한다.
+  const suppressActivationRef = useRef<string | null>(null);
 
   const formatHHMM = (minutes: number) => {
     const h = Math.floor(minutes / 60);
@@ -423,11 +435,14 @@ export function WeeklyCalendarScreenV2() {
     const targetEl = e.currentTarget as HTMLElement;
     let dragEnabled = !isTouch;
     let cancelled = false;
+    // 처음부터 캡처해야 빠르게 끌거나 좁은 겹침 카드를 벗어나도 move/up 을 놓치지 않는다.
+    // 캡처는 기본 스크롤을 막지 않으며, 터치는 길게 누르기 전 8px 이상 움직이면 아래에서
+    // 즉시 해제해 브라우저 스크롤에 돌려준다.
+    try { targetEl.setPointerCapture(e.pointerId); } catch { /* 이미 취소된 포인터 */ }
     let timer: number | null = isTouch ? window.setTimeout(() => {
       if (cancelled) return;
       dragEnabled = true;
       timer = null;
-      targetEl.setPointerCapture(e.pointerId);
       showToast('이제 끌어서 시간을 옮길 수 있어요');
     }, 300) : null;
 
@@ -438,6 +453,7 @@ export function WeeklyCalendarScreenV2() {
     const cleanup = () => {
       cancelled = true;
       if (timer != null) window.clearTimeout(timer);
+      if (targetEl.hasPointerCapture(e.pointerId)) targetEl.releasePointerCapture(e.pointerId);
       targetEl.removeEventListener('pointermove', onMove);
       targetEl.removeEventListener('pointerup', onUp);
       targetEl.removeEventListener('pointercancel', onCancel);
@@ -460,15 +476,15 @@ export function WeeklyCalendarScreenV2() {
       const minDelta = Math.round((dy / HOUR_PX) * 60 / SNAP_MIN) * SNAP_MIN;
       const newDay = dayFromDx(startDay, dx);
       const newMinute = clampStart(startMinute + minDelta);
-      setDragGhost({ id: block.id, day: newDay, minute: newMinute });
+      setDragGhost({ id: block.id, day: newDay, minute: newMinute, dx, dy });
     };
 
     const onUp = (ev: PointerEvent) => {
       cleanup();
       // 움직임 없었으면 = 클릭 → 편집 sheet.
       if (!dragMovedRef.current) {
-        setEditing(block);
         setDragGhost(null);
+        // 상세 열기는 WeekGrid 의 표준 click 경로가 맡는다.
         return;
       }
       // 움직였으면 = 드래그 → 커밋.
@@ -478,6 +494,10 @@ export function WeeklyCalendarScreenV2() {
       const newDay = dayFromDx(startDay, dx);
       const newMinute = clampStart(startMinute + minDelta);
       setDragGhost(null);
+      suppressActivationRef.current = block.id;
+      window.setTimeout(() => {
+        if (suppressActivationRef.current === block.id) suppressActivationRef.current = null;
+      }, 0);
       if (newDay === startDay && newMinute === startMinute) return; // no-op.
       commitMove(block, newDay, newMinute);
     };
@@ -648,6 +668,10 @@ export function WeeklyCalendarScreenV2() {
           if (b) handleBlockPointerDown(e, b);
         }}
         onBlockActivate={(gb) => {
+          if (suppressActivationRef.current === gb.id) {
+            suppressActivationRef.current = null;
+            return;
+          }
           const b = blocks.find((x) => x.id === gb.id);
           if (b) setEditing(b);
         }}
