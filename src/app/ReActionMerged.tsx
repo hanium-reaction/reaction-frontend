@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CaretLeft } from '@phosphor-icons/react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CaretLeft, Question } from '@phosphor-icons/react';
 import { MergedTabBar } from '../components/TabBar';
 import { SystemIntroScreen } from '../screens/SystemIntroScreen';
 import { GoalIntakeScreen } from '../screens/GoalIntakeScreen';
@@ -8,7 +8,6 @@ import { SetupScreen } from '../screens/SetupScreen';
 import { MilestoneConfirmScreen } from '../screens/MilestoneConfirmScreen';
 import { MaterialsSearchScreen } from '../screens/MaterialsSearchScreen';
 import { WeeklyPlanGenerationScreen } from '../screens/WeeklyPlanGenerationScreen';
-import { MorningBriefScreen } from '../screens/MorningBriefScreen';
 import { InboxScreen } from '../screens/InboxScreen';
 import { GoalsScreen } from '../screens/GoalsScreen';
 import { UltimateGoalInterviewScreen } from '../screens/UltimateGoalInterviewScreen';
@@ -28,11 +27,13 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { reflectionApi, todayApi } from '../lib/api';
 import type { RecoveryProposal, ScreenId, TabId, Task } from '../types';
 import type { InterviewOutcome } from '../types/api';
+import { readInterviewOutcome, writeInterviewOutcome } from '../lib/interviewOutcomeStore';
+import { GuidedTourOverlay } from '../components/GuidedTourOverlay';
 
 // onboarding 흐름은 백엔드 §3 state machine 을 기반으로 하되, 클라이언트에서 두 쌍을
 // 묶고 coping-style 을 제거해 8단계 → 5단계로 줄였다 (recovery.tone 은 인터뷰에서 받음):
 //   intro → goal-intake → goal-classify → calendar-schedule(S04+S05)
-//   → weekly-plan(S06) → policies-notifications(S07+S08) → morning-brief(첫 카드) → today
+//   → weekly-plan(S06) → today. 모닝 브리프는 오늘 화면의 하루 1회 시트로 통합한다.
 const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   'intro':                  { label: 'RE:ACTION',      back: null },
   'goal-intake':            { label: '목표 파악',      back: 'intro' },
@@ -41,9 +42,10 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   'milestone-confirm':      { label: '계획의 큰 그림', back: 'setup' },
   'materials-search':       { label: '참고 자료 찾기',  back: 'milestone-confirm' },
   'weekly-plan':            { label: '주간 계획 생성', back: 'milestone-confirm' },
-  'morning-brief':          { label: '모닝 브리프',    back: 'weekly-plan' },
   'today':                  { label: '오늘의 실행',    back: null },
-  'focus':                  { label: '집중 모드',      back: 'today' },
+  // 집중 화면의 이탈은 FocusScreen이 타이머를 일시정지·보존한 뒤 처리한다.
+  // 공용 헤더의 별도 뒤로가기를 노출하면 그 정리 경로를 우회하므로 숨긴다.
+  'focus':                  { label: '집중 모드',      back: null },
   'recovery':               { label: '복구 코치',      back: 'today' },
   'recovered':              { label: '회복 완료',      back: null },
   'evening':                { label: '저녁 체크인',    back: 'today' },
@@ -60,11 +62,11 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
 
 const TAB_SCREENS: ScreenId[] = ['today', 'weekly', 'inbox', 'review'];
 
-function MergedTopNav({ screen, onBack }: { screen: ScreenId; onBack: () => void }) {
+function MergedTopNav({ screen, onBack, onHelp }: { screen: ScreenId; onBack: () => void; onHelp: () => void }) {
   const meta = NAV_META[screen] || { label: 'RE:ACTION', back: null };
   if (screen === 'intro') return null;
   return (
-    <div style={{
+    <div className="merged-top-nav" style={{
       height: 44, flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 18px', zIndex: 20,
@@ -92,7 +94,7 @@ function MergedTopNav({ screen, onBack }: { screen: ScreenId; onBack: () => void
           {meta.label}
         </div>
       )}
-      <div style={{ width: 44 }} />
+      <button data-tour-ignore aria-label="현재 화면 도움말 열기" onClick={onHelp} style={{ width: 44, height: 44, borderRadius: 9999, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-2)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Question size={18} weight="bold" /></button>
     </div>
   );
 }
@@ -107,9 +109,31 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   // 초기값 비움 → /today/agenda 로딩 중엔 TodayScreen 의 스켈레톤이 대신 표시된다.
   // 실패 시에도 더미로 가리지 않고 빈 목록 + 정직 배너를 보여준다.
   const [tasks, setTasks] = useState<Task[]>([]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourFirstRun, setTourFirstRun] = useState(false);
+  useEffect(() => setTourOpen(false), [screen]);
+  useEffect(() => {
+    if (!TAB_SCREENS.includes(screen) || typeof window === 'undefined') return;
+    if (window.localStorage.getItem('reaction.guidedTour.core.v1') === 'done') return;
+    setTourFirstRun(true);
+    setTourOpen(true);
+  }, [screen]);
+  const closeTour = () => {
+    if (tourFirstRun && typeof window !== 'undefined') window.localStorage.setItem('reaction.guidedTour.core.v1', 'done');
+    setTourOpen(false);
+    setTourFirstRun(false);
+  };
   // 방금 끝난 목표 파악 인터뷰의 outcome — 목표 분류(S03) 화면이 GET /goals
   // (이 시점엔 항상 빈 테이블) 대신 이 값을 렌더한다(#75).
-  const [interviewOutcome, setInterviewOutcome] = useState<InterviewOutcome | null>(null);
+  const [interviewOutcome, setInterviewOutcomeState] = useState<InterviewOutcome | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return readInterviewOutcome(window.localStorage);
+  });
+  const setInterviewOutcome = (outcome: InterviewOutcome) => {
+    setInterviewOutcomeState(outcome);
+    if (typeof window !== 'undefined') writeInterviewOutcome(window.localStorage, outcome);
+  };
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [failReason, setFailReason] = useState('');
   // task.id → 실 executionId. FocusScreen(시작) 또는 markFailed(실패시 auto-start)로 채워지며,
@@ -209,7 +233,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         proposalDesc: proposal.desc,
         proposalTime: proposal.time ?? '',
       });
-      setTasks((ts) => ts.map((t) => t.id === activeTask.id ? { ...t, status: 'done' } : t));
+      // 회복안 수락은 원 행동의 완료가 아니다. 실패/부분완료 상태는 그대로 보존하고,
+      // 승인된 회복안은 appliedRecovery(및 서버 resulting action)로 별도 표현한다(#283).
     }
     setScreen('recovered');
   };
@@ -243,14 +268,15 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   };
 
   return (
-    <div style={{
+    <div ref={rootRef} className="reaction-app-shell" style={{
       width: '100%', height: '100%', flex: 1,
       overflow: 'hidden', background: 'var(--surface-ground)',
       display: 'flex', flexDirection: 'column',
     }}>
-      <MergedTopNav screen={screen} onBack={goBack} />
+      <MergedTopNav screen={screen} onBack={goBack} onHelp={() => { setTourFirstRun(false); setTourOpen(true); }} />
+      {screen === 'intro' && <button data-tour-ignore aria-label="현재 화면 도움말 열기" onClick={() => { setTourFirstRun(false); setTourOpen(true); }} style={{ position: 'fixed', zIndex: 30, top: 10, right: 14, width: 44, height: 44, borderRadius: 9999, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', display: 'grid', placeItems: 'center' }}><Question size={18} /></button>}
 
-      <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div data-tour-page style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {screen === 'intro' && (
           <SystemIntroScreen onDone={() => setScreen('goal-intake')} />
         )}
@@ -266,10 +292,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'milestone-confirm' && <MilestoneConfirmScreen />}
         {screen === 'materials-search' && <MaterialsSearchScreen />}
         {screen === 'weekly-plan' && (
-          <WeeklyPlanGenerationScreen onContinue={() => setScreen('morning-brief')} />
-        )}
-        {screen === 'morning-brief' && (
-          <MorningBriefScreen onStart={() => { setTab('today'); setScreen('today'); }} />
+          <WeeklyPlanGenerationScreen onContinue={() => { setTab('today'); setScreen('today'); }} />
         )}
         {screen === 'today' && (
           <MergedTodayScreen
@@ -316,7 +339,9 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
             recoveryCount={recoveryCount}
             applied={appliedRecovery}
             onDone={() => { setTab('today'); setScreen('today'); setAppliedRecovery(null); }}
-            executionId={activeTask ? executionIds[activeTask.id] : undefined}
+            executionId={activeTask
+              ? (recoveryReadyIds[activeTask.id] ?? executionIds[activeTask.id])
+              : undefined}
           />
         )}
         {screen === 'evening' && (
@@ -358,6 +383,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'settings' && <SettingsScreen />}
         {screen === 'my-info' && <MyInfoScreen />}
       </div>
+      <GuidedTourOverlay root={rootRef.current} open={tourOpen} screenLabel={NAV_META[screen].label} firstRun={tourFirstRun} onClose={closeTour} />
 
       {showTabs && (
         <MergedTabBar

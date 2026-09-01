@@ -132,6 +132,7 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
           <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>
             {isLoading ? '대화에서 파악한 목표를 불러오는 중…' : '대화에서 파악한 목표들이에요. 분류를 조정할 수 있어요.'}
           </p>
+          {!isLoading && goals.length > 1 && <p role="status" style={{ margin: '8px 0 0', padding: '9px 11px', borderRadius: 10, background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', color: 'var(--coral-700)', fontSize: 11.5, lineHeight: 1.5 }}><b>{goals.length}개의 목표</b>를 함께 찾았어요. 각 카드를 눌러 집중·유지·보류를 따로 정할 수 있어요.</p>}
         </div>
 
         {error && (
