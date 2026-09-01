@@ -67,8 +67,11 @@ import type {
   MandalaGenerateRequest,
   MandalaNode,
   MandalaHabitLinkRequest,
+  MandalaNextCycleRequest,
+  MandalaNextCycleResponse,
   MandalaNodeUpdateRequest,
   MandalaPromoteRequest,
+  MandalaRebuildPreflightResponse,
   MandalaRegenerateBranchRequest,
   MandalaSubgoalsRequest,
   MandalaSubgoalsResponse,
@@ -467,6 +470,10 @@ export const goalsApi = {
   mandala: (goalId: string) =>
     request<MandalaTreeResponse>(`/goals/${goalId}/mandala`),
 
+  // 다시 세우기 사전 확인(U13) — 읽기 전용, LLM 0콜. 트리 없으면 hasTree=false(에러 아님).
+  mandalaRebuildPreflight: (goalId: string) =>
+    request<MandalaRebuildPreflightResponse>(`/goals/${goalId}/mandala/rebuild-preflight`),
+
   // 셀 상세 편집(U9) — 준 필드만 갱신.
   updateMandalaNode: (nodeId: string, body: MandalaNodeUpdateRequest) =>
     request<MandalaNode>(`/goals/mandala/nodes/${nodeId}`, { method: 'PATCH', body }),
@@ -736,6 +743,13 @@ export const plansApi = {
   // 승인(U6) — 편집본을 통째로 실어 goal_nodes 73행(≤)으로 영속.
   mandalaApprove: (planId: string, body: MandalaApproveRequest) =>
     request<MandalaApproveResponse>(`/plans/mandala/${planId}/approve`, {
+      method: 'POST',
+      body,
+    }),
+
+  // 축 하나로 다음 2주 계획 Draft 를 연다(U14). LLM 1콜. 승인은 approve() 를 그대로 쓴다.
+  mandalaNextCycle: (body: MandalaNextCycleRequest) =>
+    request<MandalaNextCycleResponse>('/plans/mandala/next-cycle', {
       method: 'POST',
       body,
     }),

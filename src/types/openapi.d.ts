@@ -112,14 +112,21 @@ export interface paths {
         put?: never;
         /**
          * Connect Calendar
-         * @description Google Calendar 연결 — **베타 이후 지원 (P1)**.
+         * @description authorization code → 토큰 암호화 저장. 재호출은 기존 연결을 갱신한다.
          *
-         *     Issue #17 MVP 결정: 캘린더 OAuth 는 P1 로 미룸. FE 는 S05 수동 입력으로 진행.
+         *     멱등하다 — 같은 사용자가 다시 연결하면 새 행이 아니라 기존 행을 되살린다
+         *     (`user_id` 유니크 + soft delete 라 새 INSERT 는 제약에 걸린다).
          */
         post: operations["connect_calendar_calendar_connect_post"];
         /**
          * Disconnect Calendar
-         * @description Google Calendar 연결 해제 — **베타 이후 지원 (P1)**.
+         * @description 연결 해제 — `revoked_at` soft delete + Google 쪽 권한 회수(best-effort).
+         *
+         *     연결이 없어도 **204** 다. 해제는 멱등해야 한다 — 두 번 눌렀다고 404 를 주면
+         *     "이미 끊긴 상태"가 실패로 보인다.
+         *
+         *     우리 DB 를 먼저 확정하고 원격 회수는 그 뒤에 한다. 순서를 뒤집으면 Google 은
+         *     끊겼는데 우리는 연결됐다고 믿는 상태가 생긴다.
          */
         delete: operations["disconnect_calendar_calendar_connect_delete"];
         options?: never;
@@ -156,7 +163,14 @@ export interface paths {
         };
         /**
          * Get Freebusy
-         * @description [stub] read-only freebusy 조회. from·to 는 조회 범위 (스텁은 고정 구간 반환).
+         * @description read-only freebusy 조회 — `from`/`to` 는 KST 날짜(`YYYY-MM-DD`), 양끝 포함.
+         *
+         *     연결이 없으면 404 `CALENDAR_NOT_CONNECTED` 다. **빈 목록을 돌려주지 않는다** —
+         *     "일정 없음" 과 "연결 안 됨" 은 화면에서 다르게 안내해야 하는데, 둘 다 `busy: []` 면
+         *     FE 가 구분할 방법이 없다.
+         *
+         *     Google 쪽 실패는 502 다. 계획 생성 경로는 실패해도 캘린더 없이 진행하지만(경고로
+         *     알린다), 이 엔드포인트는 **캘린더를 보러 온 요청**이라 조용히 빈 값을 주면 안 된다.
          */
         get: operations["get_freebusy_calendar_freebusy_get"];
         put?: never;
@@ -457,6 +471,35 @@ export interface paths {
          *     (404 아님 — `GET /goals/{id}/nodes` 가 미승인 계획에 이미 쓰는 것과 같은 규약).
          */
         get: operations["get_mandala_tree_goals__goal_id__mandala_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{goal_id}/mandala/rebuild-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mandala Rebuild Preflight
+         * @description 다시 세우기 사전 확인(U13) — LLM 0콜, DB 쓰기 0.
+         *
+         *     "다시 세우기" 버튼이 확인 시트를 띄우기 위한 읽기 전용 조회다. 다시 세우면 옛 트리는
+         *     보관되고 새 73칸이 들어서는데, 그 사이에서 사용자가 손으로 쌓은 것(완료 표시·축 승격·
+         *     습관 링크)은 **제목이 같은 자리에만** 이어진다(`persist_mandala`). 무엇이 걸려 있는지
+         *     승인 전에 보여주지 않으면 버튼 한 번에 조용히 끊기므로, 이 endpoint 가 HITL 의
+         *     "무엇이 바뀌는지 먼저 보여준다" 를 만다라트 쪽에서 맡는다.
+         *
+         *     아직 트리가 없으면 `hasTree=false` + 전부 0/빈 배열(404 아님) — 처음 세우는 경우도 FE 가
+         *     같은 경로를 타고 확인 시트만 건너뛴다.
+         */
+        get: operations["get_mandala_rebuild_preflight_goals__goal_id__mandala_rebuild_preflight_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1176,6 +1219,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plans/mandala/next-cycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Mandala Next Cycle
+         * @description 축 하나로 **다음 2주 계획 Draft** 를 연다(U14). LLM 1콜(분해), `plan_drafts` 1행.
+         *
+         *     여기까지가 만다라트를 실행으로 잇는 마지막 조각이다. 지금까지는 축을 승격해도
+         *     `POST /plans/generate` 의 heaviest 가 **인터뷰 당시** 고른 목표라, 만다라트를 다시 세워
+         *     축이 바뀌어도 계획은 옛 목표를 분해했다. 이 endpoint 는 시드의 `core_goals` 를 이 축으로
+         *     갈아끼우고(`mandala_cycle.seed_outcome`) 축의 칸 8개를 계획 뼈대(마일스톤)로 넘긴다 —
+         *     사용자가 만다라트에서 확정한 분해를 계획이 그대로 따르게 하는 지점이다.
+         *
+         *     ⚠️ **자동 적용이 아니다**(§1.4). 돌려주는 건 `POST /plans/generate` 와 **같은 Draft** 이고,
+         *     카드·블록은 사용자가 기존 `POST /plans/{planId}/approve` 를 눌러야 생긴다.
+         *
+         *     지평이 2주인 이유는 여기에 규칙을 새로 넣어서가 아니라, 시드의 heaviest 제목이 승격된
+         *     목표와 같아 기존 `_max_plan_weeks`(ADR-0008 §3) 판정이 그대로 걸리기 때문이다.
+         *
+         *     **축(depth=1)만 대상**이다 — 중앙·칸은 422(`promote` 의 가드와 같은 자리). 계획 인터뷰를
+         *     한 번도 안 했으면 가용 시간·선호를 지어내지 않고 422 로 안내한다.
+         */
+        post: operations["open_mandala_next_cycle_plans_mandala_next_cycle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plans/mandala/subgoals": {
         parameters: {
             query?: never;
@@ -1187,9 +1265,12 @@ export interface paths {
         put?: never;
         /**
          * Generate Mandala Subgoals
-         * @description Stage A(U2) — 궁극목표 → 하위목표(축) 8개. LLM 1콜, lock 없음, DB 쓰기 0.
+         * @description Stage A(U2) — 궁극목표 → 하위목표(축) 8개. LLM 1콜, lock 없음, 도메인 쓰기 0.
          *
          *     사용자가 이 8개를 로컬에서 확인·편집한 뒤 `POST /plans/mandala/generate`(U3) 로 넘긴다.
+         *
+         *     "DB 쓰기 0" 이 아니다 — LLM 을 부르면 `llm_runs` 1행이 딸려 온다. 커밋 이유는
+         *     `generate_milestones` 주석 참고(같은 계측 구멍이 이 라우터에도 있었다).
          */
         post: operations["generate_mandala_subgoals_plans_mandala_subgoals_post"];
         delete?: never;
@@ -2870,6 +2951,8 @@ export interface components {
          *
          *     `task_aversiveness`(#299, FE #222): 이 일이 얼마나 하기 싫었는지 1(전혀 안 싫음)~5(매우
          *     싫음). 선택 사항 — 강제하면 회고 이탈이 늘 것으로 보고 FE 가 선택으로 뒀다.
+         *     `memo` 는 `tag_codes` 가 1개 이상일 때만 유효(#203) — memo 는 태그 행에 얹혀
+         *     저장되므로 태그 없이 보내면 422 `COMMON_VALIDATION_ERROR`.
          */
         FailureTagRequest: {
             /** Memo */
@@ -3112,8 +3195,6 @@ export interface components {
             title: string;
             /** Weeklyhours */
             weeklyHours?: number | null;
-            /** Whynow */
-            whyNow?: string | null;
         };
         /**
          * GoalCompletionProposal
@@ -3744,6 +3825,7 @@ export interface components {
              * Format: date-time
              */
             activatedAt: string;
+            carriedOver?: components["schemas"]["MandalaCarryOverSummary"];
             /** Goalid */
             goalId: string;
             /**
@@ -3758,6 +3840,35 @@ export interface components {
             rootNodeId: string;
             /** Skipped */
             skipped: number;
+        };
+        /**
+         * MandalaCarryOverSummary
+         * @description U6 응답의 승계 절 — **다시 세우기**일 때만 0이 아니다(처음 세우면 전부 0/빈 배열).
+         *
+         *     앞의 셋은 새 트리로 **이어진** 개수, 뒤의 둘은 자리를 잃어 **끊긴** 것의 이름이다.
+         *     끊긴 쪽도 지워지지 않는다 — 승격된 목표는 그대로 남고(축 배지만 빠짐), 습관은 링크만
+         *     끊겨 단독 습관이 된다. FE 는 승인 직후 이 두 배열을 그대로 보여주면 된다.
+         */
+        MandalaCarryOverSummary: {
+            /**
+             * Completedcells
+             * @default 0
+             */
+            completedCells: number;
+            /** Droppedlinkedhabits */
+            droppedLinkedHabits?: string[];
+            /** Droppedpromotedaxes */
+            droppedPromotedAxes?: string[];
+            /**
+             * Linkedhabits
+             * @default 0
+             */
+            linkedHabits: number;
+            /**
+             * Promotedaxes
+             * @default 0
+             */
+            promotedAxes: number;
         };
         /**
          * MandalaCell
@@ -3786,6 +3897,27 @@ export interface components {
             title: string;
             /** Whytext */
             whyText?: string | null;
+        };
+        /**
+         * MandalaCycleAxis
+         * @description 이번 주기가 어느 축에서 나왔는지 — U14 응답의 출처 표시.
+         */
+        MandalaCycleAxis: {
+            /** Goalid */
+            goalId: string;
+            /**
+             * Goaltier
+             * @enum {string}
+             */
+            goalTier: "focus" | "maintain" | "parked";
+            /** Newlypromoted */
+            newlyPromoted: boolean;
+            /** Nodeid */
+            nodeId: string;
+            /** Orderindex */
+            orderIndex: number;
+            /** Title */
+            title: string;
         };
         /**
          * MandalaDraftResponse
@@ -3892,6 +4024,87 @@ export interface components {
             targetCount: number;
         };
         /**
+         * MandalaNextCycleRequest
+         * @description POST /plans/mandala/next-cycle(U14) 요청 — 이 축으로 다음 2주를 연다.
+         *
+         *     `goal_tier` 는 아직 승격 안 된 축을 이 호출이 승격할 때만 쓴다(이미 승격됐으면 무시,
+         *     기존 tier 유지 — `promote` 의 멱등 규칙 그대로).
+         */
+        MandalaNextCycleRequest: {
+            /**
+             * Density
+             * @default standard
+             * @enum {string}
+             */
+            density: "light" | "standard" | "intense";
+            /**
+             * Goaltier
+             * @default focus
+             * @enum {string}
+             */
+            goalTier: "focus" | "maintain" | "parked";
+            /** Nodeid */
+            nodeId: string;
+            /** Targetdate */
+            targetDate?: string | null;
+            /**
+             * Usecellsasmilestones
+             * @default true
+             */
+            useCellsAsMilestones: boolean;
+        };
+        /**
+         * MandalaNextCycleResponse
+         * @description U14 응답 — `POST /plans/generate` 와 **같은 Draft** 에 출처(축)만 얹은 것.
+         *
+         *     `FirstPlanResponse` 를 그대로 상속하는 게 핵심이다(§6.2 additive) — 승인은 기존
+         *     `POST /plans/{planId}/approve` 를 그대로 쓰고, FE 의 계획 미리보기 화면도 그대로 재사용
+         *     한다. 만다라 전용 승인 경로를 새로 만들면 HITL 게이트가 두 벌이 된다.
+         */
+        MandalaNextCycleResponse: {
+            /** Actionitems */
+            actionItems: components["schemas"]["ActionItemDraft"][];
+            /**
+             * Aisource
+             * @default llm
+             * @enum {string}
+             */
+            aiSource: "llm" | "rule";
+            axis: components["schemas"]["MandalaCycleAxis"];
+            /** Blocks */
+            blocks: components["schemas"]["ScheduledBlockPreview"][];
+            /**
+             * Generatedat
+             * Format: date-time
+             */
+            generatedAt: string;
+            /** Goalnodes */
+            goalNodes: components["schemas"]["GoalNodeDraft"][];
+            /** Horizon */
+            horizon: string | null;
+            /**
+             * Isdraft
+             * @default true
+             */
+            isDraft: boolean;
+            /** Milestones */
+            milestones?: components["schemas"]["MilestoneDraft"][];
+            /** Planid */
+            planId: string;
+            /** Policyviolations */
+            policyViolations?: components["schemas"]["PolicyViolation"][];
+            /**
+             * Seedsource
+             * @default interview
+             * @enum {string}
+             */
+            seedSource: "interview" | "profile";
+            /** Targetdate */
+            targetDate: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
          * MandalaNode
          * @description 만다라 노드 1개(U8 응답 원소, U9 응답 그대로) — `GoalNode` additive 확장(§6.2).
          *
@@ -3962,6 +4175,79 @@ export interface components {
              * @enum {string}
              */
             goalTier: "focus" | "maintain" | "parked";
+        };
+        /**
+         * MandalaRebuildLinkedHabit
+         * @description 다시 세우기에 걸려 있는 반복형 칸 1개(ADR-0008 §1).
+         */
+        MandalaRebuildLinkedHabit: {
+            /** Celltitle */
+            cellTitle: string;
+            /** Frequencyperweek */
+            frequencyPerWeek: number;
+            /** Habitid */
+            habitId: string;
+            /** Habittitle */
+            habitTitle: string;
+            /** Orderindex */
+            orderIndex: number;
+            /** Subgoalindex */
+            subgoalIndex: number;
+        };
+        /**
+         * MandalaRebuildPreflightResponse
+         * @description GET /goals/{goalId}/mandala/rebuild-preflight(U13) 응답 — 읽기 전용, LLM 0콜, DB 쓰기 0.
+         *
+         *     "다시 세우기" 버튼이 확인 시트를 띄우기 위한 자료다. 만다라트를 다시 세우면 옛 트리는
+         *     보관되고 새 73칸이 들어서는데, 그 사이에서 **사용자가 손으로 쌓은 것**(완료 표시·축
+         *     승격·습관 링크)은 새 트리에 **제목이 같은 자리가 있을 때만** 이어진다. 무엇이 걸려
+         *     있는지 미리 보여주지 않으면 승인 한 번에 조용히 끊긴다 — 그걸 막는 것이 이 endpoint 다.
+         *
+         *     아직 승인된 트리가 없으면 `hasTree=false` + 전부 0/빈 배열(404 아님) — 처음 세우는
+         *     경우도 FE 가 같은 경로를 타고 확인 시트만 건너뛴다.
+         */
+        MandalaRebuildPreflightResponse: {
+            /** Completedcells */
+            completedCells: number;
+            /** Goalid */
+            goalId: string;
+            /** Hastree */
+            hasTree: boolean;
+            /** Linkedhabits */
+            linkedHabits: components["schemas"]["MandalaRebuildLinkedHabit"][];
+            /** Liveactionitems */
+            liveActionItems: number;
+            /** Promotedaxes */
+            promotedAxes: components["schemas"]["MandalaRebuildPromotedAxis"][];
+            /** Rootnodeid */
+            rootNodeId: string | null;
+            /** Statement */
+            statement: string;
+            /** Totalcells */
+            totalCells: number;
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * MandalaRebuildPromotedAxis
+         * @description 다시 세우기에 걸려 있는 승격된 축 1개.
+         */
+        MandalaRebuildPromotedAxis: {
+            /** Axistitle */
+            axisTitle: string;
+            /** Goalid */
+            goalId: string;
+            /** Goalstatus */
+            goalStatus: string;
+            /**
+             * Goaltier
+             * @enum {string}
+             */
+            goalTier: "focus" | "maintain" | "parked";
+            /** Goaltitle */
+            goalTitle: string;
+            /** Orderindex */
+            orderIndex: number;
         };
         /**
          * MandalaRegenerateBranchRequest
@@ -4727,6 +5013,8 @@ export interface components {
          *     `failure_tags`/`memo`/`task_aversiveness`(#299) 는 `completion_status` 가
          *     failed/partial_done 일 때만 유효(그 외 값과 함께 오면 422). `memo` 는 서버가 at-rest
          *     암호화한다. `task_aversiveness` 는 태그 선택 여부와 무관하게 독립적으로 유효하다.
+         *     `memo` 는 `failure_tags` 가 1개 이상일 때만 유효(#203) — memo 는 태그 행에 얹혀
+         *     저장되므로 태그 없이 보내면 422 `COMMON_VALIDATION_ERROR`.
          */
         ReflectionBatchItem: {
             /**
@@ -5647,13 +5935,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6264,6 +6550,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MandalaTreeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mandala_rebuild_preflight_goals__goal_id__mandala_rebuild_preflight_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MandalaRebuildPreflightResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7421,6 +7740,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MandalaDraftResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_mandala_next_cycle_plans_mandala_next_cycle_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MandalaNextCycleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MandalaNextCycleResponse"];
                 };
             };
             /** @description Validation Error */

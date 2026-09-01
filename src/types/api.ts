@@ -62,7 +62,6 @@ export interface GoalCandidate {
   category: string;
   isHeaviest: boolean;
   deadline?: string | null;
-  whyNow?: string | null;
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
@@ -350,6 +349,15 @@ export interface MandalaApproveRequest {
   centerWhyText?: string | null;
 }
 
+// U6 응답의 승계 절 — 다시 세우기일 때만 0이 아니다(처음 세우면 전부 0/빈 배열).
+export interface MandalaCarryOverSummary {
+  completedCells?: number;
+  linkedHabits?: number;
+  promotedAxes?: number;
+  droppedLinkedHabits: string[];
+  droppedPromotedAxes: string[];
+}
+
 // U6 응답 — 명시 승인 endpoint 이므로 isDraft 는 항상 false.
 export interface MandalaApproveResponse {
   planId: string;
@@ -358,7 +366,43 @@ export interface MandalaApproveResponse {
   activated: number;
   skipped: number;
   activatedAt: string; // KST ISO
+  carriedOver?: MandalaCarryOverSummary;
   isDraft?: false;
+}
+
+// 다시 세우기에 걸려 있는 승격된 축 1개.
+export interface MandalaRebuildPromotedAxis {
+  orderIndex: number;
+  axisTitle: string;
+  goalId: string;
+  goalTitle: string;
+  goalStatus: string;
+  goalTier: GoalTier;
+}
+
+// 다시 세우기에 걸려 있는 반복형 칸 1개.
+export interface MandalaRebuildLinkedHabit {
+  subgoalIndex: number;
+  orderIndex: number;
+  cellTitle: string;
+  habitId: string;
+  habitTitle: string;
+  frequencyPerWeek: number;
+}
+
+// GET /goals/{goalId}/mandala/rebuild-preflight (U13) 응답 — 읽기 전용, "다시 세우기" 확인 시트용.
+// 아직 승인된 트리가 없으면 hasTree=false + 전부 0/빈 배열(404 아님).
+export interface MandalaRebuildPreflightResponse {
+  goalId: string;
+  hasTree: boolean;
+  rootNodeId: string | null;
+  statement: string;
+  totalCells: number;
+  completedCells: number;
+  promotedAxes: MandalaRebuildPromotedAxis[];
+  linkedHabits: MandalaRebuildLinkedHabit[];
+  liveActionItems: number;
+  warnings: string[];
 }
 
 // ── Health ───────────────────────────────────────────────────
@@ -973,6 +1017,31 @@ export interface FirstPlanResponse {
   warnings?: string[];
   aiSource?: string;
   isDraft?: boolean;
+}
+
+// 이번 주기가 어느 축에서 나왔는지 — U14 응답의 출처 표시.
+export interface MandalaCycleAxis {
+  nodeId: string;
+  orderIndex: number;
+  title: string;
+  goalId: string;
+  goalTier: GoalTier;
+  newlyPromoted: boolean;
+}
+
+// POST /plans/mandala/next-cycle (U14) 요청 — 이 축으로 다음 2주를 연다.
+// goalTier 는 아직 승격 안 된 축을 이 호출이 승격할 때만 쓴다(이미 승격됐으면 무시).
+export interface MandalaNextCycleRequest {
+  nodeId: string;
+  goalTier?: GoalTier;
+  density?: PlanDensity;
+  targetDate?: string | null;
+  useCellsAsMilestones?: boolean;
+}
+
+// U14 응답 — POST /plans/generate 와 같은 Draft 에 출처(축)만 얹은 것.
+export interface MandalaNextCycleResponse extends FirstPlanResponse {
+  axis: MandalaCycleAxis;
 }
 
 // #milestones Phase 2 — 사용자가 확인·편집하는 마일스톤 초안 한 개.
