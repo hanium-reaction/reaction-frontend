@@ -3142,6 +3142,11 @@ export interface components {
             /** Goaltier */
             goalTier: string;
             /**
+             * Hasplan
+             * @default true
+             */
+            hasPlan: boolean;
+            /**
              * Isultimate
              * @default false
              */
