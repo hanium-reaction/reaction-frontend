@@ -112,6 +112,8 @@ export interface InterviewSession {
 export type InterviewKind = 'plan' | 'ultimate';
 export interface StartSessionRequest {
   kind?: InterviewKind;
+  // 이 목표 하나만 계획하는 인터뷰(#442) — 목표 관리 "미계획" 카드에서 진입.
+  goalId?: string;
 }
 
 export interface SlotAnswerRequest {
@@ -1114,6 +1116,139 @@ export interface MaterialsConfirmResponse {
   goalTitle: string;
   savedChars: number;
   notice: string;
+}
+
+// POST /plans/materials/study-method 요청 — HITL 자료 검색 흐름 ①.
+export interface StudyMethodRequest {
+  interviewSessionId?: string | null;
+}
+
+export type MaterialMix = 'book' | 'video' | 'both';
+
+// POST /plans/materials/study-method 응답.
+export interface StudyMethodResponse {
+  approach: string;
+  focusPoints?: string[];
+  materialMix?: MaterialMix;
+  bookQuery: string;
+  videoQuery: string;
+  goalTitle: string;
+  notice: string;
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+}
+
+// POST /plans/materials/catalog 요청 — HITL 자료 검색 흐름 ②(사용자가 확인·편집한 검색어).
+export interface MaterialsCatalogRequest {
+  bookQuery?: string | null;
+  videoQuery?: string | null;
+}
+
+export interface BookCandidate {
+  title: string;
+  author: string;
+  publisher: string;
+  isbn13: string;
+  coverUrl: string;
+  linkUrl: string;
+}
+
+export interface VideoCandidate {
+  title: string;
+  channelTitle: string;
+  playlistId: string;
+  thumbnailUrl: string;
+  playlistUrl: string;
+}
+
+// POST /plans/materials/catalog 응답 — 두 소스는 독립적으로 실패할 수 있다.
+export interface MaterialsCatalogResponse {
+  books: BookCandidate[];
+  bookNotice?: string | null;
+  videos: VideoCandidate[];
+  videoNotice?: string | null;
+}
+
+// POST /plans/materials/book-detail 요청 — 후보의 isbn13 을 그대로 넘긴다.
+export interface BookDetailRequest {
+  isbn13: string;
+}
+
+export interface BookChapter {
+  title: string;
+  endPage?: number | null;
+}
+
+export interface BookSpecDetail {
+  kind: 'book';
+  title: string;
+  author: string;
+  isbn13: string;
+  pageCount: number;
+  chapters?: BookChapter[];
+  tocSource?: 'seoji' | null;
+}
+
+// POST /plans/materials/book-detail 응답 — 저장하지 않는다.
+export interface BookDetailResponse {
+  detail?: BookSpecDetail | null;
+  notice?: string | null;
+}
+
+// POST /plans/materials/video-detail 요청 — 후보의 playlistId 를 그대로 넘긴다.
+export interface VideoDetailRequest {
+  playlistId: string;
+}
+
+export interface VideoSpecItem {
+  title: string;
+  minutes: number;
+}
+
+export interface VideoSpecDetail {
+  kind: 'video';
+  title: string;
+  channelTitle: string;
+  playlistId: string;
+  playlistUrl: string;
+  videoCount: number;
+  totalMinutes: number;
+  curriculum?: VideoSpecItem[];
+  truncated?: boolean;
+}
+
+// POST /plans/materials/video-detail 응답 — 저장하지 않는다.
+export interface VideoDetailResponse {
+  detail?: VideoSpecDetail | null;
+  notice?: string | null;
+}
+
+// POST /plans/materials/spec-confirm 요청 — "이 자료 맞아요"(HITL 흐름 ③, 1~2건, 같은 종류 중복 불가).
+export interface MaterialsSpecConfirmRequest {
+  details: Array<BookSpecDetail | VideoSpecDetail>;
+  interviewSessionId?: string | null;
+}
+
+export interface ChapterPace {
+  title: string;
+  sessions: number;
+  endPage?: number | null;
+}
+
+export interface BookPace {
+  pagesPerSession: number;
+  totalSessions: number;
+  daysUntilDeadline: number;
+  summary: string;
+  chapters?: ChapterPace[];
+}
+
+// POST /plans/materials/spec-confirm 응답.
+export interface MaterialsSpecConfirmResponse {
+  goalTitle: string;
+  kinds: Array<'book' | 'video'>;
+  notice: string;
+  bookPace?: BookPace | null;
 }
 
 // POST /plans/{planId}/approve

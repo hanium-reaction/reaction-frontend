@@ -446,7 +446,7 @@ export interface paths {
          *
          *     완료하면 **그 목표의 남은 예정 카드와 블록이 정리된다**(soft) — 안 그러면 끝냈다고
          *     확인한 목표가 다음 날 아침 브리프에 그대로 뜬다. 시작·완료·실패한 카드와 사용자가
-         *     시간을 옮긴 카드는 보존된다. ⚠️ **만다라 유래 카드와 회복 카드는 안 걸린다**(위 참고).
+         *     시간을 옮긴 카드는 보존된다. **만다라 유래 카드와 회복 카드도 함께 멈춘다**(#367).
          *     ⚠️ **되돌려도 카드는 안 돌아온다** — 다시 하려면 되돌리기 → generate → approve 를
          *     거쳐야 하고, 그 되돌리기가 tier 한도에 걸릴 수 있다(soft 정리라 데이터는 남는다).
          */
@@ -1190,6 +1190,16 @@ export interface paths {
          *     Focus≤3 / Maintain≤5 초과 시 LLM 분해 전에 422 `GOAL_TIER_LIMIT_EXCEEDED`.
          *     Draft 를 `plan_drafts`(72h 만료)에 저장하고 실제 `planId` 를 반환. 항상 `is_draft=true`.
          *
+         *     **`goalId` 를 주면 그 목표로 계획을 세운다** (#398, additive). 안 주면 종전대로 최근 완료
+         *     인터뷰의 heaviest 를 재투영하는데, 목표를 여러 개 굴리는 사용자에게는 그게 **다른 목표**일
+         *     수 있었다 — 주간 리포트의 `nextCycleProposals` 는 `goalId` 를 주면서 승인은 목표를 못
+         *     지정하는 `POST /plans/generate` 로 안내해서, 목표 A 의 제안을 열었는데 최근 인터뷰 목표 B
+         *     의 계획이 생성·승인되는 일이 가능했다.
+         *
+         *     가용 시간·선호·정체성은 **인터뷰 답 그대로** 두고 `core_goals` 만 갈아끼운다
+         *     (`goal_cycle.seed_outcome`) — 지어내지 않는다. 만다라 승격 목표의 2주 지평도 그대로
+         *     걸린다: `_max_plan_weeks` 가 heaviest **제목**으로 판정하기 때문이다.
+         *
          *     동시성 lock(ADR-0005 §7.6): 다중 디바이스 동시 생성으로 인한 state race 방지.
          */
         post: operations["generate_plan_plans_generate_post"];
@@ -1235,7 +1245,7 @@ export interface paths {
          *     여기까지가 만다라트를 실행으로 잇는 마지막 조각이다. 지금까지는 축을 승격해도
          *     `POST /plans/generate` 의 heaviest 가 **인터뷰 당시** 고른 목표라, 만다라트를 다시 세워
          *     축이 바뀌어도 계획은 옛 목표를 분해했다. 이 endpoint 는 시드의 `core_goals` 를 이 축으로
-         *     갈아끼우고(`mandala_cycle.seed_outcome`) 축의 칸 8개를 계획 뼈대(마일스톤)로 넘긴다 —
+         *     갈아끼우고(`goal_cycle.seed_outcome`) 축의 칸 8개를 계획 뼈대(마일스톤)로 넘긴다 —
          *     사용자가 만다라트에서 확정한 분해를 계획이 그대로 따르게 하는 지점이다.
          *
          *     ⚠️ **자동 적용이 아니다**(§1.4). 돌려주는 건 `POST /plans/generate` 와 **같은 Draft** 이고,
@@ -1345,6 +1355,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plans/materials/book-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Book Detail
+         * @description 후보 도서 1건의 페이지 수 + 목차(best-effort)를 조회한다. 저장하지 않는다.
+         *
+         *     페이지 수는 알라딘에서 안정적으로 온다(L0 실측 10/10). 목차는 국중 seoji 에서
+         *     best-effort 로만 온다(L0 실측 10권 중 1권, 판본마다 다르다) — 못 가져와도 `detail`
+         *     은 채워진다(페이지 수만으로 계획에 반영할 수 있으므로). `detail` 자체가 없으면 알라딘
+         *     조회가 실패한 것이다(`notice` 에 사유).
+         */
+        post: operations["get_book_detail_plans_materials_book_detail_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Catalog
+         * @description 사용자가 확인·편집한 검색어로 알라딘/YouTube 후보를 찾는다. 저장하지 않는다.
+         *
+         *     LLM 을 부르지 않으므로(ADR-0010 §1 ②) `llm_runs`/그라운딩 예산과 무관하다 — 대신
+         *     쿼터는 각 provider 가 관리한다. YouTube `search.list` 는 1회에 100유닛이라 앱 전체
+         *     일일 쿼터(10,000유닛)로 하루 ~100회가 상한이다(`config.youtube_api_key` 참고) — 지금은
+         *     사용자별 상한이 없고, 쿼터를 넘기면 `videos` 가 빈 배열로 오고 `videoNotice` 에 그
+         *     사유(다시 시도 안내)가 채워질 뿐이다(500 이 아니다).
+         */
+        post: operations["search_catalog_plans_materials_catalog_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plans/materials/confirm": {
         parameters: {
             query?: never;
@@ -1411,6 +1472,89 @@ export interface paths {
          *     외부 호출이 0회라 과금도 예산 차감도 없다 — 사용자가 몇 번을 다시 열어봐도 무료다.
          */
         post: operations["propose_search_query_plans_materials_search_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/spec-confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Spec
+         * @description "이 자료 맞아요" — book/video-detail 이 돌려준 `details`(1~2건)를 그대로 되받아
+         *     저장한다. 몇 건이 좋을지는 `study-method` 의 `materialMix` 가 권장하지만 강제하지
+         *     않는다 — 사용자가 책만, 영상만, 또는 둘 다 보낼 수 있다.
+         *
+         *     재조회하지 않는다 — 사용자가 화면에서 이미 확인한 값이고(②→③ 과 같은 HITL 왕복), 같은
+         *     isbn/재생목록을 또 부르면 API 호출만 늘어난다. `goals.materials` 슬롯에 새
+         *     `{"type": "spec", "items": [...]}` 로 쓰므로 기존 텍스트 확정(`/confirm`)이나 이전
+         *     spec 확정이 있었다면 그걸 대체한다(마지막 확정이 이긴다 — `/confirm` 과 같은 규칙).
+         *
+         *     다음 계획 생성부터 반영된다 — 이 파일 상단 독스트링 참고(`interview_adapter.
+         *     _materials_note` 가 각 항목을 텍스트로 풀어 이어붙여 기존 `materials_for_prompt`
+         *     경로를 그대로 탄다). 책이 있으면 **여기서** 세션당 권장 페이지(`book_pace`)를 계산해
+         *     응답에 싣고, 같은 값을 슬롯에도 저장해 분해 프롬프트에도 실린다 — 클라이언트가 보낸
+         *     값이 아니라 서버가 지금 막 계산한 값이다(`materials_spec._spec_item_dict` 참고). 목차
+         *     전 챕터에 페이지가 있으면(best-effort) 균등 분할이 아니라 **챕터 경계를 존중한** 세션
+         *     배정으로 계산된다(`materials_spec._chapter_session_plan`) — 세션이 챕터 중간에서 안
+         *     끊긴다.
+         */
+        post: operations["confirm_spec_plans_materials_spec_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/study-method": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Study Method
+         * @description 목표에 맞는 학습 방식 + 도서/영상 검색어 2종을 추천한다.
+         *
+         *     LLM 구조화 호출 1회뿐 — 그라운딩도 검색도 아직 없다(ADR-0010 §2). 아무것도 외부로
+         *     나가지 않으므로 `/plans/materials/catalog` 이전에 사용자가 검색어를 확인·편집할 수
+         *     있다(#259 §4.1 ① 결정과 같은 원칙).
+         */
+        post: operations["propose_study_method_plans_materials_study_method_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/materials/video-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Video Detail
+         * @description 후보 재생목록 1건의 커리큘럼(영상 제목) + 분량(재생시간)을 조회한다. 저장하지 않는다.
+         *
+         *     이 소스는 커리큘럼·분량이 핵심이라(L0 실측 4/4) 못 가져오면 `detail` 자체가 없다
+         *     (`notice` 에 사유 — 쿼터 초과 포함).
+         */
+        post: operations["get_video_detail_plans_materials_video_detail_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2687,6 +2831,100 @@ export interface components {
             title: string;
         };
         /**
+         * BookCandidate
+         * @description 알라딘 검색 후보 1건.
+         */
+        BookCandidate: {
+            /** Author */
+            author: string;
+            /** Coverurl */
+            coverUrl: string;
+            /** Isbn13 */
+            isbn13: string;
+            /** Linkurl */
+            linkUrl: string;
+            /** Publisher */
+            publisher: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BookChapter
+         * @description 목차 항목 1개(best-effort, L0 1/10). `endPage` 는 이 챕터가 끝나는 페이지(추정) —
+         *     소단원 점선 뒤 페이지 번호 중 챕터 경계마다 마지막 것만 취한다. 단조증가가 깨지면
+         *     파싱이 틀렸다는 뜻이라 **전부 `None`** 이 된다(`nl_seoji.client._chapter_end_pages`
+         *     참고) — 챕터 제목 목록 자체는 그래도 남는다.
+         */
+        BookChapter: {
+            /** Endpage */
+            endPage?: number | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BookDetailRequest
+         * @description POST /plans/materials/book-detail — 후보 목록의 `isbn13` 을 그대로 넘긴다.
+         */
+        BookDetailRequest: {
+            /** Isbn13 */
+            isbn13: string;
+        };
+        /**
+         * BookDetailResponse
+         * @description 조회 결과 — 저장하지 않는다. `detail` 이 있으면 `spec-confirm` 으로 넘길 수 있다.
+         */
+        BookDetailResponse: {
+            detail?: components["schemas"]["BookSpecDetail"] | null;
+            /** Notice */
+            notice?: string | null;
+        };
+        /**
+         * BookPace
+         * @description 책 전체를 마감까지 다 보려면 세션당 몇 쪽 — `page_count` 만으로 항상 계산 가능하다
+         *     (L0 10/10, 목차 유무와 무관). 목표의 시간 예산(주당 시간·마감)과 결합한 **파생값**이라
+         *     `spec-confirm` 이 그때그때 서버에서 계산한다 — 클라이언트가 보낸 값을 믿지 않는다.
+         *
+         *     `chapters` 가 채워지면(목차 전 챕터에 `endPage` 가 있을 때만, best-effort) `totalSessions`
+         *     는 그 챕터별 배정의 합 — 균등 분할이 아니라 **챕터 경계를 존중한** 세션 수다. 비어 있으면
+         *     (목차가 없거나 일부 챕터만 페이지를 알 때) `pageCount` 균등 분할로 폴백한다.
+         */
+        BookPace: {
+            /** Chapters */
+            chapters?: components["schemas"]["ChapterPace"][];
+            /** Daysuntildeadline */
+            daysUntilDeadline: number;
+            /** Pagespersession */
+            pagesPerSession: number;
+            /** Summary */
+            summary: string;
+            /** Totalsessions */
+            totalSessions: number;
+        };
+        /**
+         * BookSpecDetail
+         * @description 도서 상세 — 페이지 수는 안정적으로 온다(L0 10/10). 목차·페이지 체크포인트는
+         *     best-effort(L0 1/10).
+         */
+        BookSpecDetail: {
+            /** Author */
+            author: string;
+            /** Chapters */
+            chapters?: components["schemas"]["BookChapter"][];
+            /** Isbn13 */
+            isbn13: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "book";
+            /** Pagecount */
+            pageCount: number;
+            /** Title */
+            title: string;
+            /** Tocsource */
+            tocSource?: "seoji" | null;
+        };
+        /**
          * BusyInterval
          * @description freebusy 의 busy 구간 한 개.
          */
@@ -2739,6 +2977,20 @@ export interface components {
              * Format: date-time
              */
             start: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ChapterPace
+         * @description 챕터 1개의 세션 배정 — `sessions` 개로 나누면 이 챕터가 정확히 세션 경계에서 끝난다
+         *     (세션이 챕터 중간에서 끊기지 않는다). 목차 커버리지 밖의 나머지 분량(`endPage` 가
+         *     `pageCount` 에 못 미치는 차이)도 이름 없는 항목 하나로 여기 포함된다.
+         */
+        ChapterPace: {
+            /** Endpage */
+            endPage?: number | null;
+            /** Sessions */
+            sessions: number;
             /** Title */
             title: string;
         };
@@ -2979,6 +3231,9 @@ export interface components {
          * @description 승인 결과 — 활성화 완료. 명시 승인 endpoint 이므로 `is_draft=False` (ADR-0005 §7.2).
          *
          *     #62: `plan_id` 로 저장된 Draft 를 로드해 goal 트리까지 영속화한 결과 카운트.
+         *
+         *     `warnings`(#371, additive) — Focus≤3/Maintain≤5 한도를 넘겨 parked 로 내린 목표가
+         *     있으면 실린다. 대개 빈 리스트.
          */
         FirstPlanApproveResponse: {
             /** Activatedactionitems */
@@ -3002,6 +3257,8 @@ export interface components {
             isDraft: false;
             /** Planid */
             planId: string;
+            /** Warnings */
+            warnings?: string[];
         };
         /**
          * FirstPlanGenerateRequest
@@ -3018,6 +3275,8 @@ export interface components {
              * @enum {string}
              */
             density: "light" | "standard" | "intense";
+            /** Goalid */
+            goalId?: string | null;
             /** Interviewsessionid */
             interviewSessionId?: string | null;
             /** Milestones */
@@ -4380,6 +4639,33 @@ export interface components {
             uri: string;
         };
         /**
+         * MaterialsCatalogRequest
+         * @description POST /plans/materials/catalog — 사용자가 확인·편집한 검색어만 받는다.
+         *
+         *     둘 다 생략할 수 없다(적어도 하나는 있어야 검색할 게 있다) — `study-method` 가 준
+         *     `bookQuery`/`videoQuery` 를 그대로 쓰거나 사용자가 고친 값을 보낸다.
+         */
+        MaterialsCatalogRequest: {
+            /** Bookquery */
+            bookQuery?: string | null;
+            /** Videoquery */
+            videoQuery?: string | null;
+        };
+        /**
+         * MaterialsCatalogResponse
+         * @description 검색 결과 — 두 소스는 독립적으로 실패할 수 있다(부분 성공을 실패로 뭉개지 않는다).
+         */
+        MaterialsCatalogResponse: {
+            /** Booknotice */
+            bookNotice?: string | null;
+            /** Books */
+            books?: components["schemas"]["BookCandidate"][];
+            /** Videonotice */
+            videoNotice?: string | null;
+            /** Videos */
+            videos?: components["schemas"]["VideoCandidate"][];
+        };
+        /**
          * MaterialsConfirmRequest
          * @description POST /plans/materials/confirm — "이 자료 맞아요".
          *
@@ -4471,6 +4757,32 @@ export interface components {
             status: "found" | "not_found" | "blocked_copyright" | "quota_exceeded" | "unavailable";
             /** Text */
             text?: string | null;
+        };
+        /**
+         * MaterialsSpecConfirmRequest
+         * @description POST /plans/materials/spec-confirm — "이 자료 맞아요".
+         *
+         *     `details` 는 위 조회 응답에서 받은 것을 **그대로** 되돌려 보낸다(② HITL — `search`→
+         *     `confirm` 과 같은 왕복. 재조회하지 않는 이유는 `orchestrator/materials_spec.py` 참고).
+         *
+         *     1~2건 — 책 1개, 영상 1개까지, 같은 종류를 두 번 보낼 수 없다. `study-method` 의
+         *     `materialMix` 가 몇 건이 좋을지 권장하지만 강제하지 않는다 — 최종 선택은 사용자 몫이다.
+         */
+        MaterialsSpecConfirmRequest: {
+            /** Details */
+            details: (components["schemas"]["BookSpecDetail"] | components["schemas"]["VideoSpecDetail"])[];
+            /** Interviewsessionid */
+            interviewSessionId?: string | null;
+        };
+        /** MaterialsSpecConfirmResponse */
+        MaterialsSpecConfirmResponse: {
+            bookPace?: components["schemas"]["BookPace"] | null;
+            /** Goaltitle */
+            goalTitle: string;
+            /** Kinds */
+            kinds: ("book" | "video")[];
+            /** Notice */
+            notice: string;
         };
         /**
          * MilestoneCompletionRequest
@@ -5347,12 +5659,62 @@ export interface components {
          * @description POST /interview/sessions 요청 — kind 생략 시 계획 인터뷰(하위호환, U0b).
          */
         StartSessionRequest: {
+            /** Goalid */
+            goalId?: string | null;
             /**
              * Kind
              * @default plan
              * @enum {string}
              */
             kind: "plan" | "ultimate";
+        };
+        /**
+         * StudyMethodRequest
+         * @description POST /plans/materials/study-method.
+         */
+        StudyMethodRequest: {
+            /** Interviewsessionid */
+            interviewSessionId?: string | null;
+        };
+        /**
+         * StudyMethodResponse
+         * @description POST /plans/materials/study-method 응답 — API 경계에서 `StudyMethodPlan` 을 감싼다.
+         *
+         *     LLM 산출물이라 `DraftMixin`(is_draft/ai_source) 을 붙인다 — `MandalaSubgoalsResponse`
+         *     와 같은 패턴. 이 단계는 아직 아무것도 외부로 나가지 않는다(그라운딩도 검색도 없다) —
+         *     사용자가 검색어를 확인·편집한 뒤에야 `/plans/materials/catalog` 가 실제로 나간다
+         *     (#259 §4.1 ① 결정과 같은 원칙).
+         */
+        StudyMethodResponse: {
+            /**
+             * Aisource
+             * @default llm
+             * @enum {string}
+             */
+            aiSource: "llm" | "rule";
+            /** Approach */
+            approach: string;
+            /** Bookquery */
+            bookQuery: string;
+            /** Focuspoints */
+            focusPoints?: string[];
+            /** Goaltitle */
+            goalTitle: string;
+            /**
+             * Isdraft
+             * @default true
+             */
+            isDraft: boolean;
+            /**
+             * Materialmix
+             * @default both
+             * @enum {string}
+             */
+            materialMix: "book" | "video" | "both";
+            /** Notice */
+            notice: string;
+            /** Videoquery */
+            videoQuery: string;
         };
         /**
          * SyncPreview
@@ -5580,6 +5942,79 @@ export interface components {
         VapidPublicKeyResponse: {
             /** Publickey */
             publicKey: string | null;
+        };
+        /**
+         * VideoCandidate
+         * @description YouTube 재생목록 검색 후보 1건.
+         */
+        VideoCandidate: {
+            /** Channeltitle */
+            channelTitle: string;
+            /** Playlistid */
+            playlistId: string;
+            /** Playlisturl */
+            playlistUrl: string;
+            /** Thumbnailurl */
+            thumbnailUrl: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * VideoDetailRequest
+         * @description POST /plans/materials/video-detail — 후보 목록의 `playlistId` 를 그대로 넘긴다.
+         */
+        VideoDetailRequest: {
+            /** Playlistid */
+            playlistId: string;
+        };
+        /**
+         * VideoDetailResponse
+         * @description 조회 결과 — 저장하지 않는다.
+         */
+        VideoDetailResponse: {
+            detail?: components["schemas"]["VideoSpecDetail"] | null;
+            /** Notice */
+            notice?: string | null;
+        };
+        /**
+         * VideoSpecDetail
+         * @description 영상 상세 — 커리큘럼(영상 제목)과 분량(재생시간)이 함께 온다(L0 4/4).
+         */
+        VideoSpecDetail: {
+            /** Channeltitle */
+            channelTitle: string;
+            /** Curriculum */
+            curriculum?: components["schemas"]["VideoSpecItem"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "video";
+            /** Playlistid */
+            playlistId: string;
+            /** Playlisturl */
+            playlistUrl: string;
+            /** Title */
+            title: string;
+            /** Totalminutes */
+            totalMinutes: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Videocount */
+            videoCount: number;
+        };
+        /**
+         * VideoSpecItem
+         * @description 재생목록의 영상 1편 — 제목이 곧 단원명, `minutes` 가 곧 분량(L0 핵심 발견).
+         */
+        VideoSpecItem: {
+            /** Minutes */
+            minutes: number;
+            /** Title */
+            title: string;
         };
         /**
          * WeeklyBlock
@@ -7935,6 +8370,76 @@ export interface operations {
             };
         };
     };
+    get_book_detail_plans_materials_book_detail_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookDetailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_catalog_plans_materials_catalog_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialsCatalogRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialsCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_materials_plans_materials_confirm_post: {
         parameters: {
             query?: never;
@@ -8027,6 +8532,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialsQueryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_spec_plans_materials_spec_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialsSpecConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialsSpecConfirmResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_study_method_plans_materials_study_method_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyMethodRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudyMethodResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_video_detail_plans_materials_video_detail_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoDetailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoDetailResponse"];
                 };
             };
             /** @description Validation Error */

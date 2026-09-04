@@ -35,6 +35,14 @@ import type {
   MaterialsQueryResponse,
   MaterialsSearchResponse,
   MaterialsConfirmResponse,
+  StudyMethodRequest,
+  StudyMethodResponse,
+  MaterialsCatalogRequest,
+  MaterialsCatalogResponse,
+  BookDetailResponse,
+  VideoDetailResponse,
+  MaterialsSpecConfirmRequest,
+  MaterialsSpecConfirmResponse,
   FixedSchedule,
   FixedScheduleCreateRequest,
   FixedScheduleUpdateRequest,
@@ -686,6 +694,32 @@ export const plansApi = {
   materialsConfirm: (text: string, interviewSessionId?: string | null) =>
     request<MaterialsConfirmResponse>('/plans/materials/confirm', {
       method: 'POST', body: { text, interviewSessionId: interviewSessionId ?? null },
+    }),
+
+  // HITL 자료 검색 흐름(①학습방식 제안 → ②검색어 확인·카탈로그 → ③상세 조회 → ④확정).
+  studyMethod: (body: StudyMethodRequest = {}) =>
+    request<StudyMethodResponse>('/plans/materials/study-method', {
+      method: 'POST', body,
+    }),
+
+  materialsCatalog: (body: MaterialsCatalogRequest) =>
+    request<MaterialsCatalogResponse>('/plans/materials/catalog', {
+      method: 'POST', body,
+    }),
+
+  bookDetail: (isbn13: string) =>
+    request<BookDetailResponse>('/plans/materials/book-detail', {
+      method: 'POST', body: { isbn13 },
+    }),
+
+  videoDetail: (playlistId: string) =>
+    request<VideoDetailResponse>('/plans/materials/video-detail', {
+      method: 'POST', body: { playlistId },
+    }),
+
+  materialsSpecConfirm: (body: MaterialsSpecConfirmRequest) =>
+    request<MaterialsSpecConfirmResponse>('/plans/materials/spec-confirm', {
+      method: 'POST', body,
     }),
 
   // Idempotency-Key 동봉 시 같은 키 재요청은 동일 planId 를 돌려준다(재시도 안전, #6).
