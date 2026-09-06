@@ -62,7 +62,6 @@ export interface GoalCandidate {
   category: string;
   isHeaviest: boolean;
   deadline?: string | null;
-  whyNow?: string | null;
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
@@ -113,6 +112,8 @@ export interface InterviewSession {
 export type InterviewKind = 'plan' | 'ultimate';
 export interface StartSessionRequest {
   kind?: InterviewKind;
+  // 이 목표 하나만 계획하는 인터뷰(#442) — 목표 관리 "미계획" 카드에서 진입.
+  goalId?: string;
 }
 
 export interface SlotAnswerRequest {
@@ -165,7 +166,8 @@ export interface GoalsByTier {
 
 export interface GoalUpdateRequest {
   title?: string;
-  category?: string;
+  // GoalCreateRequest.category 와 같은 허용값·정규화 규칙(#326). 생략하면 기존 유지.
+  category?: string | null;
   deadline?: string | null; // YYYY-MM-DD
   priorityLevel?: number;
   goalTier?: GoalTier;
@@ -189,12 +191,24 @@ export interface GoalNode {
   orderIndex: number;
   nodeType: MandalaNodeType;
   isLeaf: boolean;
+  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 만 값을 가질 수 있다.
+  completedAt?: string | null;
 }
 
 export interface GoalDecomposition {
   goalId: string;
   rootNodeId: string;
   nodes: GoalNode[];
+}
+
+// POST /goals/{goalId}/complete 요청 — 목표 완료 확정/해제(ADR-0007 6b). completed=false 로 되돌릴 수 있다.
+export interface GoalCompletionRequest {
+  completed: boolean;
+}
+
+// PATCH /goals/{goalId}/nodes/{nodeId} 요청 — 마일스톤 완료 표시(ADR-0007 §3 예외).
+export interface MilestoneCompletionRequest {
+  completed: boolean;
 }
 
 // ── 궁극목표 / 만다라 (U1-U10) ─────────────────────────────────
@@ -347,6 +361,15 @@ export interface MandalaApproveRequest {
   centerWhyText?: string | null;
 }
 
+// U6 응답의 승계 절 — 다시 세우기일 때만 0이 아니다(처음 세우면 전부 0/빈 배열).
+export interface MandalaCarryOverSummary {
+  completedCells?: number;
+  linkedHabits?: number;
+  promotedAxes?: number;
+  droppedLinkedHabits: string[];
+  droppedPromotedAxes: string[];
+}
+
 // U6 응답 — 명시 승인 endpoint 이므로 isDraft 는 항상 false.
 export interface MandalaApproveResponse {
   planId: string;
@@ -355,7 +378,43 @@ export interface MandalaApproveResponse {
   activated: number;
   skipped: number;
   activatedAt: string; // KST ISO
+  carriedOver?: MandalaCarryOverSummary;
   isDraft?: false;
+}
+
+// 다시 세우기에 걸려 있는 승격된 축 1개.
+export interface MandalaRebuildPromotedAxis {
+  orderIndex: number;
+  axisTitle: string;
+  goalId: string;
+  goalTitle: string;
+  goalStatus: string;
+  goalTier: GoalTier;
+}
+
+// 다시 세우기에 걸려 있는 반복형 칸 1개.
+export interface MandalaRebuildLinkedHabit {
+  subgoalIndex: number;
+  orderIndex: number;
+  cellTitle: string;
+  habitId: string;
+  habitTitle: string;
+  frequencyPerWeek: number;
+}
+
+// GET /goals/{goalId}/mandala/rebuild-preflight (U13) 응답 — 읽기 전용, "다시 세우기" 확인 시트용.
+// 아직 승인된 트리가 없으면 hasTree=false + 전부 0/빈 배열(404 아님).
+export interface MandalaRebuildPreflightResponse {
+  goalId: string;
+  hasTree: boolean;
+  rootNodeId: string | null;
+  statement: string;
+  totalCells: number;
+  completedCells: number;
+  promotedAxes: MandalaRebuildPromotedAxis[];
+  linkedHabits: MandalaRebuildLinkedHabit[];
+  liveActionItems: number;
+  warnings: string[];
 }
 
 // ── Health ───────────────────────────────────────────────────
@@ -570,13 +629,15 @@ export interface Habit {
   goalNodeId?: string | null;
 }
 
+// POST /goals/mandala/nodes/{nodeId}/habit (U12) — 셀(leaf, depth=2) → 반복형 전환.
+// title 생략 시 칸 제목을 그대로 쓴다. frequencyPerWeek/minutesPerSession 만 필수.
 export interface MandalaHabitLinkRequest {
   title?: string | null;
-  category: HabitCategory | string;
-  frequencyPerWeek: number;
+  category?: HabitCategory | string; // 기본값 'other'
+  frequencyPerWeek: number; // 1~7
   minutesPerSession: number;
-  timePreference: TimePreference;
-  priorityLevel: number;
+  timePreference?: TimePreference; // 기본값 'anytime'
+  priorityLevel?: number; // 1~5, 기본값 3
 }
 
 export interface HabitInstance {
@@ -973,6 +1034,31 @@ export interface FirstPlanResponse {
   isDraft?: boolean;
 }
 
+// 이번 주기가 어느 축에서 나왔는지 — U14 응답의 출처 표시.
+export interface MandalaCycleAxis {
+  nodeId: string;
+  orderIndex: number;
+  title: string;
+  goalId: string;
+  goalTier: GoalTier;
+  newlyPromoted: boolean;
+}
+
+// POST /plans/mandala/next-cycle (U14) 요청 — 이 축으로 다음 2주를 연다.
+// goalTier 는 아직 승격 안 된 축을 이 호출이 승격할 때만 쓴다(이미 승격됐으면 무시).
+export interface MandalaNextCycleRequest {
+  nodeId: string;
+  goalTier?: GoalTier;
+  density?: PlanDensity;
+  targetDate?: string | null;
+  useCellsAsMilestones?: boolean;
+}
+
+// U14 응답 — POST /plans/generate 와 같은 Draft 에 출처(축)만 얹은 것.
+export interface MandalaNextCycleResponse extends FirstPlanResponse {
+  axis: MandalaCycleAxis;
+}
+
 // #milestones Phase 2 — 사용자가 확인·편집하는 마일스톤 초안 한 개.
 export interface MilestoneDraft {
   title: string;
@@ -1033,6 +1119,139 @@ export interface MaterialsConfirmResponse {
   goalTitle: string;
   savedChars: number;
   notice: string;
+}
+
+// POST /plans/materials/study-method 요청 — HITL 자료 검색 흐름 ①.
+export interface StudyMethodRequest {
+  interviewSessionId?: string | null;
+}
+
+export type MaterialMix = 'book' | 'video' | 'both';
+
+// POST /plans/materials/study-method 응답.
+export interface StudyMethodResponse {
+  approach: string;
+  focusPoints?: string[];
+  materialMix?: MaterialMix;
+  bookQuery: string;
+  videoQuery: string;
+  goalTitle: string;
+  notice: string;
+  aiSource?: 'llm' | 'rule';
+  isDraft?: boolean;
+}
+
+// POST /plans/materials/catalog 요청 — HITL 자료 검색 흐름 ②(사용자가 확인·편집한 검색어).
+export interface MaterialsCatalogRequest {
+  bookQuery?: string | null;
+  videoQuery?: string | null;
+}
+
+export interface BookCandidate {
+  title: string;
+  author: string;
+  publisher: string;
+  isbn13: string;
+  coverUrl: string;
+  linkUrl: string;
+}
+
+export interface VideoCandidate {
+  title: string;
+  channelTitle: string;
+  playlistId: string;
+  thumbnailUrl: string;
+  playlistUrl: string;
+}
+
+// POST /plans/materials/catalog 응답 — 두 소스는 독립적으로 실패할 수 있다.
+export interface MaterialsCatalogResponse {
+  books: BookCandidate[];
+  bookNotice?: string | null;
+  videos: VideoCandidate[];
+  videoNotice?: string | null;
+}
+
+// POST /plans/materials/book-detail 요청 — 후보의 isbn13 을 그대로 넘긴다.
+export interface BookDetailRequest {
+  isbn13: string;
+}
+
+export interface BookChapter {
+  title: string;
+  endPage?: number | null;
+}
+
+export interface BookSpecDetail {
+  kind: 'book';
+  title: string;
+  author: string;
+  isbn13: string;
+  pageCount: number;
+  chapters?: BookChapter[];
+  tocSource?: 'seoji' | null;
+}
+
+// POST /plans/materials/book-detail 응답 — 저장하지 않는다.
+export interface BookDetailResponse {
+  detail?: BookSpecDetail | null;
+  notice?: string | null;
+}
+
+// POST /plans/materials/video-detail 요청 — 후보의 playlistId 를 그대로 넘긴다.
+export interface VideoDetailRequest {
+  playlistId: string;
+}
+
+export interface VideoSpecItem {
+  title: string;
+  minutes: number;
+}
+
+export interface VideoSpecDetail {
+  kind: 'video';
+  title: string;
+  channelTitle: string;
+  playlistId: string;
+  playlistUrl: string;
+  videoCount: number;
+  totalMinutes: number;
+  curriculum?: VideoSpecItem[];
+  truncated?: boolean;
+}
+
+// POST /plans/materials/video-detail 응답 — 저장하지 않는다.
+export interface VideoDetailResponse {
+  detail?: VideoSpecDetail | null;
+  notice?: string | null;
+}
+
+// POST /plans/materials/spec-confirm 요청 — "이 자료 맞아요"(HITL 흐름 ③, 1~2건, 같은 종류 중복 불가).
+export interface MaterialsSpecConfirmRequest {
+  details: Array<BookSpecDetail | VideoSpecDetail>;
+  interviewSessionId?: string | null;
+}
+
+export interface ChapterPace {
+  title: string;
+  sessions: number;
+  endPage?: number | null;
+}
+
+export interface BookPace {
+  pagesPerSession: number;
+  totalSessions: number;
+  daysUntilDeadline: number;
+  summary: string;
+  chapters?: ChapterPace[];
+}
+
+// POST /plans/materials/spec-confirm 응답.
+export interface MaterialsSpecConfirmResponse {
+  goalTitle: string;
+  kinds: Array<'book' | 'video'>;
+  notice: string;
+  bookPace?: BookPace | null;
 }
 
 // POST /plans/{planId}/approve
@@ -1109,9 +1328,30 @@ export interface NextCycleProposal {
   goalTitle: string;
   axisTitle?: string | null;
 }
+// "이 목표 끝난 거 맞아요?" 제안 — NextCycleProposal 과 배타적(has_open_milestone 의 양쪽 갈래).
+export interface GoalCompletionProposal {
+  goalId: string;
+  goalTitle: string;
+}
 export interface StaleAxisProposal {
   axisId: string;
   axisTitle: string;
+}
+// 실패 사유 상위 3개(BCT 2.3 Self-monitoring, 근거 A5) — #301. share 는 0~1 비율이고
+// LIMIT 이전(태그 전체)을 분모로 하므로 반환된 3건의 share 합이 1.0 이 아닐 수 있다.
+export interface TopFailureContext {
+  tagCode: FailureTagCode | string;
+  labelKo: string;
+  count: number;
+  share: number;
+}
+// 이번 주를 분(minute)으로 본 요약(ADR-0009 D5) — adherenceRate(건수 비율) 옆에 나란히 둔다.
+// completedMinutes/actualMinutes 는 둘 다 완료한 실행만 센다.
+export interface EffortMinutes {
+  plannedMinutes: number;
+  completedMinutes: number;
+  actualMinutes: number;
+  adherenceRate?: number | null;
 }
 export interface WeeklyReviewResponse {
   weekStart: string;
@@ -1131,7 +1371,10 @@ export interface WeeklyReviewResponse {
   policyUpdateCandidates?: unknown[] | null;
   mandala?: MandalaWeeklySummary | null;
   nextCycleProposals?: NextCycleProposal[];
+  goalCompletionProposals?: GoalCompletionProposal[];
   staleAxisProposals?: StaleAxisProposal[];
+  topFailureContexts?: TopFailureContext[];
+  effort?: EffortMinutes;
 }
 export interface WeeklyGenerateRequest {
   weekStart?: string;
@@ -1155,7 +1398,9 @@ export interface HabitPenaltyListResponse {
 }
 export interface HabitPenaltyAcceptResponse {
   habitId: string;
-  newFrequency?: number;
+  previousFrequency: number;
+  newFrequency: number;
+  message: string;
 }
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501. api-contract §16 ──
@@ -1184,6 +1429,20 @@ export interface ToneModeUpdateRequest {
 
 export interface AnonymizeRequest {
   confirmationToken: string;
+}
+
+// POST /settings/delete-account — anonymize 와 동일한 2단계 확인 모양. anonymize 와 달리
+// 계정 자체를 soft delete 해 재로그인을 막는다(#321).
+export interface DeleteAccountRequest {
+  confirmationToken?: string | null;
+}
+
+export interface DeleteAccountResponse {
+  status: 'confirmation_required' | 'deleted';
+  message: string;
+  confirmationToken?: string | null;
+  deletedAt?: string | null; // date-time
+  expiresAt?: string | null; // date-time
 }
 
 export type ConsentType = 'marketing' | 'research' | 'analytics' | string;
@@ -1250,6 +1509,54 @@ export interface PolicySnapshotResponse {
   recoveryPolicy: Record<string, unknown>;
   reasonForUpdate: string | null;
   validFrom: string; // date-time
+}
+
+// POST /policy-snapshot/apply 요청 — preview-update 응답을 그대로(source='rule') 또는
+// 사용자가 고친 값(source='user_manual')을 되보낸다.
+export interface PolicyApplyRequest {
+  behavioralProfile: Record<string, unknown>;
+  executionConstraints: Record<string, unknown>;
+  interactionStyle: Record<string, unknown>;
+  recoveryPolicy: Record<string, unknown>;
+  reasonForUpdate?: string | null; // ≤200자
+  source?: 'rule' | 'user_manual';
+}
+
+// 승인 화면에 보여줄 변경 한 줄 — 근거를 숫자로 담는다.
+export interface PolicyChangeItem {
+  area: string;
+  field: string;
+  before: unknown;
+  after: unknown;
+  why: string;
+}
+
+// POST /policy-snapshot/preview-update 응답 — 다음 버전 후보(Draft, 저장하지 않음).
+export interface PolicyPreviewResponse {
+  baseVersion: number | null;
+  nextVersion: number;
+  changes: PolicyChangeItem[];
+  reasonForUpdate: string | null;
+  behavioralProfile: Record<string, unknown>;
+  executionConstraints: Record<string, unknown>;
+  interactionStyle: Record<string, unknown>;
+  recoveryPolicy: Record<string, unknown>;
+  isDraft?: boolean;
+  aiSource?: 'llm' | 'rule';
+}
+
+// GET /policy-snapshot/history 항목 — 4 영역 payload 는 빼고 메타만.
+export interface PolicyHistoryItem {
+  version: number;
+  source: string;
+  isActive: boolean;
+  reasonForUpdate: string | null;
+  validFrom: string; // date-time
+  validTo: string | null; // date-time
+}
+
+export interface PolicyHistoryResponse {
+  items: PolicyHistoryItem[];
 }
 
 // ── Web Push (S08·S25) ────────────────────────────────────────

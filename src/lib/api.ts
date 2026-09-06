@@ -21,6 +21,8 @@ import type {
   CheckInResponse,
   ConsentRecord,
   ConsentUpdateRequest,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
   ExecutionEvent,
   ExecutionStartResponse,
   FailureTagMaster,
@@ -33,14 +35,24 @@ import type {
   MaterialsQueryResponse,
   MaterialsSearchResponse,
   MaterialsConfirmResponse,
+  StudyMethodRequest,
+  StudyMethodResponse,
+  MaterialsCatalogRequest,
+  MaterialsCatalogResponse,
+  BookDetailResponse,
+  VideoDetailResponse,
+  MaterialsSpecConfirmRequest,
+  MaterialsSpecConfirmResponse,
   FixedSchedule,
   FixedScheduleCreateRequest,
   FixedScheduleUpdateRequest,
   TimePolicyCreateRequest,
   TimePolicyUpdateRequest,
   FreeBusy,
+  GoalCompletionRequest,
   GoalCreateRequest,
   GoalDecomposition,
+  GoalNode,
   GoalsByTier,
   GoalUpdateRequest,
   Habit,
@@ -63,17 +75,24 @@ import type {
   MandalaGenerateRequest,
   MandalaNode,
   MandalaHabitLinkRequest,
+  MandalaNextCycleRequest,
+  MandalaNextCycleResponse,
   MandalaNodeUpdateRequest,
   MandalaPromoteRequest,
+  MandalaRebuildPreflightResponse,
   MandalaRegenerateBranchRequest,
   MandalaSubgoalsRequest,
   MandalaSubgoalsResponse,
   MandalaTreeResponse,
+  MilestoneCompletionRequest,
   NotificationSettings,
   NotificationSettingsUpdateRequest,
   OnboardingStatus,
   BlockEditRequest,
   BlockEditResponse,
+  PolicyApplyRequest,
+  PolicyHistoryResponse,
+  PolicyPreviewResponse,
   PolicySnapshotResponse,
   ProfileResponse,
   ProfileUpdateRequest,
@@ -360,10 +379,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
-  loginWithGoogle: (idToken: string) =>
+  // inviteCode — 신규 가입에만 필요(#324). 기존 사용자 로그인은 무시된다.
+  loginWithGoogle: (idToken: string, inviteCode?: string) =>
     request<AuthSession>('/auth/google', {
       method: 'POST',
-      body: { idToken },
+      body: inviteCode ? { idToken, inviteCode } : { idToken },
       anonymous: true,
     }),
 
@@ -462,6 +482,10 @@ export const goalsApi = {
   mandala: (goalId: string) =>
     request<MandalaTreeResponse>(`/goals/${goalId}/mandala`),
 
+  // 다시 세우기 사전 확인(U13) — 읽기 전용, LLM 0콜. 트리 없으면 hasTree=false(에러 아님).
+  mandalaRebuildPreflight: (goalId: string) =>
+    request<MandalaRebuildPreflightResponse>(`/goals/${goalId}/mandala/rebuild-preflight`),
+
   // 셀 상세 편집(U9) — 준 필드만 갱신.
   updateMandalaNode: (nodeId: string, body: MandalaNodeUpdateRequest) =>
     request<MandalaNode>(`/goals/mandala/nodes/${nodeId}`, { method: 'PATCH', body }),
@@ -475,6 +499,14 @@ export const goalsApi = {
 
   unlinkMandalaHabit: (nodeId: string) =>
     request<void>(`/goals/mandala/nodes/${nodeId}/habit`, { method: 'DELETE' }),
+
+  // 목표 완료 확정/해제(ADR-0007 6b) — completed=false 로 되돌릴 수 있다(오조작 복구).
+  complete: (goalId: string, body: GoalCompletionRequest) =>
+    request<ApiGoal>(`/goals/${goalId}/complete`, { method: 'POST', body }),
+
+  // 마일스톤 완료 표시(ADR-0007 §3 예외) — nodeType="milestone" 만 받는다, subgoal/leaf 는 404.
+  updateMilestoneCompletion: (goalId: string, nodeId: string, body: MilestoneCompletionRequest) =>
+    request<GoalNode>(`/goals/${goalId}/nodes/${nodeId}`, { method: 'PATCH', body }),
 };
 
 // ── Time Policies (S07) ───────────────────────────────────────
@@ -664,6 +696,32 @@ export const plansApi = {
       method: 'POST', body: { text, interviewSessionId: interviewSessionId ?? null },
     }),
 
+  // HITL 자료 검색 흐름(①학습방식 제안 → ②검색어 확인·카탈로그 → ③상세 조회 → ④확정).
+  studyMethod: (body: StudyMethodRequest = {}) =>
+    request<StudyMethodResponse>('/plans/materials/study-method', {
+      method: 'POST', body,
+    }),
+
+  materialsCatalog: (body: MaterialsCatalogRequest) =>
+    request<MaterialsCatalogResponse>('/plans/materials/catalog', {
+      method: 'POST', body,
+    }),
+
+  bookDetail: (isbn13: string) =>
+    request<BookDetailResponse>('/plans/materials/book-detail', {
+      method: 'POST', body: { isbn13 },
+    }),
+
+  videoDetail: (playlistId: string) =>
+    request<VideoDetailResponse>('/plans/materials/video-detail', {
+      method: 'POST', body: { playlistId },
+    }),
+
+  materialsSpecConfirm: (body: MaterialsSpecConfirmRequest) =>
+    request<MaterialsSpecConfirmResponse>('/plans/materials/spec-confirm', {
+      method: 'POST', body,
+    }),
+
   // Idempotency-Key 동봉 시 같은 키 재요청은 동일 planId 를 돌려준다(재시도 안전, #6).
   generate: (body: FirstPlanGenerateRequest = {}, idempotencyKey?: string) =>
     request<FirstPlanResponse>('/plans/generate', { method: 'POST', body, idempotencyKey }),
@@ -723,6 +781,13 @@ export const plansApi = {
   // 승인(U6) — 편집본을 통째로 실어 goal_nodes 73행(≤)으로 영속.
   mandalaApprove: (planId: string, body: MandalaApproveRequest) =>
     request<MandalaApproveResponse>(`/plans/mandala/${planId}/approve`, {
+      method: 'POST',
+      body,
+    }),
+
+  // 축 하나로 다음 2주 계획 Draft 를 연다(U14). LLM 1콜. 승인은 approve() 를 그대로 쓴다.
+  mandalaNextCycle: (body: MandalaNextCycleRequest) =>
+    request<MandalaNextCycleResponse>('/plans/mandala/next-cycle', {
       method: 'POST',
       body,
     }),
@@ -826,6 +891,23 @@ export const notificationsApi = {
 export const policySnapshotApi = {
   // 활성 스냅샷 없으면 404 — 호출부가 카운트-only 폴백을 유지한다.
   current: () => request<PolicySnapshotResponse>('/policy-snapshot/current'),
+
+  // 다음 버전 후보 — 저장하지 않는다(AGENTS §1 자동 적용 금지). apply 전 미리보기.
+  previewUpdate: () =>
+    request<PolicyPreviewResponse>('/policy-snapshot/preview-update', { method: 'POST', body: {} }),
+
+  // 사용자 승인 후 새 버전 INSERT — HITL 게이트. preview-update 응답을 그대로(source='rule')
+  // 또는 사용자가 고친 값(source='user_manual')으로 보낸다.
+  apply: (body: PolicyApplyRequest) =>
+    request<PolicySnapshotResponse>('/policy-snapshot/apply', { method: 'POST', body }),
+
+  // 버전 이력 — 최신이 앞. 비어 있으면 items: []("정책 없음" 은 여기선 정상 상태, 404 아님).
+  history: () => request<PolicyHistoryResponse>('/policy-snapshot/history'),
+
+  // 지난 버전 값을 새 버전으로 되살린다(append-only 감사 기록). 없는 버전은 404, 이미
+  // 활성인 버전은 409.
+  rollback: (version: number) =>
+    request<PolicySnapshotResponse>(`/policy-snapshot/rollback/${version}`, { method: 'POST' }),
 };
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
@@ -837,6 +919,10 @@ export const settingsApi = {
 
   anonymize: (body: AnonymizeRequest) =>
     request<void>('/settings/anonymize', { method: 'POST', body }),
+
+  // 계정 삭제(2단계 확인, #321) — anonymize 와 달리 재로그인을 막는 soft delete 까지 포함.
+  deleteAccount: (body: DeleteAccountRequest = {}) =>
+    request<DeleteAccountResponse>('/settings/delete-account', { method: 'POST', body }),
 
   // 지속형 프로필 메모리(에너지/시간·톤/빈도·회복 선호). 인터뷰 미완료 항목은 null.
   getProfile: () => request<ProfileResponse>('/settings/profile'),
