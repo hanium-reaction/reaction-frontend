@@ -513,6 +513,9 @@ export const fixedSchedulesApi = {
 
 // ── Calendar (S04) ────────────────────────────────────────────
 export const calendarApi = {
+  // 연결 상태. 연결이 없으면 404 가 아니라 connected=false, 서버 설정 전이면 501.
+  status: () => request<CalendarConnection>('/calendar/connect'),
+
   connect: (code: string) =>
     request<CalendarConnection>('/calendar/connect', {
       method: 'POST',

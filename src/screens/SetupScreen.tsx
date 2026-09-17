@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  Calendar, Plus, Trash, ArrowRight,
+  Plus, Trash, ArrowRight,
   Moon, ForkKnife, Pause, Sun, Bell, Sparkle, ShieldCheck,
 } from '@phosphor-icons/react';
 import type { IconProps } from '@phosphor-icons/react';
 import { ReButton } from '../components/ReButton';
+import { CalendarConnectCard } from '../components/CalendarConnectCard';
 import {
   friendlyError, fixedSchedulesApi, notificationsApi, timePoliciesApi,
 } from '../lib/api';
@@ -90,13 +91,6 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, []);
-
-  // Google 캘린더 자동 연동은 백엔드 OAuth 가 아직 준비 중(베타)이라,
-  // 가짜 'demo-mock-code' 로 연결된 척하지 않는다. 대신 솔직하게 안내하고
-  // 직접 입력 경로로 유도한다.
-  const notifyCalendarPending = () => {
-    toast.info('캘린더 자동 연동은 준비 중이에요. 아래에서 직접 추가해 주세요.');
-  };
 
   const toggleDay = (d: DayOfWeek) => {
     setDraftDays((s) => {
@@ -212,21 +206,10 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
 
         {/* 1. 캘린더 + 고정 일정 */}
         <SectionTitle>일정</SectionTitle>
-        <button
-          onClick={notifyCalendarPending}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 12, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', marginBottom: 8, opacity: 0.85 }}
-        >
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--sand-100)', color: 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Calendar size={12} weight="fill" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              Google 캘린더 자동 가져오기
-              <span style={{ height: 'var(--ctrl-xs)', padding: '0 5px', borderRadius: 9999, background: 'var(--sand-200)', fontSize: 12, fontWeight: 700, color: 'var(--text-3)', display: 'inline-flex', alignItems: 'center' }}>준비 중</span>
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>지금은 아래에서 직접 추가해 주세요</div>
-          </div>
-        </button>
+        {/* 캘린더에 있는 일정은 계획이 알아서 피한다. 캘린더에 없는 고정 일정만 아래에 추가. */}
+        <div style={{ marginBottom: 8 }}>
+          <CalendarConnectCard compact />
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
           {isLoading && <SkeletonRow />}

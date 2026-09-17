@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CaretRight, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, IdentificationCard, SignOut } from '@phosphor-icons/react';
+import { CaretRight, Sparkle, BellRinging, BellSlash, Shield, Warning, Check, ArrowClockwise, IdentificationCard, SignOut, CalendarBlank } from '@phosphor-icons/react';
+import { CalendarConnectCard } from '../components/CalendarConnectCard';
 import { ApiError, notificationsApi, privacyApi, settingsApi } from '../lib/api';
 import { isNativeApp, nativePushReady } from '../lib/platform';
 import { subscribePush, unsubscribePush, getPushPermission } from '../lib/push';
@@ -182,6 +183,12 @@ export function SettingsScreen() {
             </div>
             <CaretRight size={16} color="var(--text-3)" />
           </button>
+        </section>
+
+        {/* Calendar — 온보딩에서 건너뛴 사용자도 여기서 연결·해제한다 */}
+        <section>
+          <SectionHeader icon={<CalendarBlank size={11} weight="fill" />}>캘린더</SectionHeader>
+          <CalendarConnectCard />
         </section>
 
         {/* Push */}
