@@ -267,9 +267,11 @@ let renewInFlight: Promise<boolean> | null = null;
 function renewAccessToken(): Promise<boolean> {
   if (renewInFlight) return renewInFlight;
   const token = getRefreshToken();
-  if (!token) return Promise.resolve(false);
+  // 웹은 새로고침 후에도 httpOnly 쿠키로 갱신할 수 있다.
+  // 네이티브는 보안 저장소에서 읽은 토큰이 반드시 필요하다.
+  if (!token && isNative) return Promise.resolve(false);
   const kind = getAuthKind() ?? 'real';
-  renewInFlight = authApi.refresh(token)
+  renewInFlight = authApi.refresh(token ?? undefined)
     .then((res) => {
       // 회전하지 않으므로 refresh 는 그대로 두고 access 만 갈아 끼운다.
       setSession({ accessToken: res.accessToken }, kind);
@@ -298,6 +300,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
+    credentials: isNative ? 'same-origin' : 'include',
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -309,9 +312,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     // 401 자가치유 — 두 갈래를 순서대로 시도하고, 둘 다 안 되면 재로그인으로 보낸다.
     // (부트스트랩 타이밍이나 토큰 유실로 "인증 헤더 없음" 401 이 나던 문제도 여기서 걸린다)
     if (res.status === 401 && !anonymous && !_retry && typeof window !== 'undefined') {
-      // ① 실제 로그인 사용자: refresh token 으로 새 access 를 받아 1회 재시도한다.
-      //    access TTL 이 60분이라, 이게 없으면 로그인 한 시간 뒤에 무조건 튕긴다.
-      if (getRefreshToken()) {
+      // ① 본문 토큰 또는 웹 httpOnly 쿠키로 갱신하고 원 요청은 한 번만 재시도한다.
+      //    access TTL은 서버 설정을 따른다(현재 기본값 24시간).
+      if (getRefreshToken() || !isNative) {
         const renewed = await renewAccessToken();
         if (renewed) return await request<T>(path, { ...opts, _retry: true });
       }
@@ -369,17 +372,18 @@ export const authApi = {
 
   me: () => request<UserProfile>('/auth/me'),
 
-  refresh: (refreshToken: string) =>
+  refresh: (refreshToken?: string) =>
     request<{ accessToken: string }>('/auth/refresh', {
       method: 'POST',
-      body: { refreshToken },
+      body: refreshToken ? { refreshToken } : {},
       anonymous: true,
     }),
 
-  logout: (refreshToken: string) =>
+  logout: (refreshToken?: string) =>
     request<void>('/auth/logout', {
       method: 'POST',
-      body: { refreshToken },
+      body: refreshToken ? { refreshToken } : {},
+      anonymous: true,
     }),
 };
 
