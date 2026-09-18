@@ -1,4 +1,5 @@
 import { ReButton } from './ReButton';
+import { requestInterviewRestart } from '../lib/interviewSession';
 
 export interface ReinterviewSheetProps {
   open: boolean;
@@ -13,7 +14,7 @@ export interface ReinterviewSheetProps {
  * 진입점이 여러 곳(목표 관리, 주간 계획)이라 문구를 각 화면에 복사해 두면 언젠가 갈라진다.
  * "무슨 일이 일어나는가"를 밝히는 문장이 이 기능의 핵심이라 한 곳에서만 관리한다 —
  * 인터뷰는 처음부터 새로 시작되고 이전 답변은 대체되지만, 이미 만든 목표와 일정은 남는다.
- * (GoalIntakeScreen 은 진입할 때마다 기존 세션을 finish 하고 새로 시작한다.)
+ * (이 시트에서 확인한 경우에만 기존 세션을 finish 하고 새로 시작한다.)
  */
 export function ReinterviewSheet({ open, onClose, onConfirm }: ReinterviewSheetProps) {
   if (!open) return null;
@@ -37,7 +38,7 @@ export function ReinterviewSheet({ open, onClose, onConfirm }: ReinterviewSheetP
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <ReButton variant="ghost" size="sm" onClick={onClose}>지금은 그대로</ReButton>
           <div style={{ flex: 1 }}>
-            <ReButton variant="primary" size="sm" full onClick={onConfirm}>
+            <ReButton variant="primary" size="sm" full onClick={() => { requestInterviewRestart(); onConfirm(); }}>
               다시 인터뷰하기
             </ReButton>
           </div>

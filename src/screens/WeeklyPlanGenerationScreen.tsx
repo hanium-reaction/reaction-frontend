@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Lightbulb, DotsThreeOutline } from '@phosphor-icons/react';
 import { DEFAULT_GOAL_CATEGORY, categoryLabel, goalColor } from '../data';
 import { SetupProgress } from '../components/SetupProgress';
+import { requestInterviewRestart } from '../lib/interviewSession';
 import { AiDraftCard } from '../components/AiDraftCard';
 import { BlockEditSheet } from '../components/BlockEditSheet';
 import { PlanOptionsSheet } from '../components/PlanOptionsSheet';
@@ -291,7 +292,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     const planId = planIdRef.current;
     // 폐기 실패해도(네트워크 등) 재인터뷰는 막지 않는다 — 초안은 어차피 만료되고,
     // 사용자를 화면에 가둬 두는 게 더 나쁘다.
-    const done = () => { setPlanGoalId(null); setPlanAxisId(null); setScreen('goal-intake'); };
+    const done = () => { requestInterviewRestart(); setPlanGoalId(null); setPlanAxisId(null); setScreen('goal-intake'); };
     if (!planId) { done(); return; }
     plansApi.discard(planId).catch(() => {}).finally(done);
   };
