@@ -7,6 +7,7 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { IosInstallCard } from '../components/IosInstallCard';
 import { ApiError, authApi, clearSession, friendlyError, getAccessToken, getAuthKind, getRefreshToken, initTokenStore, onAuthExpired, onboardingApi, setSession, stubLoginAllowed } from '../lib/api';
 import { markNotificationOpenedFromLaunch } from '../lib/push';
+import { isNativeApp } from '../lib/platform';
 import type { ScreenId, TabId } from '../types';
 import type { MilestoneDraft, OnboardingState, UserProfile } from '../types/api';
 
@@ -167,13 +168,12 @@ export function AppShell() {
   // 반대로 revoke 가 실패했다고 로컬 세션을 남겨 두면, 사용자는 로그아웃을 눌렀는데
   // 로그인된 채로 남는다 — 그쪽이 더 나쁘다. 그래서 revoke 실패는 삼킨다.
   //
-  // 웹에서 새로고침한 뒤라면 refresh 가 메모리에서 사라졌을 수 있다. 그때는 보낼 토큰이
-  // 없으니 로컬만 비운다(서버 토큰은 만료까지 남는다).
+  // 웹은 메모리 토큰이 없어도 서버가 httpOnly 쿠키를 삭제하고 revoke하게 한다.
   const handleLogout = useCallback(async () => {
     const refreshToken = getRefreshToken();
-    if (refreshToken) {
+    if (refreshToken || !isNativeApp()) {
       try {
-        await authApi.logout(refreshToken);
+        await authApi.logout(refreshToken ?? undefined);
       } catch {
         /* 네트워크 오류나 이미 만료된 토큰 — 아래에서 로컬은 그대로 비운다 */
       }
@@ -272,12 +272,15 @@ export function AppShell() {
         //    실제 Google 로그인 화면(LoginScreen)을 보여준다.
         //    ?login=1 로 강제로 로그인 화면을 확인할 수 있다(수동 테스트용).
         let profile;
+        const wasRealSession = getAuthKind() === 'real';
         try {
+          // access가 없거나 만료돼도 api 레이어가 웹 쿠키 refresh를 한 번 시도한다.
+          // 이 시도가 끝나기 전에는 로그인 화면을 보여주지 않는다.
           profile = await authApi.me();
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
             // api 레이어 자가치유와 같은 판단을 쓴다(stubLoginAllowed).
-            if (stubLoginAllowed()) {
+            if (!wasRealSession && stubLoginAllowed()) {
               const session = await authApi.loginWithGoogle(stubIdToken());
               setSession(session, 'stub');
               profile = session.user;

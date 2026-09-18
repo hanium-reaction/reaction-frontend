@@ -5,15 +5,13 @@
 // 토큰이 통째로 새어 나간다. 그 자리에 14일짜리 refresh token 까지 얹으면 한 번의 사고가
 // 2주짜리 세션을 넘겨주는 셈이라, 저장 위치를 토큰별·플랫폼별로 나눈다.
 //
-//                    access token (60분)          refresh token (14일)
+//                    access token (서버 기본 24시간) refresh token (14일)
 //   네이티브 앱      보안 저장소                   보안 저장소
 //                    (iOS Keychain / Android Keystore)
 //   웹 브라우저      localStorage (기존 유지)      메모리에만 — 디스크에 남기지 않는다
 //
-// 웹에서 refresh 를 메모리에만 두면 새로고침 시 사라진다. 그래도 access token 이 남아 있어
-// 60분 안에는 그대로 쓰고, 그 뒤에는 다시 로그인해야 한다. 웹에서 14일 세션을 온전히
-// 살리려면 백엔드가 refresh 를 httpOnly 쿠키로 내려 주는 수밖에 없다 — 클라이언트가
-// 읽을 수 있는 저장소는 어디든 XSS 에 노출된다.
+// 웹에서 메모리 refresh는 새로고침 시 사라지지만, 백엔드가 설정한 httpOnly 쿠키로
+// 갱신할 수 있다. 이 쿠키는 JS로 읽지 않고 브라우저가 refresh/logout 요청에 보낸다.
 import { isNativeApp } from './platform';
 
 const ACCESS_KEY = 'reaction.accessToken';
