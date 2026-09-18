@@ -57,6 +57,9 @@ export function AppShell() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
   const [plannedMilestones, setPlannedMilestones] = useState<MilestoneDraft[] | null>(null);
+  const [planGoalId, setPlanGoalId] = useState<string | null>(null);
+  const [planAxisId, setPlanAxisId] = useState<string | null>(null);
+  const [calendarEditActionId, setCalendarEditActionId] = useState<string | null>(null);
   // 앱 사용 중 딥 인터뷰로 진입했을 때 돌아갈 화면(#216). 온보딩 경로면 null.
   const [interviewReturnTo, setInterviewReturnTo] = useState<ScreenId | null>(null);
   // 만다라트 화면이 볼 궁극목표 id(#220). 목표 화면에서 진입하면 채워지고, 직접 진입하면 null.
@@ -185,6 +188,9 @@ export function AppShell() {
     setScreen('intro');
     setTab('today');
     setInterviewSessionId(null);
+    setPlanGoalId(null);
+    setPlanAxisId(null);
+    setCalendarEditActionId(null);
     setPlannedMilestones(null);
     setInterviewReturnTo(null);
     setMandalaGoalId(null);
@@ -341,7 +347,7 @@ export function AppShell() {
 
   return (
     <NavigationContext.Provider
-      value={{ screen, tab, setScreen, setTab, user, onboardingState, isBootstrapping, weekOffset, setWeekOffset, interviewSessionId, setInterviewSessionId, plannedMilestones, setPlannedMilestones, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId, interviewGoalId, setInterviewGoalId, logout: handleLogout }}
+      value={{ screen, tab, setScreen, setTab, calendarEditActionId, setCalendarEditActionId, user, onboardingState, isBootstrapping, weekOffset, setWeekOffset, interviewSessionId, setInterviewSessionId, plannedMilestones, setPlannedMilestones, planGoalId, setPlanGoalId, planAxisId, setPlanAxisId, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId, interviewGoalId, setInterviewGoalId, logout: handleLogout }}
     >
       <ToastProvider>
         {/* 뷰포트에 맞는 트리 하나만 마운트(둘 다 마운트 후 CSS 로만 숨기면 데이터 페칭이 2배로 나감). */}

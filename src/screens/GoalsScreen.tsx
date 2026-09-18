@@ -12,6 +12,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { SkeletonBlock } from '../components/SkeletonBlock';
 import { ReinterviewSheet } from '../components/ReinterviewSheet';
 import { isPersistedGoalId } from '../lib/goalIdentity';
+import { GoalCompletionControl } from '../components/GoalCompletionControl';
 
 // Focus ≤ 3 / Maintain ≤ 5. Parked 는 한도 자유 (백엔드 _TIER_LIMITS 와 동일).
 const TIER_LIMIT: Record<GoalTier, number | null> = { focus: 3, maintain: 5, parked: null };
@@ -76,7 +77,17 @@ export function GoalsScreen() {
 
   useEffect(() => fetchGoals(), [fetchGoals]);
 
-  const count = (tier: GoalTier) => goals.filter((g) => g.goalTier === tier).length;
+  const count = (tier: GoalTier) => goals.filter((g) => g.goalTier === tier && g.status !== 'completed').length;
+  const [nodeBusy, setNodeBusy] = useState<string | null>(null);
+  const toggleMilestone = async (goalId: string, nodeId: string, completed: boolean) => {
+    if (nodeBusy) return;
+    setNodeBusy(nodeId); setError(null);
+    try {
+      const updated = await goalsApi.updateNode(goalId, nodeId, completed);
+      setDecomp((current) => current?.goalId === goalId ? { ...current, data: { ...current.data, nodes: current.data.nodes.map((node) => node.nodeId === nodeId ? updated : node) } } : current);
+    } catch (err) { setError(friendlyError(err, '단계 완료 상태를 저장하지 못했어요.')); }
+    finally { setNodeBusy(null); }
+  };
 
   // 궁극목표는 사용자당 1개. parked 그룹에 일반 목표와 섞여 오므로 isUltimate 로만 구분한다.
   const ultimateGoal = goals.find((g) => g.isUltimate) ?? null;
@@ -265,12 +276,12 @@ export function GoalsScreen() {
               <ReButton
                 variant={ultimateGoal ? 'ghost' : 'primary'}
                 size="sm"
-                onClick={() => { setMandalaGoalId(null); setScreen('ultimate-interview'); }}
+                onClick={() => { setMandalaGoalId(ultimateGoal?.goalId ?? null); setScreen(ultimateGoal ? 'mandala-draft' : 'ultimate-interview'); }}
                 // 이미 세워둔 궁극적 목표가 있으면 이 버튼은 "새로 세우기" 가 아니라
                 // "다시 세우기" 다. 무엇이 바뀌는지 밝히지 않으면 되돌리기 어려운
                 // 동작을 설명 없이 누르게 된다.
                 data-tour-help={ultimateGoal
-                  ? '인터뷰를 다시 해서 궁극적 목표를 새로 세우고, 만다라트 초안도 다시 만들어요.'
+                  ? '연결된 목표와 습관에 미칠 영향을 확인한 뒤, 기존 궁극적 목표의 만다라트 초안을 다시 만들어요.'
                   : '장기 목표를 만다라트로 펼쳐 하위 영역까지 정해요.'}
               >
                 {ultimateGoal ? '다시 세우기' : '궁극적 목표 세우기'}
@@ -309,17 +320,21 @@ export function GoalsScreen() {
                 return (
                   <GoalCard
                     key={g.goalId}
-                    title={g.title}
+                    title={g.status === 'completed' ? `${g.title} · 완료` : g.title}
                     tier={g.goalTier}
                     categoryLabel={categoryLabel(g.category)}
                     deadline={g.deadline}
                     priorityLevel={g.priorityLevel}
                     expanded={isExp}
                     onToggle={() => { setExpandedId(isExp ? null : g.goalId); setConfirmDeleteId(null); }}
-                    unplanned={g.hasPlan === false}
+                    unplanned={g.status !== 'completed' && g.hasPlan === false}
                   >
 
                     {/* 인라인 수정 폼 */}
+                    {(g.status === 'active' || g.status === 'completed') && <GoalCompletionControl
+                      goalId={g.goalId} title={g.title} completed={g.status === 'completed'}
+                      onChanged={() => { fetchGoals(); setDecomp(null); }}
+                    />}
                     {isEditing && edit && (
                       <>
                         <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="제목" style={inputStyle} />
@@ -355,7 +370,7 @@ export function GoalsScreen() {
                             상단의 "목표가 바뀌었어요 · 다시 인터뷰하기" 와는 **다른 질문**이다:
                             저건 "전체 판이 바뀌었다", 이건 "이 목표를 계획하고 싶다".
                             대상을 실어 보내므로 서버가 목표를 다시 묻지 않는다. */}
-                        {g.hasPlan === false && !g.isUltimate && (
+                        {g.hasPlan === false && g.status !== 'completed' && !g.isUltimate && (
                           <button
                             data-tour-help="이 목표의 계획을 세워요. 목표는 이미 정해졌으니 나머지만 몇 가지 물어봐요."
                             onClick={() => {
@@ -410,6 +425,10 @@ export function GoalsScreen() {
                                     <div key={n.nodeId} style={{ paddingLeft: n.depth * 12, fontSize: 12, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                       <span style={{ width: 4, height: 4, borderRadius: 9999, background: 'var(--brand)', flexShrink: 0 }} />
                                       {n.title}
+                                      {n.nodeType === 'milestone' && <label>
+                                        <input type="checkbox" checked={!!n.completedAt} disabled={nodeBusy != null}
+                                          onChange={(event) => void toggleMilestone(g.goalId, n.nodeId, event.target.checked)} />완료
+                                      </label>}
                                     </div>
                                   ))}
                                 </div>
