@@ -5,6 +5,7 @@ import type { InterviewOutcome, InterviewQuestion, InterviewSession, SlotCatalog
 import { SetupProgress } from '../components/SetupProgress';
 import { useNavigation } from '../contexts/NavigationContext';
 import { MaterialsResearch } from '../components/MaterialsResearch';
+import { openInterview, requestInterviewRestart } from '../lib/interviewSession';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateAnswerField, TimeRangeAnswerField, isValidRange, parseRange } from '../components/TypedAnswerField';
 import { useSpeechInput } from '../lib/useSpeechInput';
@@ -44,7 +45,7 @@ function omxStatus(clarity: number) {
 
 export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
   // 인터뷰 세션 id 를 전역에 올려, weekly-plan(S06) 에서 /plans/generate 가 쓸 수 있게 한다.
-  const { setInterviewSessionId, interviewGoalId, setPlanGoalId, setPlanAxisId } = useNavigation();
+  const { setInterviewSessionId, interviewGoalId, setPlanGoalId, setPlanAxisId, user } = useNavigation();
   useEffect(() => { setPlanGoalId(null); setPlanAxisId(null); }, [setPlanGoalId, setPlanAxisId]);
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -53,6 +54,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
   const [materialsSaved, setMaterialsSaved] = useState(false);
   const [materialsBusy, setMaterialsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openAttempt, setOpenAttempt] = useState(0);
   // 같은 슬롯이 연속 재질문되어(에이전트가 진전 못 시킴) 사용자가 갇힐 때 눈에 띄는 탈출 안내를 띄운다.
   const [stuckHint, setStuckHint] = useState(false);
   // slot-catalog: 필수 슬롯 수와 카테고리를 백엔드 카탈로그에서 가져온다.
@@ -109,82 +111,25 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
     };
   }, []);
 
-  // 세션 시작 — "항상 새 세션" 정책. 유저당 활성 세션 1개라는 백엔드의 의도된 제약
-  // (INTERVIEW_SESSION_EXISTS·409)에 맞춰, 재진입 시 기존 세션을 finish 하고 새로
-  // 시작한다(사용자 요청으로 도입 — 이어하기보다 새로 시작을 원함).
-  // AGENT_CONCURRENT_ACCESS(동시접근 락) 재시도는 원래 advisory-lock 누수 버그(#76,
-  // xact_lock 으로 수정 완료 확인됨) 때문에 넣은 완화책이지만, 여러 요청이 진짜
-  // 동시에 몰릴 때는 여전히 정상적으로 발생할 수 있어 짧은 재시도를 유지한다.
+  // 일반 재진입은 서버 상태를 복구하고, 명시적 새로 시작만 기존 세션을 종료한다.
   useEffect(() => {
     let cancelled = false;
-    const STORE_KEY = 'reaction.interviewSessionId';
     setIsTyping(true);
-
-    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-    const readStored = () =>
-      (typeof window !== 'undefined' && window.localStorage.getItem(STORE_KEY)) || null;
-
-    const applySession = (s: InterviewSession) => {
+    setError(null);
+    openInterview(interviewGoalId ?? null, user?.userId).then((s) => {
       if (cancelled) return;
-      if (typeof window !== 'undefined') window.localStorage.setItem(STORE_KEY, s.sessionId);
-      initialAmbiguity.current = s.ambiguityScore || REQUIRED_SLOTS_INIT;
+      initialAmbiguity.current = Math.max(REQUIRED_SLOTS_INIT, s.ambiguityScore);
       setSession(s);
       setInterviewSessionId(s.sessionId);
-      if (s.currentQuestion) {
-        setMessages([{ id: newMsgId('ai'), who: 'ai', text: s.currentQuestion.text }]);
-      }
-    };
-
-    // 항상 새 세션을 만든다. 막는 요인(기존 세션/일시 락)은 흡수하며 최대 6회 재시도.
-    const beginFresh = async (attempt = 0): Promise<InterviewSession> => {
-      try {
-        // 목표 지정 인터뷰(#442)면 그 목표를 실어 보낸다 — 서버가 `goals.list`·
-        // `goals.heaviest` 를 채워 **대상을 다시 묻지 않는다.**
-        return await interviewApi.start(undefined, interviewGoalId ?? undefined);
-      } catch (err) {
-        if (cancelled) throw err;
-        const code = err instanceof ApiError ? err.code : '';
-        // 이미 세션이 있으면 끝내고 다시 시작 → 새 세션 보장.
-        if (code === 'INTERVIEW_SESSION_EXISTS') {
-          const sid = readStored();
-          if (sid) {
-            await interviewApi.finish(sid).catch(() => {});
-            window.localStorage.removeItem(STORE_KEY);
-          }
-          if (attempt < 5) { await sleep(500); return beginFresh(attempt + 1); }
-          throw err;
-        }
-        // 일시적 에이전트 락 — 잠시 후 재시도(사용자에겐 노출하지 않음).
-        if (code === 'AGENT_CONCURRENT_ACCESS' && attempt < 5) {
-          await sleep(600 + attempt * 300);
-          return beginFresh(attempt + 1);
-        }
-        throw err;
-      }
-    };
-
-    // 진입 시 저장된 세션이 있으면 먼저 정리하고(항상 새로 시작) 새 세션을 만든다.
-    (async () => {
-      const sid = readStored();
-      if (sid) {
-        await interviewApi.finish(sid).catch(() => {});
-        window.localStorage.removeItem(STORE_KEY);
-      }
-      return beginFresh();
-    })()
-      .then(applySession)
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(friendlyError(err, '백엔드에 연결할 수 없어요. 서버가 켜져 있는지 확인해주세요.'));
-      })
-      .finally(() => {
-        if (!cancelled) setIsTyping(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      if (s.outcome) onOutcome?.(s.outcome);
+      setMessages(s.currentQuestion
+        ? [{ id: newMsgId('ai'), who: 'ai', text: s.currentQuestion.text }]
+        : [{ id: newMsgId('ai'), who: 'ai', text: '저장된 인터뷰를 불러왔어요. 다음 단계로 진행해 주세요.' }]);
+    }).catch((err: unknown) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : '인터뷰를 불러오지 못했어요. 다시 시도해 주세요.');
+    }).finally(() => { if (!cancelled) setIsTyping(false); });
+    return () => { cancelled = true; };
+  }, [openAttempt, interviewGoalId, user?.userId]);
 
   // catalog 가 로드되면 isRequired 카운트로 ambiguity 시작점을 보정.
   // 단, 세션이 이미 시작돼서 ambiguityScore 를 받은 뒤라면 그쪽이 우선.
@@ -441,6 +386,14 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
             <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)' }}>목표 파악 AI</div>
             <div style={{ fontSize: 11, color: 'var(--text-3)' }}>질문에 답하면 자동으로 목표를 분류해요</div>
           </div>
+          <button disabled={isTyping || materialsBusy} onClick={() => {
+            if (!window.confirm('인터뷰를 처음부터 새로 시작할까요? 저장된 답변 대신 새 답변으로 진행해요. 이미 만든 목표와 일정은 남아요.')) return;
+            speech.stop();
+            requestInterviewRestart();
+            setSession(null); setMessages([]); setInputText('');
+            setMaterialsSaved(false); setStuckHint(false); repeatRef.current = 0;
+            setOpenAttempt((value) => value + 1);
+          }}>새로 시작</button>
           <div style={{ height: 'var(--ctrl-xs)', padding: '0 8px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 9999, fontSize: 12, fontWeight: 700, color: 'var(--coral-700)', display: 'flex', alignItems: 'center' }}>
             {currentCategory ? (CATEGORY_LABEL[currentCategory] ?? '목표 파악') : '목표 파악'}
           </div>
@@ -466,9 +419,8 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
         {error && (
           <ErrorBanner
             action={
-              /* 인터뷰 시작/이어가기가 막혀도(예: 기존 세션 409) 온보딩을 진행할 수 있게 한다. */
-              <button onClick={onDone} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 12px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--surface-raised)', color: 'var(--coral-700)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                다음 단계로 넘어가기 <ArrowRight size={12} />
+              <button disabled={isTyping || materialsBusy} onClick={() => setOpenAttempt((value) => value + 1)} style={{ alignSelf: 'flex-start', height: 'var(--ctrl-sm)', padding: '0 12px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--surface-raised)', color: 'var(--coral-700)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                저장된 인터뷰 다시 불러오기
               </button>
             }
           >
