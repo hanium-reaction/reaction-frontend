@@ -142,6 +142,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   // 라이브 호출을 실제로 시도했으나 실패했는지 — 배너 문구를 정직하게 맞추는 용도.
   const [genFailed, setGenFailed] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [planErrorCode, setPlanErrorCode] = useState<string | null>(null);
   // 계획 분량(밀도) — 재생성 시 body.density 로 전달. ref 로 최신값을 읽어 generatePlan
   // 콜백의 deps 를 바꾸지 않는다(density 변경만으로 자동 재생성되지 않게).
   const [density, setDensity] = useState<PlanDensity>('standard');
@@ -192,6 +193,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     setGenerating(true);
     setGenFailed(false);
     setPlanError(null);
+    setPlanErrorCode(null);
     planIdRef.current = null;
     setUsingRealPlan(false);
     const minDelay = new Promise<void>((r) => setTimeout(r, 1400));
@@ -235,6 +237,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
             continue;
           }
           setGenFailed(true); // 네트워크/422(완료 인터뷰 없음)/재시도 소진 — 빈 상태 + 정직 배너
+          setPlanErrorCode(err instanceof ApiError ? err.code : null);
           setPlanError(err instanceof ApiError && (err.status === 404 || err.status === 422)
             ? err.message : '계획을 생성하지 못했어요. 잠시 후 다시 시도해 주세요.');
           return;
@@ -570,6 +573,15 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
           <p>계획을 생성하지 못했어요. 다시 생성하거나 목표 파악(인터뷰)을 진행해 주세요. 서버에서 초안을 받기 전에는 승인할 수 없어요.</p>
         )}
         {planError && <div role="alert">{planError}</div>}
+        {planAxisId && planError && planErrorCode === 'GOAL_TIER_LIMIT_EXCEEDED' && (
+          <button onClick={() => { setPlanAxisId(null); setScreen('goals'); }}>목표 화면에서 Focus·Maintain 개수 정리하기</button>
+        )}
+        {planAxisId && planError && planErrorCode === 'COMMON_VALIDATION_ERROR' && (
+          <div><p>축 선택과 활동 시간대를 확인해 주세요. 시간 정보가 없다면 설정하거나 계획 인터뷰를 진행할 수 있어요.</p>
+            <button onClick={() => { setPlanAxisId(null); setScreen('settings'); }}>설정에서 활동 시간대 확인</button>
+            <button onClick={handleRestartInterview}>계획 인터뷰 진행</button>
+          </div>
+        )}
         {usingRealPlan && blocks.length === 0 && (
           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
             아직 계획 블록이 없어요. 아래 "블록 추가"로 채워보세요.

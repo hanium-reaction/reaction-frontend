@@ -7,7 +7,7 @@ import type { components } from '../types/openapi';
 
 vi.mock('../contexts/NavigationContext', () => ({ useNavigation: vi.fn() }));
 vi.mock('../components/WeekGrid', () => ({ WeekGrid: () => <div>시간표</div>, scrollColIntoView: vi.fn() }));
-vi.mock('../lib/api', async (original) => { const api = await original<typeof import('../lib/api')>(); return { ...api, plansApi: { ...api.plansApi, weekly: vi.fn(), generate: vi.fn(), approve: vi.fn() } }; });
+vi.mock('../lib/api', async (original) => { const api = await original<typeof import('../lib/api')>(); return { ...api, plansApi: { ...api.plansApi, weekly: vi.fn(), generate: vi.fn(), approve: vi.fn(), mandalaNextCycle: vi.fn() } }; });
 const draft = { aiSource: 'rule' as const, isDraft: true, planId: 'plan-b', targetDate: '2026-10-01', horizon: null, goalNodes: [], actionItems: [], generatedAt: '', blocks: [{ title: '목표 B 실행', start: '2026-09-21T09:00:00+09:00', end: '2026-09-21T09:30:00+09:00', category: 'study', origin: 'goal' as const, originId: 'b' }] } satisfies components['schemas']['FirstPlanResponse'];
 describe('계획 생성·승인 계약 (#340 #285)', () => {
   const nav = { interviewSessionId: null, plannedMilestones: null, planGoalId: 'goal-b', planAxisId: null, setScreen: vi.fn(), setPlanGoalId: vi.fn(), setPlanAxisId: vi.fn() };
@@ -19,6 +19,19 @@ describe('계획 생성·승인 계약 (#340 #285)', () => {
     vi.mocked(plansApi.generate).mockResolvedValue(draft);
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  it.each([
+    ['GOAL_TIER_LIMIT_EXCEEDED', '목표 화면에서 Focus·Maintain 개수 정리하기', 'goals'],
+    ['COMMON_VALIDATION_ERROR', '설정에서 활동 시간대 확인', 'settings'],
+  ])('축 계획의 %s 오류에 필요한 화면으로 안내한다', async (code, label, target) => {
+    vi.mocked(useNavigation).mockReturnValue({ ...nav, planGoalId: null, planAxisId: 'axis-a' } as unknown as ReturnType<typeof useNavigation>);
+    vi.mocked(plansApi.mandalaNextCycle).mockRejectedValue(new ApiError(code, '입력을 확인하세요', 422));
+    render(<WeeklyPlanGenerationScreen onContinue={vi.fn()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    fireEvent.click(screen.getByText(label));
+    expect(nav.setScreen).toHaveBeenCalledWith(target);
+    expect(plansApi.generate).not.toHaveBeenCalled();
+    expect(plansApi.mandalaNextCycle).toHaveBeenCalledTimes(1);
+  });
   it.each([409, 422, 503])('승인 %s 실패 시 성공 이동 없이 동일 키로 재시도한다', async (status) => {
     vi.mocked(plansApi.approve).mockRejectedValueOnce(new ApiError('FAIL', '승인 실패', status)).mockResolvedValueOnce({ planId: 'plan-b' } as Awaited<ReturnType<typeof plansApi.approve>>);
     const done = vi.fn(); render(<WeeklyPlanGenerationScreen onContinue={done} />);
