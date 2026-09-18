@@ -140,6 +140,8 @@ function actionStatusToTaskStatus(s: string): TaskStatus {
 // AgendaCard 에는 예약시각/이월/실패사유 필드가 없다 (estimatedMinutes·category 만 사용).
 function actionToTask(a: AgendaCard): Task {
   return {
+    calendarConflict: a.calendarConflict,
+    missedCheckIn: a.missedCheckIn,
     id: a.actionId,
     title: a.title,
     status: actionStatusToTaskStatus(a.status),
@@ -251,7 +253,8 @@ function startCountdownLabel(scheduledAt: string, now: Date): string {
 }
 
 export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onPartial, onFail, onOpenRecovery, onEvening, onAgendaLoaded, onUncheckedChange }: MergedTodayScreenProps) {
-  const { user } = useNavigation();
+  const { user, setScreen, setTab, setWeekOffset, setCalendarEditActionId } = useNavigation();
+  const [calendarFailed, setCalendarFailed] = useState(false);
   const userName = user?.name ?? '친구';
 
   // 취소를 누른 카드는 서버 응답을 기다리지 않고 즉시 목록에서 뺀다. 되돌리면 돌아온다.
@@ -275,7 +278,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   // 오늘 블록의 예약 시각·소요와 원본 주간 계획. agenda 와 주간 계획을 함께 settle한 뒤
   // 빈 agenda fallback까지 한 번에 결정해, 빈 상태가 잠깐 보였다가 카드로 바뀌는 것을 막는다.
   const [blockInfo, setBlockInfo] = useState<Map<string, { time: string; durMin: number; startAt: string; goalId?: string | null }>>(new Map());
-  const [weeklyPlan, setWeeklyPlan] = useState<WeeklyPlanResponse | null>(null);
+  const [agendaRefresh, setAgendaRefresh] = useState(0);
 
   // /today/agenda 와 이번 주 계획을 함께 읽는다. agenda 카드가 있으면 그것이 권위이고,
   // 비어 있을 때만 주간 계획의 오늘 블록을 fallback으로 사용한다. 따라서 같은 actionId가
@@ -289,11 +292,11 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
 
         const plan = planResult.status === 'fulfilled' ? planResult.value : null;
         const todayBlocks = plan ? todayBlockIndex(plan, today) : new Map();
-        setWeeklyPlan(plan);
         setBlockInfo(todayBlocks);
 
         if (agendaResult.status === 'rejected') return;
         const agenda = agendaResult.value;
+        setCalendarFailed(agenda.calendar?.status === 'failed');
         setUsingRealAgenda(true);
         setFixedSchedules(agenda.fixedSchedules ?? []);
         setBriefHeadline(agenda.brief?.headline ?? null);
@@ -312,7 +315,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
       },
     ).finally(() => { if (!cancelled) setAgendaLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [agendaRefresh]);
 
   const hasMorningBrief = !!briefHeadline || briefAdjustmentHints.length > 0 || !!briefBigRockId;
   const briefSeenKey = `reaction.morningBriefSeen.${localDateStr(new Date())}`;
@@ -350,12 +353,12 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
     return () => { cancelled = true; };
   }, []);
 
-  // 블록 종료 +20분 미체크 인앱 넛지(#224 T1). 시간이 지나는 것만으로도 조건이 바뀌므로
-  // 1분마다 재평가한다 — 화면을 새로고침해야만 뜨면 "앱을 열어보게" 만드는 목적에 안 맞는다.
-  const [nudgeNow, setNudgeNow] = useState(() => new Date());
+  // 미체크 여부는 서버에서 다시 읽는다. 숨긴 탭에서는 폴링하지 않는다.
   useEffect(() => {
-    const id = setInterval(() => setNudgeNow(new Date()), 60_000);
-    return () => clearInterval(id);
+    const refresh = () => { if (!document.hidden) setAgendaRefresh((value) => value + 1); };
+    const id = setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', refresh); };
   }, []);
   // 체크인 목록 계산은 1분 주기로 유지하고, 화면의 카운트다운만 가볍게 매초 갱신한다.
   const [countdownNow, setCountdownNow] = useState(() => new Date());
@@ -367,8 +370,8 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   // 재계산할 이유가 없다 — 즉시 화면에서 빼려고 이 카운터를 dep 에 끼워 강제로 재실행한다.
   const [nudgeDismissTick, setNudgeDismissTick] = useState(0);
   const uncheckedBlocks = useMemo(
-    () => filterDismissedBlocks(findUncheckedBlocks(tasks, weeklyPlan, localDateStr(nudgeNow), nudgeNow)),
-    [tasks, weeklyPlan, nudgeNow, nudgeDismissTick],
+    () => filterDismissedBlocks(findUncheckedBlocks(tasks)),
+    [tasks, nudgeDismissTick],
   );
   useEffect(() => { onUncheckedChange?.(uncheckedBlocks.length); }, [uncheckedBlocks.length, onUncheckedChange]);
   const dismissNudge = () => {
@@ -658,6 +661,11 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
         />
       )}
       <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '12px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {calendarFailed && <p role="status">캘린더를 확인하지 못했어요. 일정 겹침 여부는 다음 조회에서 다시 확인해요.</p>}
+        {!calendarFailed && tasks.filter((task) => task.calendarConflict).map((task) => <button key={task.id}
+          onClick={() => { setCalendarEditActionId(task.id); setWeekOffset(0); setTab('weekly'); setScreen('weekly'); }}>
+          {task.title} · 캘린더 일정과 겹쳐요 — 주간에서 시간 옮기기
+        </button>)}
         {/* Header — 한 줄로 압축. 열품타식 미니멀. */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
@@ -682,7 +690,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           </div>
         </div>
 
-        {/* 블록 종료 +20분 미체크 인앱 넛지(#224 T1) — 푸시가 막혀 대체된 것이라 앱을 열었을
+        {/* 서버 missedCheckIn 인앱 넛지(#341) — 앱을 열었을
             때만 보인다. 닫으면(X) 같은 블록은 localStorage 로 다시 안 뜬다(반복 노출 방지). */}
         {!agendaLoading && uncheckedBlocks.length > 0 && (
           <div

@@ -4,6 +4,8 @@ import type { MilestoneDraft, OnboardingState, UserProfile } from '../types/api'
 
 export interface NavigationContextType {
   screen: ScreenId;
+  calendarEditActionId: string | null;
+  setCalendarEditActionId: (id: string | null) => void;
   tab: TabId;
   setScreen: (s: ScreenId) => void;
   setTab: (t: TabId) => void;
@@ -24,6 +26,10 @@ export interface NavigationContextType {
   // 사용자가 확인·편집해 확정한 마일스톤(Phase 2). weekly-plan 의 /plans/generate 가
   // milestones 로 넘겨 그 구조대로 계획을 세운다. 마일스톤 없이 자동 생성이면 null.
   plannedMilestones: MilestoneDraft[] | null;
+  planGoalId: string | null;
+  planAxisId: string | null;
+  setPlanAxisId: (id: string | null) => void;
+  setPlanGoalId: (id: string | null) => void;
   setPlannedMilestones: (m: MilestoneDraft[] | null) => void;
   // 온보딩이 아니라 앱 사용 중에 딥 인터뷰로 들어왔을 때 끝나고 돌아갈 화면(#216).
   // null 이면 기존 온보딩 체인(goal-intake → goal-classify) 그대로다.
@@ -46,6 +52,8 @@ export interface NavigationContextType {
 
 export const NavigationContext = createContext<NavigationContextType>({
   screen: 'intro',
+  calendarEditActionId: null,
+  setCalendarEditActionId: () => {},
   tab: 'today',
   setScreen: () => {},
   setTab: () => {},
@@ -57,6 +65,10 @@ export const NavigationContext = createContext<NavigationContextType>({
   interviewSessionId: null,
   setInterviewSessionId: () => {},
   plannedMilestones: null,
+  planGoalId: null,
+  planAxisId: null,
+  setPlanAxisId: () => {},
+  setPlanGoalId: () => {},
   setPlannedMilestones: () => {},
   interviewReturnTo: null,
   setInterviewReturnTo: () => {},

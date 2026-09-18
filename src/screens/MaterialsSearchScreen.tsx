@@ -6,6 +6,7 @@ import type { MaterialsSearchResponse } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ReButton } from '../components/ReButton';
 import { SkeletonBlock } from '../components/SkeletonBlock';
+import { MaterialsResearch } from '../components/MaterialsResearch';
 
 const STATUS_MESSAGE: Record<Exclude<MaterialsSearchResponse['status'], 'found'>, string> = {
   not_found: '맞는 자료를 찾지 못했어요. 검색어를 조금 더 구체적으로 바꿔보세요.',
@@ -54,7 +55,6 @@ export function MaterialsSearchScreen() {
     catch { setError('자료를 저장하지 못했어요. 다시 시도해 주세요.'); setBusy(false); }
   };
 
-  const found = result?.status === 'found';
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '14px 18px 32px', background: 'var(--surface-ground)' }}>
       <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -67,6 +67,7 @@ export function MaterialsSearchScreen() {
         </div>
 
         <section style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-sm, 0 2px 10px rgba(0,0,0,.04))' }}>
+          <MaterialsResearch key={interviewSessionId} interviewSessionId={interviewSessionId} />
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', fontWeight: 800, marginBottom: 10 }}><MagnifyingGlass size={18} /> 1. 검색어 확인</div>
           {loadingQuery ? <SkeletonBlock count={1} height={44} radius={10} /> : <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
             <input aria-label="자료 검색어" value={query} disabled={loadingQuery || busy} onChange={(e) => { setQuery(e.target.value); setResult(null); }} maxLength={200}
@@ -77,14 +78,14 @@ export function MaterialsSearchScreen() {
         </section>
 
         {result && result.status !== 'found' && <div role="status" style={{ padding: 14, borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-300)', color: 'var(--text-2)', fontSize: 13, lineHeight: 1.6 }}>{STATUS_MESSAGE[result.status]}</div>}
-        {found && <section style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 16, padding: 16 }}>
+        <section style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 16, padding: 16 }}>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', fontWeight: 800, marginBottom: 6 }}><PencilSimple size={18} color="var(--brand)" /> 2. 찾은 내용 확인·편집</div>
           <p style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.5 }}>내용이 다르면 고치거나 지워도 돼요. 아직 계획에는 저장되지 않았습니다.</p>
           <textarea aria-label="확정할 자료 내용" value={text} onChange={(e) => setText(e.target.value)} maxLength={20000} rows={12} style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', border: '1px solid var(--sand-300)', borderRadius: 10, padding: 12, background: 'var(--surface-ground)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.6 }} />
           <div style={{ textAlign: 'right', color: 'var(--text-3)', fontSize: 11 }}>{text.length.toLocaleString()} / 20,000자</div>
-          {!!result.sources?.length && <div style={{ marginTop: 10, fontSize: 12 }}><b>참고 출처</b>{result.sources.map((s) => <div key={s.uri}><a href={s.uri} target="_blank" rel="noreferrer">{s.title || s.uri}</a></div>)}</div>}
+          {!!result?.sources?.length && <div style={{ marginTop: 10, fontSize: 12 }}><b>참고 출처</b>{result.sources.map((s) => <div key={s.uri}><a href={s.uri} target="_blank" rel="noreferrer">{s.title || s.uri}</a></div>)}</div>}
           <ReButton onClick={confirm} disabled={busy || !text.trim()} full style={{ marginTop: 14 }}><Check size={16} /> 3. 이 자료를 계획에 반영</ReButton>
-        </section>}
+        </section>
 
         {error && <ErrorBanner>{error}</ErrorBanner>}
         <div style={{ padding: '12px 14px', borderRadius: 14, background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', display: 'flex', gap: 9 }}><Sparkle size={16} weight="fill" color="var(--brand)" style={{ flexShrink: 0, marginTop: 1 }} /><div style={{ color: 'var(--coral-700)', fontSize: 12, lineHeight: 1.55 }}><b>선택 단계예요.</b> 자료를 넣지 않아도 인터뷰와 마일스톤을 바탕으로 계획을 만들 수 있어요.</div></div>

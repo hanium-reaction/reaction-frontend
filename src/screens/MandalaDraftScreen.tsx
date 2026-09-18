@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowClockwise, ArrowRight, LockSimple, Sparkle, Trash, WarningCircle } from '@phosphor-icons/react';
-import { friendlyError, plansApi } from '../lib/api';
+import { ApiError, friendlyError, goalsApi, plansApi } from '../lib/api';
+import type { components } from '../types/openapi';
 import { useToast } from '../contexts/ToastContext';
 import {
   AXIS_COUNT,
@@ -48,10 +49,30 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
   const [aiSource, setAiSource] = useState<'llm' | 'rule'>('llm');
   const [busy, setBusy] = useState<null | 'load' | 'generate' | 'regen' | 'approve' | 'discard'>('load');
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
+  const draftError = (err: unknown, fallback: string) => {
+    const isExpired = err instanceof ApiError && err.status === 410;
+    setExpired(isExpired);
+    setError(isExpired ? '초안이 만료됐어요. 다시 만들기를 눌러 새 초안을 받아 주세요.' : friendlyError(err, fallback));
+  };
   const [axis, setAxis] = useState<number | null>(null);
   const [selected, setSelected] = useState<MandalaSlot | null>(null);
   const [hint, setHint] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [preflight, setPreflight] = useState<components['schemas']['MandalaRebuildPreflightResponse'] | null>(null);
+  const [readyToBuild, setReadyToBuild] = useState(false);
+  const [preflightRetry, setPreflightRetry] = useState(0);
+  const [approvalResult, setApprovalResult] = useState<{ goalId: string; carriedOver: components['schemas']['MandalaCarryOverSummary'] } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    goalsApi.rebuildPreflight(goalId).then((result) => {
+      if (cancelled) return;
+      setPreflight(result);
+      if (!result.hasTree) setReadyToBuild(true);
+    }).catch((err) => { if (!cancelled) setError(friendlyError(err, '다시 세우기 영향을 확인하지 못했어요.')); });
+    return () => { cancelled = true; };
+  }, [goalId, preflightRetry]);
 
   // ── Stage A (U2) — 8축 ──
   const loadSubgoals = useCallback(async () => {
@@ -77,6 +98,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
   // 진입 시: 이 목표로 만들어 둔 초안이 있으면 U4 로 스냅샷만 다시 받아 이어서 본다
   // (LLM 재호출 0회). 만료(410)·없음(404)이면 Stage A 부터 새로 시작한다.
   useEffect(() => {
+    if (!readyToBuild) return;
     let cancelled = false;
     const key = `reaction.mandalaPlanId.${goalId}`;
     const saved = typeof window === 'undefined' ? null : window.localStorage.getItem(key);
@@ -99,8 +121,13 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
         setAxis(0);
         setBusy(null);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
+        if (!(err instanceof ApiError) || (err.status !== 410 && err.status !== 404)) {
+          setError(friendlyError(err, '저장된 초안을 불러오지 못했어요. 편집 내용은 유지했어요.'));
+          setBusy(null);
+          return;
+        }
         // 만료·삭제된 초안 — 흔적을 지우고 처음부터.
         window.localStorage.removeItem(key);
         clearLocalEdit(saved);
@@ -109,7 +136,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
     return () => {
       cancelled = true;
     };
-  }, [goalId, loadSubgoals]);
+  }, [goalId, loadSubgoals, readyToBuild]);
 
   // 승인 전 편집본은 서버에 없다 — planId 가 생기는 순간부터 로컬에 계속 붙여둔다.
   useEffect(() => {
@@ -182,7 +209,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
       setHint('');
       toast.success('이 축의 8칸을 다시 만들었어요.');
     } catch (err: unknown) {
-      setError(friendlyError(err, '이 축을 다시 만들지 못했어요.'));
+      draftError(err, '이 축을 다시 만들지 못했어요.');
     } finally {
       setBusy(null);
     }
@@ -202,9 +229,10 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
       clearLocalEdit(planId);
       forgetPlanId(goalId);
       toast.success(`${res.activated}칸을 확정했어요.`);
-      onApproved(res.goalId);
+      if (res.carriedOver) setApprovalResult({ goalId: res.goalId, carriedOver: res.carriedOver });
+      else onApproved(res.goalId);
     } catch (err: unknown) {
-      setError(friendlyError(err, '만다라트를 확정하지 못했어요.'));
+      draftError(err, '만다라트를 확정하지 못했어요.');
     } finally {
       setBusy(null);
     }
@@ -258,6 +286,27 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
   const filledAxes = subgoals.filter((s) => s.title.trim() !== '').length;
   const filledCells = cells.filter((c) => c.title.trim() !== '').length;
 
+  if (approvalResult) return <div style={{ padding: 18, overflowY: 'auto' }}>
+    <h2>만다라트를 확정했어요</h2>
+    <p>이어진 완료 표시 {approvalResult.carriedOver.completedCells}개 · 승격 축 {approvalResult.carriedOver.promotedAxes}개 · 습관 연결 {approvalResult.carriedOver.linkedHabits}개</p>
+    {approvalResult.carriedOver.droppedPromotedAxes?.map((name) => <p key={name}>{name}: 축 연결이 풀렸어요. 목표는 그대로 남아 있어요.</p>)}
+    {approvalResult.carriedOver.droppedLinkedHabits?.map((name) => <p key={name}>{name}: 칸 연결이 풀렸어요. 습관은 그대로 남아 있어요.</p>)}
+    <ReButton onClick={() => onApproved(approvalResult.goalId)}>만다라트 보기</ReButton>
+  </div>;
+  if (!readyToBuild) return <div style={{ padding: 18, overflowY: 'auto' }}>
+    <h2>다시 세우기 전 확인</h2>
+    {!preflight && !error && <p role="status">기존 만다라트에 미치는 영향을 확인하고 있어요…</p>}
+    {error && <><p role="alert">{error}</p><ReButton onClick={() => setPreflightRetry((value) => value + 1)}>다시 시도</ReButton></>}
+    {preflight && <>
+      <p>전체 {preflight.totalCells}칸 · 완료 {preflight.completedCells}칸 · 실행 항목 {preflight.liveActionItems}개</p>
+      {preflight.warnings.map((warning, i) => <p key={i}>{warning}</p>)}
+      {preflight.promotedAxes.map((item) => <p key={item.goalId}>승격한 축: {item.axisTitle} → {item.goalTitle}</p>)}
+      {preflight.linkedHabits.map((item) => <p key={item.habitId}>연결한 습관: {item.cellTitle} → {item.habitTitle}</p>)}
+      <ReButton onClick={() => setReadyToBuild(true)}>확인하고 초안 만들기</ReButton>
+    </>}
+    <ReButton variant="ghost" onClick={onLeave}>취소</ReButton>
+  </div>;
+
   if (busy === 'load') {
     return (
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -273,7 +322,11 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
     <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {error && (
-          <ErrorBanner action={<ReButton variant="ghost" size="sm" onClick={() => (stage === 'axes' ? void loadSubgoals() : setError(null))}>다시 시도</ReButton>}>
+          <ErrorBanner action={<ReButton variant="ghost" size="sm" disabled={busy !== null} onClick={() => {
+            if (expired) { setExpired(false); void loadSubgoals(); }
+            else if (stage === 'axes') { setReadyToBuild(false); setPreflight(null); setPreflightRetry((value) => value + 1); }
+            else setError(null);
+          }}>{expired ? '다시 만들기' : '다시 시도'}</ReButton>}>
             {error}
           </ErrorBanner>
         )}

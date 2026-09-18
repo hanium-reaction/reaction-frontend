@@ -4,10 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { Sparkle, ArrowRight } from '@phosphor-icons/react';
 import { friendlyError, goalsApi, reviewsApi } from '../lib/api';
 import { formatDurationMinutes, localDateStr } from '../lib/dates';
-import { DemoNotice } from '../components/DemoNotice';
 import { useNavigation } from '../contexts/NavigationContext';
 import type { WeeklyReviewResponse, HabitPenaltyCandidate, MandalaWeeklySummary, NextCycleProposal, StaleAxisProposal } from '../types/api';
 import { categoryLabel, isKnownCategory } from '../data';
+import { GoalCompletionControl } from '../components/GoalCompletionControl';
 
 // 이번 주 월요일 (YYYY-MM-DD)
 function thisMonday(): string {
@@ -51,11 +51,13 @@ function toPct(v: number | null | undefined): number | null {
 }
 
 export function WeeklyReviewScreenV2() {
-  const { setScreen, setTab, setWeekOffset, setInterviewSessionId, setPlannedMilestones } = useNavigation();
+  const { setScreen, setTab, setWeekOffset, setInterviewSessionId, setPlannedMilestones, setPlanGoalId, setPlanAxisId } = useNavigation();
   // 백엔드 실제 주간 리뷰. 들어오면 hero 점수/복구율/한줄요약을 실데이터로 덮는다.
   const [real, setReal] = useState<WeeklyReviewResponse | null>(null);
   // 주간 리뷰 fetch가 끝날 때까지 true. 끝나기 전엔 더미 대신 스켈레톤을 보여 플래시를 막는다.
   const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   // Habit Penalty 후보(3주 연속 미달) — 있으면 재설계 제안 카드로 표시(S22).
   const [penalties, setPenalties] = useState<HabitPenaltyCandidate[]>([]);
   const [proposalBusy, setProposalBusy] = useState<string | null>(null);
@@ -66,9 +68,10 @@ export function WeeklyReviewScreenV2() {
   };
   const dismissPenalty = (habitId: string) => setPenalties((cur) => cur.filter((c) => c.habitId !== habitId));
 
-  const openNextCycle = (_proposal: NextCycleProposal) => {
-    // 계약상 다음 주기는 빈 바디 generate로 최근 완료 인터뷰를 재투영한다. 예전 온보딩
-    // session/milestone이 남아 있으면 빈 바디가 아니게 되므로 명시적으로 비운다.
+  const openNextCycle = (proposal: NextCycleProposal) => {
+    // 선택한 목표만 다음 주기로 이어간다. 이전 인터뷰의 마일스톤은 섞지 않는다.
+    setPlanGoalId(proposal.goalId);
+    setPlanAxisId(null);
     // 생성 즉시 승인하지 않고 기존 초안 확인 화면으로 보내 사용자가 블록을 검토하게 한다.
     setInterviewSessionId(null);
     setPlannedMilestones(null);
@@ -95,20 +98,22 @@ export function WeeklyReviewScreenV2() {
     setScreen('weekly');
   };
 
-  // /reviews/weekly(#21 구현됨) 시도. 실데이터 오면 일부 지표를 덮고, 없으면 더미 유지.
+  // 실패와 활동이 없는 정상 응답을 구분한다. 오류 안내는 닫거나 숨길 수 없다.
   useEffect(() => {
     let cancelled = false;
     setReviewLoading(true);
+    setReviewError(null);
+    setReal(null);
     reviewsApi.weekly(thisMonday()).then(
       (res) => { if (!cancelled) setReal(res); },
-      () => { /* 미구현/오류 — 더미 유지 */ },
+      (err) => { if (!cancelled) setReviewError(friendlyError(err, '주간 리뷰를 불러오지 못했어요.')); },
     ).finally(() => { if (!cancelled) setReviewLoading(false); });
     reviewsApi.habitPenalty().then(
       (res) => { if (!cancelled) setPenalties(res.candidates ?? []); },
       () => { /* 미구현/오류 — 미표시 */ },
     );
     return () => { cancelled = true; };
-  }, []);
+  }, [retry]);
 
   // 성공 응답이면(필드가 모두 null이어도) 연동된 것으로 본다. 실패(catch)일 때만 false.
   const usingReal = !!real;
@@ -175,9 +180,11 @@ export function WeeklyReviewScreenV2() {
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 3 }}>{weekLabel}</div>
           <h1 style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', margin: '0 0 10px' }}>{headline}</h1>
           {reviewLoading ? null : !usingReal ? (
-            <DemoNotice storageKey="weekly-review">
-              주간 리뷰를 서버에서 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
-            </DemoNotice>
+            <div role="alert">
+              <p>주간 리뷰를 불러오지 못했어요.</p>
+              {reviewError && reviewError !== '주간 리뷰를 불러오지 못했어요.' && <p>{reviewError}</p>}
+              <button onClick={() => setRetry((value) => value + 1)}>다시 시도</button>
+            </div>
           ) : connectedEmpty ? (
             <div style={{ border: '1px dashed var(--sand-200)', borderRadius: 12, padding: '12px 14px', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
               이번 주는 아직 집계할 활동이 없어요. 주간 계획을 실행하면 리뷰가 채워져요.
@@ -224,6 +231,16 @@ export function WeeklyReviewScreenV2() {
             </button>
           </div>
         ))}
+
+        {(real?.goalCompletionProposals ?? []).map((proposal) => <section key={proposal.goalId}>
+          <h2 style={{ fontSize: 16 }}>{proposal.goalTitle} · 목표를 다 이뤘나요?</h2>
+          <GoalCompletionControl goalId={proposal.goalId} title={proposal.goalTitle} completed={false}
+            onChanged={() => setRetry((value) => value + 1)} />
+        </section>)}
+        {!!real?.topFailureContexts?.length && <section>
+          <h2 style={{ fontSize: 16 }}>최근 28일 자주 막힌 이유</h2>
+          {real.topFailureContexts.map((context) => <p key={context.tagCode}>{context.labelKo} · {context.count}회 ({Math.round(context.share * 100)}%)</p>)}
+        </section>}
 
         {(real?.staleAxisProposals ?? []).map((proposal) => (
           <StaleAxisCard key={proposal.axisId} proposal={proposal} busy={proposalBusy === proposal.axisId} onSave={renameStaleAxis} />

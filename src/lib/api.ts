@@ -2,6 +2,7 @@
 // 응답·에러·인증·Idempotency 규약은 docs/api-contract.md v0.7 의 §1 을 따른다.
 
 import { Capacitor } from '@capacitor/core';
+import type { components } from '../types/openapi';
 import {
   clearSession,
   getAccessToken,
@@ -29,6 +30,7 @@ import type {
   FirstPlanApproveResponse,
   FirstPlanGenerateRequest,
   FirstPlanResponse,
+  PlanDensity,
   MilestoneListResponse,
   MaterialsQueryResponse,
   MaterialsSearchResponse,
@@ -435,6 +437,11 @@ export const interviewApi = {
 
 // ── Goals (S03·S26) ───────────────────────────────────────────
 export const goalsApi = {
+  rebuildPreflight: (goalId: string) => request<components['schemas']['MandalaRebuildPreflightResponse']>(`/goals/${goalId}/mandala/rebuild-preflight`),
+  complete: (goalId: string, completed: boolean) =>
+    request<ApiGoal>(`/goals/${goalId}/complete`, { method: 'POST', body: { completed } }),
+  updateNode: (goalId: string, nodeId: string, completed: boolean) =>
+    request<import('../types/api').GoalNode>(`/goals/${goalId}/nodes/${nodeId}`, { method: 'PATCH', body: { completed } }),
   list: () => request<GoalsByTier>('/goals'),
 
   create: (body: GoalCreateRequest) =>
@@ -517,6 +524,9 @@ export const fixedSchedulesApi = {
 
 // ── Calendar (S04) ────────────────────────────────────────────
 export const calendarApi = {
+  // 연결 상태. 연결이 없으면 404 가 아니라 connected=false, 서버 설정 전이면 501.
+  status: () => request<CalendarConnection>('/calendar/connect'),
+
   connect: (code: string) =>
     request<CalendarConnection>('/calendar/connect', {
       method: 'POST',
@@ -653,6 +663,12 @@ export const todayApi = {
 
 // ── Plans (S06·S14·S15·S16) — generate/get/approve 는 백엔드 #18 구현됨 ──
 export const plansApi = {
+  mandalaNextCycle: (nodeId: string, density: PlanDensity) => request<components['schemas']['MandalaNextCycleResponse']>('/plans/mandala/next-cycle', { method: 'POST', body: { nodeId, density, useCellsAsMilestones: true } }),
+  studyMethod: (interviewSessionId?: string | null) => request<components['schemas']['StudyMethodResponse']>('/plans/materials/study-method', { method: 'POST', body: { interviewSessionId } }),
+  materialsCatalog: (body: components['schemas']['MaterialsCatalogRequest']) => request<components['schemas']['MaterialsCatalogResponse']>('/plans/materials/catalog', { method: 'POST', body }),
+  bookDetail: (isbn13: string) => request<components['schemas']['BookDetailResponse']>('/plans/materials/book-detail', { method: 'POST', body: { isbn13 } }),
+  videoDetail: (playlistId: string) => request<components['schemas']['VideoDetailResponse']>('/plans/materials/video-detail', { method: 'POST', body: { playlistId } }),
+  materialsSpecConfirm: (body: components['schemas']['MaterialsSpecConfirmRequest']) => request<components['schemas']['MaterialsSpecConfirmResponse']>('/plans/materials/spec-confirm', { method: 'POST', body }),
   materialsQuery: (interviewSessionId?: string | null) =>
     request<MaterialsQueryResponse>('/plans/materials/search-query', {
       method: 'POST', body: { interviewSessionId: interviewSessionId ?? null },
@@ -834,6 +850,7 @@ export const policySnapshotApi = {
 
 // ── Settings / Privacy (S23·S28) — 백엔드 501 ─────────────────
 export const settingsApi = {
+  deleteAccount: (confirmationToken?: string) => request<components['schemas']['DeleteAccountResponse']>('/settings/delete-account', { method: 'POST', body: { confirmationToken } }),
   get: () => request<UserSettings>('/settings'),
 
   updateToneMode: (body: ToneModeUpdateRequest) =>

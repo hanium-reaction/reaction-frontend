@@ -3,7 +3,6 @@ import { Clock, Lightbulb, DotsThreeOutline } from '@phosphor-icons/react';
 import { DEFAULT_GOAL_CATEGORY, categoryLabel, goalColor } from '../data';
 import { SetupProgress } from '../components/SetupProgress';
 import { AiDraftCard } from '../components/AiDraftCard';
-import { DemoNotice } from '../components/DemoNotice';
 import { BlockEditSheet } from '../components/BlockEditSheet';
 import { PlanOptionsSheet } from '../components/PlanOptionsSheet';
 import { WeekGrid, scrollColIntoView, type WeekGridBlock } from '../components/WeekGrid';
@@ -142,6 +141,8 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   const [usingRealPlan, setUsingRealPlan] = useState(false);
   // 라이브 호출을 실제로 시도했으나 실패했는지 — 배너 문구를 정직하게 맞추는 용도.
   const [genFailed, setGenFailed] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [planErrorCode, setPlanErrorCode] = useState<string | null>(null);
   // 계획 분량(밀도) — 재생성 시 body.density 로 전달. ref 로 최신값을 읽어 generatePlan
   // 콜백의 deps 를 바꾸지 않는다(density 변경만으로 자동 재생성되지 않게).
   const [density, setDensity] = useState<PlanDensity>('standard');
@@ -177,11 +178,11 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   // POST /plans/generate 가 빈 본문이면 "최근 정상 종료 인터뷰"로 자동 복구하므로
   // (api-contract v1.16) 항상 호출한다 — sessionId 가 있으면 그 세션을 명시.
   // 완료된 인터뷰가 아예 없으면 422 → genFailed 배너로 정직하게 안내.
-  const { interviewSessionId, setScreen, plannedMilestones } = useNavigation();
+  const { interviewSessionId, setScreen, plannedMilestones, planGoalId, setPlanGoalId, planAxisId, setPlanAxisId } = useNavigation();
   // 확정 마일스톤을 ref 로 잡아 generatePlan 콜백 deps 를 흔들지 않는다(#milestones Stage B).
   const milestonesRef = React.useRef(plannedMilestones);
   milestonesRef.current = plannedMilestones;
-  const generateInput: FirstPlanGenerateRequest = interviewSessionId
+  const generateInput: FirstPlanGenerateRequest = planGoalId ? { goalId: planGoalId } : interviewSessionId
     ? { interviewSessionId }
     : {};
 
@@ -191,6 +192,10 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     inFlightRef.current = true;
     setGenerating(true);
     setGenFailed(false);
+    setPlanError(null);
+    setPlanErrorCode(null);
+    planIdRef.current = null;
+    setUsingRealPlan(false);
     const minDelay = new Promise<void>((r) => setTimeout(r, 1400));
     // Idempotency-Key — 이 한 번의 생성(3회 재시도 포함)에 같은 키를 써서, 409 재시도 시
     // 백엔드가 LLM 을 다시 돌리지 않고 같은 planId 를 돌려주게 한다(#6). 재생성 버튼은
@@ -203,8 +208,9 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     const attempt = async (): Promise<void> => {
       for (let i = 0; i < 3; i++) {
         try {
-          const plan = await plansApi.generate(
-            { ...generateInput, density: densityRef.current, milestones: milestonesRef.current ?? undefined },
+          const cyclePlan = planAxisId ? await plansApi.mandalaNextCycle(planAxisId, densityRef.current) : null;
+          const plan = cyclePlan ?? await plansApi.generate(
+            { ...generateInput, density: densityRef.current, milestones: planGoalId ? undefined : milestonesRef.current ?? undefined },
             key,
           );
           planIdRef.current = plan.planId;
@@ -213,6 +219,12 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
           setBlocks((plan.blocks ?? []).map(previewToBlock));
           setPlanAiSource(plan.aiSource === 'rule' ? 'rule' : 'llm');
           setWarnings(plan.warnings ?? []);
+          if (cyclePlan) setWarnings([
+            ...(cyclePlan.warnings ?? []),
+            cyclePlan.axis.newlyPromoted ? '이 축이 이번에 목표가 됐어요.' : '기존에 승격한 목표로 이어가요.',
+            cyclePlan.seedSource === 'profile' ? '설정에 저장된 활동 시간대로 배치했어요.' : '인터뷰의 활동 시간대로 배치했어요.',
+            ...(cyclePlan.milestones ?? []).map((milestone) => `만다라트에서 가져온 단계: ${milestone.title}`),
+          ]);
           setMaterialsMissing(
             (plan.policyViolations ?? []).some((v) => v.reason === 'materials_referenced_but_missing'),
           );
@@ -225,6 +237,9 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
             continue;
           }
           setGenFailed(true); // 네트워크/422(완료 인터뷰 없음)/재시도 소진 — 빈 상태 + 정직 배너
+          setPlanErrorCode(err instanceof ApiError ? err.code : null);
+          setPlanError(err instanceof ApiError && (err.status === 404 || err.status === 422)
+            ? err.message : '계획을 생성하지 못했어요. 잠시 후 다시 시도해 주세요.');
           return;
         }
       }
@@ -234,7 +249,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
       inFlightRef.current = false;
       setGenerating(false);
     });
-  }, [interviewSessionId]);
+  }, [interviewSessionId, planGoalId, planAxisId]);
 
   // 자동 생성은 '유효 입력(interviewSessionId)'별로 딱 한 번만 호출한다.
   // StrictMode 이중 실행이나 interviewSessionId 지연 세팅(null→값)으로 /plans/generate 가
@@ -253,13 +268,14 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   const [approving, setApproving] = useState(false);
   const handleContinue = () => {
     if (approvingRef.current) return; // 승인 진행 중 중복 클릭 무시
-    if (!planIdRef.current) { onContinue(); return; }
+    if (!planIdRef.current) { setPlanError('먼저 계획 초안을 생성해 주세요.'); return; }
     approvingRef.current = true;
     setApproving(true);
     plansApi
       .approve(planIdRef.current, `approve-${planIdRef.current}`)
-      .catch(() => { /* 501/오류 ok — 온보딩 흐름은 이어간다 */ })
-      .finally(() => { onContinue(); });
+      .then(() => { setPlanGoalId(null); setPlanAxisId(null); onContinue(); })
+      .catch((err: unknown) => { setPlanError(err instanceof Error ? err.message : '계획을 승인하지 못했어요. 다시 시도해 주세요.'); })
+      .finally(() => { approvingRef.current = false; setApproving(false); });
   };
 
   // "다시 인터뷰하기" — 이 계획을 버리고 처음부터 다시 답한다.
@@ -275,7 +291,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     const planId = planIdRef.current;
     // 폐기 실패해도(네트워크 등) 재인터뷰는 막지 않는다 — 초안은 어차피 만료되고,
     // 사용자를 화면에 가둬 두는 게 더 나쁘다.
-    const done = () => setScreen('goal-intake');
+    const done = () => { setPlanGoalId(null); setPlanAxisId(null); setScreen('goal-intake'); };
     if (!planId) { done(); return; }
     plansApi.discard(planId).catch(() => {}).finally(done);
   };
@@ -554,10 +570,17 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
           </div>
         )}
         {!usingRealPlan && genFailed && (
-          <DemoNotice storageKey="weekly-plan-gen">
-            AI 계획을 생성하지 못했어요 — 완료된 인터뷰가 없거나 서버 오류예요. 아래 "블록
-            추가"로 직접 채우거나, 목표 파악(인터뷰)을 먼저 진행해 주세요.
-          </DemoNotice>
+          <p>계획을 생성하지 못했어요. 다시 생성하거나 목표 파악(인터뷰)을 진행해 주세요. 서버에서 초안을 받기 전에는 승인할 수 없어요.</p>
+        )}
+        {planError && <div role="alert">{planError}</div>}
+        {planAxisId && planError && planErrorCode === 'GOAL_TIER_LIMIT_EXCEEDED' && (
+          <button onClick={() => { setPlanAxisId(null); setScreen('goals'); }}>목표 화면에서 Focus·Maintain 개수 정리하기</button>
+        )}
+        {planAxisId && planError && planErrorCode === 'COMMON_VALIDATION_ERROR' && (
+          <div><p>축 선택과 활동 시간대를 확인해 주세요. 시간 정보가 없다면 설정하거나 계획 인터뷰를 진행할 수 있어요.</p>
+            <button onClick={() => { setPlanAxisId(null); setScreen('settings'); }}>설정에서 활동 시간대 확인</button>
+            <button onClick={handleRestartInterview}>계획 인터뷰 진행</button>
+          </div>
         )}
         {usingRealPlan && blocks.length === 0 && (
           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
@@ -637,7 +660,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
             </button>
           }
           // 블록이 하나도 없으면 "이대로 시작"이 말이 안 되므로 막고, 아래 안내로 유도.
-          acceptDisabled={blocks.length === 0 || approving}
+          acceptDisabled={!usingRealPlan || blocks.length === 0 || approving}
           acceptLabel={approving ? '시작하는 중…' : '이대로 시작'}
           editLabel="블록 추가"
           rejectLabel="재생성"

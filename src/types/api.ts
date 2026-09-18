@@ -62,7 +62,6 @@ export interface GoalCandidate {
   category: string;
   isHeaviest: boolean;
   deadline?: string | null;
-  whyNow?: string | null;
   successImage?: string | null;
   tentativeTier: 'focus' | 'maintain' | 'parked';
   confidence: number;
@@ -181,6 +180,7 @@ export interface GoalCreateRequest {
 }
 
 export interface GoalNode {
+  completedAt?: string | null;
   nodeId: string;
   parentId: string | null;
   title: string;
@@ -349,6 +349,7 @@ export interface MandalaApproveRequest {
 
 // U6 응답 — 명시 승인 endpoint 이므로 isDraft 는 항상 false.
 export interface MandalaApproveResponse {
+  carriedOver?: import('./openapi').components['schemas']['MandalaCarryOverSummary'];
   planId: string;
   goalId: string;
   rootNodeId: string;
@@ -432,6 +433,11 @@ export interface TimePolicyUpdateRequest {
 }
 
 // ── Calendar (S04) ─────────────────────────────────────────────
+export interface CalendarCheck {
+  status: 'ok' | 'failed' | 'not_connected';
+  checkedAt: string | null;
+}
+
 export interface CalendarConnection {
   provider: string;
   connected: boolean;
@@ -643,6 +649,8 @@ export interface ActionItem {
 // GET /today/agenda 의 카드 1건 (백엔드 AgendaCard 스키마와 정렬).
 // 주의: scheduledTime/durationMinutes 같은 필드는 없다 — estimatedMinutes 만 있다.
 export interface AgendaCard {
+  calendarConflict?: boolean;
+  missedCheckIn?: boolean;
   actionId: string;
   title: string;
   category: string;
@@ -683,6 +691,7 @@ export interface AgendaHabit {
 }
 
 export interface TodayAgenda {
+  calendar?: CalendarCheck;
   date: string;
   brief: MorningBrief | null;
   cards: AgendaCard[];
@@ -947,7 +956,7 @@ export interface ActionItemDraft {
 
 export interface ScheduledBlockPreview {
   origin: string; // goal / habit / fixed 등
-  originId: string | null;
+  originId?: string | null;
   title: string;
   category: string;
   start: string; // KST ISO
@@ -985,6 +994,7 @@ export type PlanDensity = 'light' | 'standard' | 'intense';
 
 // POST /plans/generate 요청 본문 (모두 선택 — 서버가 인터뷰 결과로 보완).
 export interface FirstPlanGenerateRequest {
+  goalId?: string | null;
   interviewSessionId?: string | null;
   targetDate?: string | null; // YYYY-MM-DD
   outcome?: Record<string, unknown> | null; // InterviewOutcome (보통 서버 파생)
@@ -1048,6 +1058,7 @@ export interface FirstPlanApproveResponse {
 
 // GET /plans/weekly (#21 구현됨) — 실제 contract.
 export interface WeeklyBlock {
+  calendarConflict?: boolean;
   blockId: string;
   actionId: string;
   title: string;
@@ -1066,6 +1077,7 @@ export interface WeeklyPlanDay {
   blocks?: WeeklyBlock[];
 }
 export interface WeeklyPlanResponse {
+  calendar?: CalendarCheck;
   planId: string;
   weekStart: string;
   weekEnd: string;
@@ -1114,6 +1126,8 @@ export interface StaleAxisProposal {
   axisTitle: string;
 }
 export interface WeeklyReviewResponse {
+  goalCompletionProposals?: { goalId: string; goalTitle: string }[];
+  topFailureContexts?: { tagCode: string; labelKo: string; count: number; share: number }[];
   weekStart: string;
   weekEnd: string;
   generatedAt: string;

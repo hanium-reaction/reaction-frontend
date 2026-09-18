@@ -10,6 +10,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Toast } from '../components/Toast';
 import { ReinterviewSheet } from '../components/ReinterviewSheet';
 import { useNavigation } from '../contexts/NavigationContext';
+import { WeeklyReplanCard } from '../components/WeeklyReplanCard';
 import type { Block } from '../types';
 import type { WeeklyPlanResponse, BlockEditRequest, ApiGoal } from '../types/api';
 
@@ -57,6 +58,8 @@ function weeklyToBlocks(res: WeeklyPlanResponse): (Block & { status: 'pending' |
       const e = new Date(b.endAt);
       const status = b.blockStatus === 'done' ? 'done' : b.blockStatus === 'failed' ? 'failed' : 'pending';
       out.push({
+        actionId: b.actionId,
+        calendarConflict: b.calendarConflict,
         id: b.blockId,
         day: (s.getDay() + 6) % 7, // 월=0 .. 일=6
         time: `${String(s.getHours()).padStart(2, '0')}:${String(s.getMinutes()).padStart(2, '0')}`,
@@ -95,7 +98,7 @@ type BlockWithStatus = Block & { status: string };
 
 export function WeeklyCalendarScreenV2() {
   // 보여줄 주차: 0=이번 주, 1=다음 주 (주간 리뷰의 "다음 주 계획 확인" 진입).
-  const { weekOffset, setWeekOffset, setScreen, setInterviewReturnTo } = useNavigation();
+  const { weekOffset, setWeekOffset, setScreen, setInterviewReturnTo, calendarEditActionId, setCalendarEditActionId } = useNavigation();
   // '+' 토글 메뉴와 재인터뷰 확인 시트.
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmReinterview, setConfirmReinterview] = useState(false);
@@ -134,6 +137,8 @@ export function WeeklyCalendarScreenV2() {
   // weekly 페치가 진행 중인지 — true 면 더미가 번쩍이지 않게 스켈레톤을 보여준다.
   // 주차 전환(weekStartStr 변경)마다 effect 가 재실행되어 true 로 리셋된다.
   const [planLoading, setPlanLoading] = useState(true);
+  const [planRefresh, setPlanRefresh] = useState(0);
+  const [calendarFailed, setCalendarFailed] = useState(false);
   // goalId → 목표 — 블록 색/라벨을 목표 카테고리 기준으로 매기기 위함(#109).
   const [goalMap, setGoalMap] = useState<Record<string, ApiGoal>>({});
   useEffect(() => {
@@ -159,6 +164,7 @@ export function WeeklyCalendarScreenV2() {
       (res) => {
         if (cancelled) return;
         planIdRef.current = res.planId;
+        setCalendarFailed(res.calendar?.status === 'failed');
         // 200 응답 = 백엔드 연동 성공. 블록이 0개여도 '예시'가 아니라
         // '아직 계획 없음'인 실데이터다 — 더미로 가리지 않고 그대로 교체한다.
         setBlocks(weeklyToBlocks(res));
@@ -170,9 +176,15 @@ export function WeeklyCalendarScreenV2() {
       if (!cancelled) setPlanLoading(false);
     });
     return () => { cancelled = true; };
-  }, [weekStartStr]);
+  }, [weekStartStr, planRefresh]);
 
   const [editing, setEditing] = useState<Block | null>(null);
+  useEffect(() => {
+    if (!calendarEditActionId || planLoading) return;
+    const target = blocks.find((block) => block.actionId === calendarEditActionId);
+    if (target) setEditing(target);
+    setCalendarEditActionId(null);
+  }, [calendarEditActionId, planLoading, blocks, setCalendarEditActionId]);
   // 두 종류 토스트: 성공(success) / 에러(error). 인라인 표시는 색만 다름.
   const [toast, setToast] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
 
@@ -294,7 +306,7 @@ export function WeeklyCalendarScreenV2() {
       col: moving ? dragGhost!.day : b.day,
       startMin: tMin,
       durMin: b.dur,
-      title: b.title,
+      title: !calendarFailed && b.calendarConflict ? `캘린더 겹침 · ${b.title}` : b.title,
       glyph: b.status === 'done' ? '✓ ' : b.status === 'failed' ? '✗ ' : b.carryover ? '↩ ' : undefined,
       subLabel: `${moving ? formatHHMM(tMin) : b.time}·${b.dur}분`,
       colors: blockStyle(b),
@@ -389,6 +401,7 @@ export function WeeklyCalendarScreenV2() {
     try {
       const body: BlockEditRequest = { startAt: startAt.toISOString(), endAt: endAt.toISOString() };
       await plansApi.updateBlock(planIdRef.current, block.id, body);
+      setPlanRefresh((value) => value + 1);
       showToast('블록 이동됨');
     } catch (err) {
       // 422 코드 분기.
@@ -404,8 +417,8 @@ export function WeeklyCalendarScreenV2() {
         setBlocks((bs) => bs.map((b) => (b.id === block.id ? block : b)));
         return;
       }
-      // 404 등 백엔드 미구현 — mock 성공으로 간주(임시 저장).
-      showToast('블록 이동됨 (임시 저장)');
+      setBlocks((bs) => bs.map((b) => b.id === block.id ? block : b));
+      showToast('일정을 옮기지 못했어요. 다시 시도해 주세요.', 'error');
     }
   };
 
@@ -636,6 +649,7 @@ export function WeeklyCalendarScreenV2() {
         title: updated.title,
       };
       const res = await plansApi.updateBlock(planIdRef.current, updated.id, body);
+      setPlanRefresh((value) => value + 1);
       // 응답으로 목표 연결/카테고리 갱신 → 색·라벨 반영(#109).
       setBlocks((bs) => bs.map((b) => b.id === updated.id
         ? { ...b, goal: res.category ?? b.goal, goalId: res.goalId ?? b.goalId, title: res.title ?? b.title }
@@ -653,11 +667,15 @@ export function WeeklyCalendarScreenV2() {
         if (prev) setBlocks((bs) => bs.map((b) => (b.id === updated.id ? prev : b))); // revert
         return;
       }
-      // 404 등 백엔드 미구현 — 임시 저장으로 간주.
-      showToast('블록 수정됨 (임시 저장)');
+      if (prev) setBlocks((bs) => bs.map((b) => b.id === updated.id ? prev : b));
+      showToast('서버에 저장하지 못했어요. 다시 시도해 주세요.', 'error');
     }
   };
   const handleDelete = (id: string) => {
+    if (!id.startsWith('new-')) {
+      showToast('저장된 일정의 개별 삭제는 아직 지원하지 않아요. 목표 완료 시 남은 예정 일정을 정리할 수 있어요.', 'error');
+      return;
+    }
     setBlocks((bs) => bs.filter((b) => b.id !== id));
     setEditing(null);
     showToast('블록 삭제됨');
@@ -675,6 +693,8 @@ export function WeeklyCalendarScreenV2() {
     <div ref={rootRef} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
       {/* Header */}
       <div className="weekly-calendar-header" style={{ flexShrink: 0, padding: '10px 14px 8px', borderBottom: '1px solid var(--sand-200)' }}>
+        <WeeklyReplanCard onApproved={() => setPlanRefresh((value) => value + 1)} />
+        {calendarFailed && <p role="status">캘린더를 확인하지 못했어요. 일정 겹침 여부는 다음 조회에서 다시 확인해요.</p>}
         {/* 주 단위 이동(#119) — 마감까지 여러 주에 걸친 계획을 이전/다음 주로 열람.
             주간 리뷰의 "다음 주 계획 확인" 은 weekOffset=1 로 진입한다. */}
         <div className="weekly-week-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

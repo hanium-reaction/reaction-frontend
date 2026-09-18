@@ -2,23 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Sparkle } from '@phosphor-icons/react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { stubDemoAvailable } from '../lib/api';
+import { GOOGLE_CLIENT_ID } from '../lib/googleIdentity';
 
-// Google Identity Services 는 CDN 스크립트(index.html)가 window.google 을 채운다.
-// 공식 타입 패키지 없이 최소 shape 만 선언 — 실제로 쓰는 필드만.
-interface GoogleIdCredentialResponse {
-  credential: string; // Google ID token (JWT) — 그대로 백엔드 POST /auth/google 로 전달
-}
-interface GoogleAccountsId {
-  initialize: (config: { client_id: string; callback: (r: GoogleIdCredentialResponse) => void }) => void;
-  renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-}
-declare global {
-  interface Window {
-    google?: { accounts?: { id?: GoogleAccountsId } };
-  }
-}
-
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+// 모듈 지역 const 로 받아야 아래 콜백 안에서 `if (!CLIENT_ID) return` 좁히기가 유지된다.
+const CLIENT_ID = GOOGLE_CLIENT_ID;
 
 interface LoginScreenProps {
   onGoogleCredential: (idToken: string) => void;

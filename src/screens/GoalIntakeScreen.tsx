@@ -4,6 +4,7 @@ import { ApiError, friendlyError, interviewApi } from '../lib/api';
 import type { InterviewOutcome, InterviewQuestion, InterviewSession, SlotCatalogEntry } from '../types/api';
 import { SetupProgress } from '../components/SetupProgress';
 import { useNavigation } from '../contexts/NavigationContext';
+import { MaterialsResearch } from '../components/MaterialsResearch';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateAnswerField, TimeRangeAnswerField, isValidRange, parseRange } from '../components/TypedAnswerField';
 import { useSpeechInput } from '../lib/useSpeechInput';
@@ -43,11 +44,14 @@ function omxStatus(clarity: number) {
 
 export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
   // 인터뷰 세션 id 를 전역에 올려, weekly-plan(S06) 에서 /plans/generate 가 쓸 수 있게 한다.
-  const { setInterviewSessionId, interviewGoalId } = useNavigation();
+  const { setInterviewSessionId, interviewGoalId, setPlanGoalId, setPlanAxisId } = useNavigation();
+  useEffect(() => { setPlanGoalId(null); setPlanAxisId(null); }, [setPlanGoalId, setPlanAxisId]);
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [materialsSaved, setMaterialsSaved] = useState(false);
+  const [materialsBusy, setMaterialsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 같은 슬롯이 연속 재질문되어(에이전트가 진전 못 시킴) 사용자가 갇힐 때 눈에 띄는 탈출 안내를 띄운다.
   const [stuckHint, setStuckHint] = useState(false);
@@ -209,27 +213,32 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
     : Math.max(0, Math.min(100, Math.round((1 - ambiguity / initialAmbiguity.current) * 100)));
   const omx = omxStatus(clarity);
 
-  const submit = async (value: string) => {
+  const submit = async (value: string, useSavedMaterials = false) => {
     if (!session || !currentQuestion || isTyping || isFinished) return;
+    if (!useSavedMaterials && (materialsBusy || materialsSaved)) return;
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed && !useSavedMaterials) return;
 
     const answeredKey = currentQuestion.slotKey;
     // 답을 보내는 순간 마이크를 놓는다. 같은 슬롯이 재질문되면 slotKey 가 그대로라
     // 아래 정리 effect 가 안 돌아, 이전 답의 뒷말이 다음 답에 흘러들어간다.
     speech.stop();
-    setMessages((m) => [...m, { id: newMsgId('u'), who: 'user', text: trimmed }]);
+    setMessages((m) => [...m, { id: newMsgId('u'), who: 'user', text: useSavedMaterials ? '확정한 자료로 진행할게요.' : trimmed }]);
     setInputText('');
     setIsTyping(true);
+    setError(null);
 
     try {
       // 백엔드 submitAnswer 응답에 이미 다음 질문(또는 종료 상태)이 들어있다.
       // 별도 nextQuestion 호출은 user_agent_lock 을 한 번 더 잡아 실패 위험만 키우므로 제거.
-      const next = await interviewApi.submitAnswer(session.sessionId, {
+      // spec-confirm이 구조화된 자료를 이미 저장했다. 제목 문자열로 다시 답하면
+      // 목차·분량을 덮어쓰므로 이 경우에만 다음 질문을 요청한다.
+      const next = useSavedMaterials ? await interviewApi.nextQuestion(session.sessionId) : await interviewApi.submitAnswer(session.sessionId, {
         slotKey: answeredKey,
         value: trimmed,
         clientTurn: session.totalTurns,
       });
+      setMaterialsSaved(false);
 
       // 종료 신호는 서버의 endReason 하나로 판정한다(completed/early_user/abandoned 모두 terminal).
       // 서버는 아직 물을 게 남으면 endReason=null 로 두고 currentQuestion 을 준다(clarity 부족으로
@@ -289,7 +298,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
   };
 
   const finishEarly = async () => {
-    if (!session) return;
+    if (!session || isTyping || materialsBusy) return;
     try {
       const s = await interviewApi.finish(session.sessionId);
       setSession(s);
@@ -385,6 +394,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
   const range = typedKind === 'range' ? parseRange(inputText) : null;
   const canSubmit =
     inputText.trim() !== '' &&
+    !materialsBusy && !materialsSaved &&
     !isTyping &&
     (!useTypedField || typedKind !== 'range' || (range !== null && isValidRange(range.start, range.end)));
 
@@ -600,6 +610,8 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
               {useTypedField ? null : currentQuestion.slotKey === 'goals.materials' ? (
                 // 자료 원문 붙여넣기 — 여러 줄 붙여넣기가 편하도록 textarea (Enter=줄바꿈, 전송은 버튼).
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <details><summary>도서·영상 자료 검색</summary><div style={{ maxHeight: '40vh', overflowY: 'auto' }}><MaterialsResearch key={session?.sessionId} interviewSessionId={session?.sessionId ?? null} onSaved={() => { setMaterialsSaved(true); setInputText(''); }} onBusyChange={setMaterialsBusy} onConfirmed={() => submit('', true)} /></div></details>
+                  {materialsSaved && <p>검색에서 확정한 자료가 저장됐어요. 위의 ‘확정한 자료로 인터뷰 계속하기’를 눌러 주세요.</p>}
                   <textarea
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}

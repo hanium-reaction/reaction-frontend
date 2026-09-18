@@ -41,6 +41,8 @@ export type ScreenId =
 export type TabId = 'today' | 'weekly' | 'inbox' | 'review';
 
 export interface Task {
+  calendarConflict?: boolean;
+  missedCheckIn?: boolean;
   id: string;
   title: string;
   status: TaskStatus;
@@ -75,6 +77,8 @@ export interface Goal {
 }
 
 export interface Block {
+  actionId?: string;
+  calendarConflict?: boolean;
   id: string;
   day: number;
   // 블록의 실제 날짜(YYYY-MM-DD). 다중 주 계획에서 주 슬라이스·정확한 날짜 칸 매핑에 쓴다(#119).

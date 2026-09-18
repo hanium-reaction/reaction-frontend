@@ -35,7 +35,7 @@ function prefersReducedMotion(): boolean {
 }
 
 export function MandalaScreen({ goalId, onStartUltimate, onBuildMandala }: MandalaScreenProps) {
-  const { setInterviewReturnTo } = useNavigation();
+  const { setInterviewReturnTo, setPlanAxisId, setPlanGoalId, setScreen, setInterviewSessionId, setPlannedMilestones } = useNavigation();
   const toast = useToast();
   const [tree, setTree] = useState<MandalaTreeResponse | null>(null);
   const [resolvedGoalId, setResolvedGoalId] = useState<string | null>(goalId ?? null);
@@ -152,6 +152,9 @@ export function MandalaScreen({ goalId, onStartUltimate, onBuildMandala }: Manda
             </div>
 
             <MandalaProgress progress={tree.progress} coverage={tree.coverage} />
+            {board.axes.filter((item) => item.slot.nodeId && item.slot.filled).map((item) => <ReButton key={item.slot.nodeId} size="sm" variant="ghost" onClick={() => {
+              setPlanAxisId(item.slot.nodeId); setPlanGoalId(null); setInterviewSessionId(null); setPlannedMilestones(null); setScreen('weekly-plan');
+            }}>{item.slot.title} · 이 축으로 2주 시작</ReButton>)}
 
             {/* 뷰 전환 — 편집은 ①/③ 에서만, ② 는 조망 전용. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
