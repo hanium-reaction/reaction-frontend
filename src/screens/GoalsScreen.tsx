@@ -333,7 +333,10 @@ export function GoalsScreen() {
                     {/* 인라인 수정 폼 */}
                     {(g.status === 'active' || g.status === 'completed') && <GoalCompletionControl
                       goalId={g.goalId} title={g.title} completed={g.status === 'completed'}
-                      onChanged={() => { fetchGoals(); setDecomp(null); }}
+                      onChanged={(updated) => {
+                        setGoals((current) => current.map((goal) => goal.goalId === updated.goalId ? updated : goal));
+                        fetchGoals(); setDecomp(null);
+                      }}
                     />}
                     {isEditing && edit && (
                       <>

@@ -4,6 +4,8 @@ import { CalendarConnectCard } from './CalendarConnectCard';
 import { ApiError, calendarApi } from '../lib/api';
 import { CalendarConsentCancelled, requestCalendarCode } from '../lib/googleIdentity';
 import { ToastProvider } from '../contexts/ToastContext';
+import { isNativeApp } from '../lib/platform';
+vi.mock('../lib/platform', () => ({ isNativeApp: vi.fn(() => false) }));
 
 vi.mock('../lib/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../lib/api')>();
@@ -43,10 +45,30 @@ function view() {
 
 describe('CalendarConnectCard', () => {
   beforeEach(() => {
+    vi.mocked(isNativeApp).mockReturnValue(false);
     api.status.mockReset();
     api.connect.mockReset();
     api.disconnect.mockReset();
     consent.mockReset();
+  });
+  it('조회 실패 재시도는 OAuth 재동의 없이 연결 상태만 조회한다', async () => {
+    api.status.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(on);
+    view();
+    fireEvent.click(await screen.findByText('상태 다시 확인'));
+    await screen.findByText('Google 캘린더 연결됨');
+    expect(api.status).toHaveBeenCalledTimes(2);
+    expect(consent).not.toHaveBeenCalled();
+    expect(api.connect).not.toHaveBeenCalled();
+  });
+  it('네이티브에서도 기존 연결은 조회하고 해제 후에는 웹 연결만 안내한다', async () => {
+    vi.mocked(isNativeApp).mockReturnValue(true);
+    api.status.mockResolvedValue(on);
+    api.disconnect.mockResolvedValue(undefined);
+    view();
+    fireEvent.click(await screen.findByRole('button', { name: '해제' }));
+    await screen.findByText(/캘린더 연결은 웹에서/);
+    expect(screen.queryByRole('button', { name: '연결' })).not.toBeInTheDocument();
+    expect(consent).not.toHaveBeenCalled();
   });
 
   it('서버 설정 전(501)이면 준비 중으로 두고 연결 버튼을 주지 않는다', async () => {
