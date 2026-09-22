@@ -19,6 +19,17 @@ describe('계획 생성·승인 계약 (#340 #285)', () => {
     vi.mocked(plansApi.generate).mockResolvedValue(draft);
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  it('410 만료 후에는 같은 초안을 승인할 수 없고 재생성해야 한다', async () => {
+    vi.mocked(plansApi.approve).mockRejectedValue(new ApiError('PLAN_DRAFT_EXPIRED', '만료', 410));
+    const done = vi.fn();
+    render(<WeeklyPlanGenerationScreen onContinue={done} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이대로 시작' })); });
+    expect(screen.getByRole('button', { name: '이대로 시작' })).toBeDisabled();
+    expect(done).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '재생성' })); await vi.advanceTimersByTimeAsync(1500); });
+    expect(screen.getByRole('button', { name: '이대로 시작' })).not.toBeDisabled();
+  });
   it.each([
     ['GOAL_TIER_LIMIT_EXCEEDED', '목표 화면에서 Focus·Maintain 개수 정리하기', 'goals'],
     ['COMMON_VALIDATION_ERROR', '설정에서 활동 시간대 확인', 'settings'],

@@ -275,7 +275,13 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
     plansApi
       .approve(planIdRef.current, `approve-${planIdRef.current}`)
       .then(() => { setPlanGoalId(null); setPlanAxisId(null); onContinue(); })
-      .catch((err: unknown) => { setPlanError(err instanceof Error ? err.message : '계획을 승인하지 못했어요. 다시 시도해 주세요.'); })
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 410) {
+          planIdRef.current = null;
+          setUsingRealPlan(false);
+          setPlanError('초안이 만료됐어요. 재생성을 눌러 새 계획을 확인한 뒤 승인해 주세요.');
+        } else setPlanError(err instanceof Error ? err.message : '계획을 승인하지 못했어요. 다시 시도해 주세요.');
+      })
       .finally(() => { approvingRef.current = false; setApproving(false); });
   };
 

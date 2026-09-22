@@ -88,6 +88,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
       setCells([]);
       setGaps([]);
       setStage('axes');
+      setExpired(false);
     } catch (err: unknown) {
       setError(friendlyError(err, '하위 목표를 만들지 못했어요.'));
     } finally {
@@ -194,7 +195,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
 
   // ── 링 재생성 (U5) ──
   const regenerate = async (subgoalIndex: number) => {
-    if (!planId) return;
+    if (!planId || expired || busy != null) return;
     setBusy('regen');
     setError(null);
     try {
@@ -217,7 +218,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
 
   // ── 승인 (U6) ──
   const approve = async () => {
-    if (!planId) return;
+    if (!planId || expired || busy != null) return;
     setBusy('approve');
     setError(null);
     try {
@@ -323,7 +324,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {error && (
           <ErrorBanner action={<ReButton variant="ghost" size="sm" disabled={busy !== null} onClick={() => {
-            if (expired) { setExpired(false); void loadSubgoals(); }
+            if (expired) { void loadSubgoals(); }
             else if (stage === 'axes') { setReadyToBuild(false); setPreflight(null); setPreflightRetry((value) => value + 1); }
             else setError(null);
           }}>{expired ? '다시 만들기' : '다시 시도'}</ReButton>}>
@@ -420,7 +421,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
                   placeholder="어떻게 바꿀지 한 줄로 (선택) — 예: 더 구체적인 행동으로"
                   style={{ height: 40, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', padding: '0 12px', fontSize: 12, fontFamily: 'inherit', color: 'var(--text-1)', outline: 'none' }}
                 />
-                <ReButton variant="ghost" size="sm" full onClick={() => void regenerate(axis)} disabled={busy != null}>
+                <ReButton variant="ghost" size="sm" full onClick={() => void regenerate(axis)} disabled={busy != null || expired}>
                   <ArrowClockwise size={13} /> {busy === 'regen' ? '다시 만드는 중…' : '이 축의 8칸만 다시 만들기'}
                 </ReButton>
                 <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0, lineHeight: 1.5 }}>
@@ -434,7 +435,7 @@ export function MandalaDraftScreen({ goalId, onApproved, onLeave }: MandalaDraft
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-              <ReButton variant="primary" size="lg" full onClick={approve} disabled={busy != null}>
+              <ReButton variant="primary" size="lg" full onClick={approve} disabled={busy != null || expired}>
                 {busy === 'approve' ? '확정하는 중…' : '이대로 확정하기'} <ArrowRight size={16} />
               </ReButton>
               {confirmDiscard ? (
