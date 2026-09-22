@@ -167,6 +167,11 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   // 4 UX 그룹당 ≤1 로 dedup. hooks 는 early-return 앞에 둔다(호출 순서 고정).
   const loadProposals = React.useCallback(() => {
     if (!executionId) return;
+    // 새 응답이 오기 전에는 이전 attemptId를 수락할 수 없어야 한다.
+    setSel(null);
+    setShowWhy(null);
+    setProposals([]);
+    setUsingRealProposals(false);
     setDecideError(null);
     setProposalError(null);
     setLoadingProposals(true);
@@ -231,7 +236,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   };
 
   const accept = async () => {
-    if (!sel || deciding) return;
+    if (!sel || deciding || loadingProposals || !usingRealProposals) return;
     const chosen = proposals.find((p) => p.id === sel);
     let requiresReplan = false;
     // 사용자 선택 저장 — 실제 executionId 가 있을 때만(없으면 task.id 는 executionId 가
@@ -371,7 +376,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
                 // (축소/재조정/보류)이라 추천 뱃지를 붙이지 않는다.
                 recommended={!renegotiating && i === 0}
                 selected={sel === p.id}
-                onSelect={() => setSel(p.id)}
+                onSelect={() => { if (!deciding) setSel(p.id); }}
                 why={p.why}
                 whyOpen={showWhy === p.id}
                 onToggleWhy={() => setShowWhy(showWhy === p.id ? null : p.id)}
@@ -401,8 +406,8 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
           )}
           {/* 3버튼: 나중에(거절) / 다른 제안(수정=재생성) / 이 방법으로(수락) — S19 */}
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button onClick={reject} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-3)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>나중에</button>
-            <button onClick={loadProposals} disabled={!executionId || loadingProposals} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: executionId && !loadingProposals ? 'pointer' : 'not-allowed', opacity: executionId && !loadingProposals ? 1 : 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><ArrowsClockwise size={13} /> {proposalError ? '다시 시도' : '다른 제안'}</button>
+            <button onClick={reject} disabled={deciding} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-3)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>나중에</button>
+            <button onClick={loadProposals} disabled={!executionId || loadingProposals || deciding} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: executionId && !loadingProposals ? 'pointer' : 'not-allowed', opacity: executionId && !loadingProposals ? 1 : 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><ArrowsClockwise size={13} /> {proposalError ? '다시 시도' : '다른 제안'}</button>
             <button onClick={accept} disabled={!sel || deciding} style={{ flex: 1.6, height: 44, borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: sel && !deciding ? 'pointer' : 'not-allowed', opacity: sel && !deciding ? 1 : 0.35, transition: 'opacity 160ms' }}>{deciding ? '저장하는 중…' : '이 방법으로'}</button>
           </div>
         </div>
