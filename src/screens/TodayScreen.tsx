@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { visibleCalendarConflict } from '../lib/calendarConflict';
 import {
   ArrowsClockwise,
   CaretRight,
@@ -138,9 +139,9 @@ function actionStatusToTaskStatus(s: string): TaskStatus {
 
 // /today/agenda 의 AgendaCard → 화면 Task 베스트에포트 매핑.
 // AgendaCard 에는 예약시각/이월/실패사유 필드가 없다 (estimatedMinutes·category 만 사용).
-function actionToTask(a: AgendaCard): Task {
+function actionToTask(a: AgendaCard, calendar?: import('../types/api').CalendarCheck): Task {
   return {
-    calendarConflict: a.calendarConflict,
+    calendarConflict: visibleCalendarConflict(calendar, a.calendarConflict),
     missedCheckIn: a.missedCheckIn,
     id: a.actionId,
     title: a.title,
@@ -303,7 +304,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
         setBriefAdjustmentHints(agenda.brief?.adjustmentHints ?? []);
         setBriefBigRockId(agenda.brief?.bigRockActionId ?? null);
         const agendaTasks = (agenda.cards ?? [])
-          .map(actionToTask)
+          .map((action) => actionToTask(action, agenda.calendar))
           .map((task) => {
             const block = todayBlocks.get(task.id);
             return block ? { ...task, scheduledAt: block.startAt } : task;

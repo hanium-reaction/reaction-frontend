@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { ApiError, friendlyError, plansApi } from '../lib/api';
-import type { WeeklyReplanResponse } from '../types/api';
+import type { WeeklyReplanResponse, WeeklyReplanApproveResponse } from '../types/api';
 import { ReButton } from './ReButton';
 
 export function WeeklyReplanCard({ onApproved }: { onApproved: () => void }) {
@@ -8,14 +8,16 @@ export function WeeklyReplanCard({ onApproved }: { onApproved: () => void }) {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<WeeklyReplanApproveResponse | null>(null);
   const run = async (approve: boolean) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(null);
     try {
       if (approve && draft) {
-        await plansApi.approveReplan(draft.planId, `weekly-replan-${draft.planId}`);
+        setResult(await plansApi.approveReplan(draft.planId, `weekly-replan-${draft.planId}`));
         setDraft(null); onApproved();
       } else if (!approve) {
+        setResult(null);
         setDraft(await plansApi.generateReplan());
       }
     } catch (err) {
@@ -31,6 +33,7 @@ export function WeeklyReplanCard({ onApproved }: { onApproved: () => void }) {
   return <section aria-label="남은 일 다시 배치" style={{ padding: 12, borderRadius: 12, background: 'var(--surface-raised)' }}>
     {!draft && <ReButton size="sm" disabled={busy} onClick={() => void run(false)}>{busy ? '초안 만드는 중…' : '남은 일 다시 배치'}</ReButton>}
     {error && <p role="alert">{error}</p>}
+    {result && <p role="status">일정 {result.createdBlocks}개를 배치하고 {result.cancelledBlocks}개를 정리했어요. 이미 시작했거나 변경된 일정 {result.skippedBlocks}개는 보존했어요.</p>}
     {draft && <>
       <h2 style={{ fontSize: 16 }}>남은 일정 미리보기</h2>
       <p>적용하기 전에는 일정이 바뀌지 않아요. 기준일: {draft.windowStart}</p>

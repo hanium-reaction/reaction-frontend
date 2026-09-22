@@ -12,7 +12,7 @@ const draft = { aiSource: 'rule' as const, isDraft: true, planId: 'draft-1', win
 describe('주간 재계획 명시 승인 (#342)', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(plansApi.generateReplan).mockResolvedValue(draft); });
   it('초안만 만들면 승인하지 않고, 사용자 확인 후에만 적용한다', async () => {
-    vi.mocked(plansApi.approveReplan).mockResolvedValue({ planId: 'draft-1', cancelledBlocks: 1, createdBlocks: 1, skippedBlocks: 0, activatedAt: '' });
+    vi.mocked(plansApi.approveReplan).mockResolvedValue({ planId: 'draft-1', cancelledBlocks: 1, createdBlocks: 1, skippedBlocks: 2, activatedAt: '' });
     const done = vi.fn(); render(<WeeklyReplanCard onApproved={done} />);
     fireEvent.click(screen.getByText('남은 일 다시 배치'));
     expect(await screen.findByText('다시 배치할 일')).toBeInTheDocument();
@@ -20,6 +20,7 @@ describe('주간 재계획 명시 승인 (#342)', () => {
     expect(plansApi.approveReplan).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('확인하고 적용'));
     await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/변경된 일정 2개는 보존/)).toBeInTheDocument();
     expect(plansApi.approveReplan).toHaveBeenCalledWith('draft-1', 'weekly-replan-draft-1');
   });
   it.each([409, 429, 410, 503])('승인 %s 오류는 성공으로 넘기지 않는다', async (status) => {

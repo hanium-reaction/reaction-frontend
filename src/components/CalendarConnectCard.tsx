@@ -31,24 +31,25 @@ export function CalendarConnectCard({ compact = false, onChange }: CalendarConne
   // 네이티브 셸(WebView)에서는 Google 이 OAuth 팝업을 막는다(disallowed_useragent).
   // 연결은 계정 단위라 웹에서 한 번 연결하면 앱에도 반영된다.
   const native = isNativeApp();
-  const [status, setStatus] = useState<Status>(native || !GOOGLE_CLIENT_ID ? 'unavailable' : 'loading');
+  const [status, setStatus] = useState<Status>('loading');
+  const [retry, setRetry] = useState(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (native || !GOOGLE_CLIENT_ID) return;
+    setStatus('loading');
     let cancelled = false;
     calendarApi.status().then(
-      (c) => { if (!cancelled) setStatus(c.connected ? 'connected' : 'disconnected'); },
+      (c) => { if (!cancelled) setStatus(c.connected ? 'connected' : native || !GOOGLE_CLIENT_ID ? 'unavailable' : 'disconnected'); },
       (err: unknown) => {
         if (cancelled) return;
         setStatus(err instanceof ApiError && err.status === 501 ? 'unavailable' : 'error');
       },
     );
     return () => { cancelled = true; };
-  }, [native]);
+  }, [native, retry]);
 
   const setConnected = (connected: boolean) => {
-    setStatus(connected ? 'connected' : 'disconnected');
+    setStatus(connected ? 'connected' : native || !GOOGLE_CLIENT_ID ? 'unavailable' : 'disconnected');
     onChange?.(connected);
   };
 
@@ -91,7 +92,7 @@ export function CalendarConnectCard({ compact = false, onChange }: CalendarConne
   };
 
   const connected = status === 'connected';
-  const actionable = status === 'disconnected' || status === 'error';
+  const actionable = status === 'disconnected';
   const title = connected ? 'Google 캘린더 연결됨' : 'Google 캘린더 연결';
   const desc = {
     loading: '연결 상태를 확인하고 있어요…',
@@ -100,7 +101,7 @@ export function CalendarConnectCard({ compact = false, onChange }: CalendarConne
       : '지금은 아래에서 직접 추가해 주세요',
     disconnected: '제목 없이 시간만 읽어, 겹치지 않게 계획해요',
     connected: '캘린더 일정과 겹치지 않게 계획을 세워요',
-    error: '연결 상태를 불러오지 못했어요. 눌러서 다시 연결해 볼 수 있어요.',
+    error: '연결 상태를 불러오지 못했어요. 기존 연결을 바꾸지 않고 다시 확인해 주세요.',
   }[status];
 
   const titleSize = compact ? 12 : 13;
@@ -131,6 +132,7 @@ export function CalendarConnectCard({ compact = false, onChange }: CalendarConne
           {busy ? '연결 중…' : '연결'}
         </button>
       )}
+      {status === 'error' && <button onClick={() => setRetry((value) => value + 1)}>상태 다시 확인</button>}
       {connected && (
         <button
           onClick={disconnect}

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { visibleCalendarConflict } from '../lib/calendarConflict';
 import { Plus, CalendarPlus, ChatCircleDots } from '@phosphor-icons/react';
 import { DEFAULT_GOAL_CATEGORY, goalColor } from '../data';
 import { ApiError, goalsApi, plansApi } from '../lib/api';
@@ -59,7 +60,7 @@ function weeklyToBlocks(res: WeeklyPlanResponse): (Block & { status: 'pending' |
       const status = b.blockStatus === 'done' ? 'done' : b.blockStatus === 'failed' ? 'failed' : 'pending';
       out.push({
         actionId: b.actionId,
-        calendarConflict: b.calendarConflict,
+        calendarConflict: visibleCalendarConflict(res.calendar, b.calendarConflict),
         id: b.blockId,
         day: (s.getDay() + 6) % 7, // 월=0 .. 일=6
         time: `${String(s.getHours()).padStart(2, '0')}:${String(s.getMinutes()).padStart(2, '0')}`,
