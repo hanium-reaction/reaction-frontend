@@ -49,6 +49,35 @@ describe('MergedRecoveryScreen 대기 상태', () => {
     sessionStorage.clear();
   });
 
+  it('다른 제안 조회 중과 조회 실패 후에는 이전 선택을 저장하지 않는다', async () => {
+    api.generateProposals.mockResolvedValueOnce({ cards: [{ attemptId: 'old', optionGroup: 'DOWNSCOPE', labelKo: '이전 제안', suggestedActionText: '10분' }] });
+    let rejectRequest!: (error: Error) => void;
+    api.generateProposals.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRequest = reject; }));
+    view({ executionId: 'exec-1' });
+    fireEvent.click(await screen.findByText('이전 제안'));
+    fireEvent.click(screen.getByRole('button', { name: '다른 제안' }));
+    expect(screen.getByRole('button', { name: '이 방법으로' })).toBeDisabled();
+    expect(screen.queryByText('이전 제안')).not.toBeInTheDocument();
+    rejectRequest(new Error('offline'));
+    await screen.findByRole('button', { name: '다시 시도' });
+    expect(screen.getByRole('button', { name: '이 방법으로' })).toBeDisabled();
+    expect(api.decide).not.toHaveBeenCalled();
+  });
+
+  it('회복 선택 저장 실패 시 완료 화면으로 가지 않고 재시도한다', async () => {
+    api.generateProposals.mockResolvedValue({ cards: [{ attemptId: 'selected', optionGroup: 'DOWNSCOPE', labelKo: '10분만 하기', suggestedActionText: '10분' }] });
+    api.decide.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ resultingActionItemId: 'action-recovery' });
+    const onAccept = vi.fn();
+    view({ executionId: 'exec-1', onAccept });
+    fireEvent.click(await screen.findByText('10분만 하기'));
+    fireEvent.click(screen.getByRole('button', { name: '이 방법으로' }));
+    await screen.findByText(/회복 계획을 저장하지 못했어요/);
+    expect(onAccept).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '이 방법으로' }));
+    await waitFor(() => expect(onAccept).toHaveBeenCalledWith(expect.objectContaining({ id: 'selected' }), true), { timeout: 2500 });
+    expect(api.decide.mock.calls[0]).toEqual(api.decide.mock.calls[1]);
+  });
+
   it('실행 기록을 저장하는 동안 빈 공간 대신 진행 안내를 보여준다', () => {
     view({ preparing: true, executionId: undefined });
     expect(screen.getByText(/실행 기록을 저장하고 있어요/)).toBeInTheDocument();

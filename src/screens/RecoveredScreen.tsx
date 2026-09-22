@@ -54,15 +54,31 @@ export function RecoveredScreen({ recoveryCount, applied, onDone, onOpenWeekly, 
   const [approving, setApproving] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    setDiff(null);
+    setApproveError(null);
     if (!executionId || !needsReplan) return;
     setDiffError(null);
     let cancelled = false;
     replanApi.diff(executionId).then(
-      (d) => { if (!cancelled && d?.before && d?.after) setDiff(d); },
+      (d) => {
+        if (cancelled) return;
+        if (d?.before && d?.after) setDiff(d);
+        else setDiffError('일정 변경 내용이 비어 있어요. 다시 불러와 주세요.');
+      },
       (err) => { if (!cancelled) setDiffError(friendlyError(err, '실제 일정 변경 내용을 불러오지 못했어요.')); },
     );
     return () => { cancelled = true; };
   }, [executionId, needsReplan, retry]);
+
+  if (!applied || !executionId) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center' }}>
+        <h2>확인할 회복 기록이 없어요</h2>
+        <p>오늘 화면에서 실패하거나 일부 완료한 행동의 복구안을 먼저 선택해 주세요.</p>
+        <button onClick={onDone}>오늘로 돌아가기</button>
+      </div>
+    );
+  }
 
   // 표시 데이터: 백엔드 diff 가 있으면 우선, 없으면 클라이언트 applied.
   const usingRealDiff = !!diff;
