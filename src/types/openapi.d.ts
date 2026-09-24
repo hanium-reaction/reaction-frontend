@@ -93,6 +93,9 @@ export interface paths {
          *     대신 `UserRepo.get_by_id` 의 `archived_at IS NULL` 필터로 막는다. `get_current_user`
          *     가 이미 같은 필터로 access token 을 막고 있으니, 여기도 같은 기준을 적용해야
          *     "삭제된 계정은 refresh 로도 못 살아난다"가 성립한다.
+         *
+         *     통과하면 `last_active_at` 을 갱신한다 — 90일 비활성 판정이 "마지막 로그인"이 아니라
+         *     "마지막 사용"을 기준으로 하게(auth-6).
          */
         post: operations["refresh_access_token_auth_refresh_post"];
         delete?: never;
@@ -115,6 +118,10 @@ export interface paths {
          *     연결이 없으면 404 가 아니라 `connected: false` 다. "아직 연결 안 함" 은 오류가 아니라
          *     이 화면의 기본 상태다. 기능이 꺼져 있으면 connect 와 똑같이 501 — FE 는 그걸 보고
          *     '준비 중' 을 그린다.
+         *
+         *     연결이 Google 쪽에서 끊겼으면(권한 철회·refresh token 만료) `needsReconnect: true` 다 —
+         *     예전엔 앱에서 해제한 것과 똑같이 `connected: false` 만 내려가, 설정 카드가 조용히 기본
+         *     '연결' 문구로 돌아갔고 사용자는 끊긴 줄 몰랐다.
          */
         get: operations["get_calendar_connection_calendar_connect_get"];
         put?: never;
@@ -135,6 +142,13 @@ export interface paths {
          *
          *     우리 DB 를 먼저 확정하고 원격 회수는 그 뒤에 한다. 순서를 뒤집으면 Google 은
          *     끊겼는데 우리는 연결됐다고 믿는 상태가 생긴다.
+         *
+         *     **기능 스위치와 무관하다(501 없음).** 해제는 동의 철회다 — 예전엔 운영이 기능을 꺼 둔
+         *     동안 해제도 501 이라, 사용자가 연결을 끊을 방법이 없었다. 원격 회수는 client secret 이
+         *     필요 없고, 토큰을 복호화할 수 없으면 그것만 건너뛴다.
+         *
+         *     Google 쪽에서 이미 끊긴 연결(`needsReconnect`)에 부르면 재연결 안내를 거둔다 — 다시
+         *     연결하지 않기로 한 사용자에게 계획마다 같은 안내를 반복하지 않게.
          */
         delete: operations["disconnect_calendar_calendar_connect_delete"];
         options?: never;
@@ -228,6 +242,11 @@ export interface paths {
          *
          *     부수 효과: 사용자가 `ONBOARDING_CALENDAR` 또는 `ONBOARDING_MANUAL_SCHEDULE`
          *     단계에 있으면 `ONBOARDING_POLICIES` 로 전이 (멱등).
+         *
+         *     같은 요일 시간이 겹치면 409 `FIXED_SCHEDULE_OVERLAP`. 검사와 저장은 사용자별 advisory
+         *     lock 안에서 한다 — 느린 모바일에서 [추가] 를 두 번 누르면 예전엔 두 요청이 서로를 못 보고
+         *     같은 수업이 두 줄 생겼다(오늘 화면에도 두 번). 이제 두 번째 요청은 첫 번째의 commit 을
+         *     기다렸다가 그 행을 보고 409 가 된다.
          */
         post: operations["create_schedule_fixed_schedules_post"];
         delete?: never;
@@ -256,6 +275,9 @@ export interface paths {
         /**
          * Update Schedule
          * @description 고정 일정 부분 수정 — 입력된 필드만 갱신.
+         *
+         *     요일·시각을 바꿀 때만 겹침을 본다(자기 자신 제외). 제목만 고치는 요청까지 막으면, 겹침
+         *     검사가 생기기 전에 이미 겹쳐 저장된 일정은 이름조차 못 고친다.
          */
         patch: operations["update_schedule_fixed_schedules__schedule_id__patch"];
         trace?: never;
@@ -363,6 +385,10 @@ export interface paths {
          *     이미 승격된 축을 다시 누르면(그 Goal 이 아직 살아있으면) **새로 만들지 않고 그 행을
          *     그대로 반환**(멱등) — U1 이 "사용자당 1개" 를 지키는 것과 같은 이유로, 같은 축을 두
          *     번 승격해 중복 목표가 쌓이면 안 된다.
+         *
+         *     멱등 판정(`promoted_goal_id`)은 tier lock **뒤에서** 읽는다 — 먼저 읽으면 두 번 탭한 두
+         *     요청이 모두 "아직 승격 전" 을 보고 같은 축으로 목표를 두 개 만든다. 목표 만들기 규칙은
+         *     `/plans/mandala/next-cycle` 과 한 벌이다(`goal_policy.promote_axis`).
          */
         post: operations["promote_mandala_node_goals_mandala_nodes__node_id__promote_post"];
         delete?: never;
@@ -407,7 +433,20 @@ export interface paths {
         post?: never;
         /**
          * Delete Goal
-         * @description 목표 soft delete (`archived_at` + `status=archived`).
+         * @description 목표 soft delete (`archived_at` + `status=archived`) — 그 목표가 남긴 것도 함께 멈춘다.
+         *
+         *     예전엔 목표 행만 보관했다. 오늘 화면·주간 캘린더·아침 브리프·`pre_card` 알림은 전부
+         *     `action_items` 를 목표 상태와 무관하게 읽으므로, "정말 삭제" 를 누른 목표의 카드가 다음
+         *     날에도 그대로 떴고(취소도 "계획에 묶여 있어" 거절됐다) 재계획이 다음 주로 다시 옮겼다.
+         *
+         *     정리는 **완료 경로와 같은 함수·같은 두 축**이다(`complete_goal` 참고) — 손대지 않은 예정
+         *     카드는 `archived_at`, 그 블록은 `cancelled`. 시작·완료·실패한 카드와 사용자가 시간을
+         *     옮긴(`user_edit`) 카드는 보존된다(규칙을 두 벌로 가르지 않으려고 그대로 따른다).
+         *
+         *     궁극목표면 만다라도 닫는다 — 트리를 보관하고, 그 칸에서 만든 반복형 습관도 보관한다.
+         *     안 그러면 볼 화면이 없는 습관이 매주 오늘 화면에 뜨고 빈도 조정 제안까지 온다.
+         *     축에서 승격한 목표는 독립 목표라 그대로 남는다(다시 세우기의 승계 규칙과 같다).
+         *     전부 soft 이고(AGENTS §2) 한 트랜잭션이다.
          */
         delete: operations["delete_goal_goals__goal_id__delete"];
         options?: never;
@@ -415,6 +454,10 @@ export interface paths {
         /**
          * Update Goal
          * @description 목표 부분 수정. tier 변경 시 한도 재검사, category 변경 시 값 검증(#326).
+         *
+         *     `deadline` 은 **보냈는지**로 가른다 — 빼면 그대로, `null`(또는 빈 문자열)을 보내면 마감
+         *     해제. 예전엔 `null` 을 "안 바꿈" 으로 읽어 마감을 지울 방법이 없었다(FE 는 칸을 비우면
+         *     `null` 을 보낸다).
          */
         patch: operations["update_goal_goals__goal_id__patch"];
         trace?: never;
@@ -606,6 +649,10 @@ export interface paths {
         /**
          * List Instances
          * @description 그 주의 모든 활성 habit 인스턴스. weekStart 누락 시 이번 주(KST 월요일).
+         *
+         *     **이번 주**를 읽을 때는 없는 인스턴스를 먼저 채운다(`ensure_for_week`, 멱등) — 새 주
+         *     인스턴스는 월요일 00:05 cron 이 만드는데, 그 전에 화면을 열면 습관에 체크할 대상이 없어
+         *     누른 체크가 서버에 안 올라갔다. 지난 주·다음 주는 읽기만 한다.
          */
         get: operations["list_instances_habit_instances_get"];
         put?: never;
@@ -628,8 +675,34 @@ export interface paths {
         /**
          * Check Instance
          * @description 1회 달성 카운트 증가. user_id scope 는 habit 조인으로 자동 검증.
+         *
+         *     지난 주 인스턴스로 오면 이번 주 인스턴스를 올리고 **그 인스턴스**를 돌려준다(응답의
+         *     `instanceId`·`weekStart` 로 화면이 새 주를 알 수 있다).
          */
         post: operations["check_instance_habit_instances__instance_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/habit-instances/{instance_id}/uncheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uncheck Instance
+         * @description 잘못 누른 체크 1회 되돌리기 — 0 아래로는 안 내려간다(다시 눌러도 안전).
+         *
+         *     예전엔 체크를 되돌릴 방법이 없어, 잘못 누르거나 두 번 눌린 체크가 그 주 기록에 영영
+         *     남았다. 다른 사용자의 인스턴스는 check 와 같은 404.
+         */
+        post: operations["uncheck_instance_habit_instances__instance_id__uncheck_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -655,7 +728,8 @@ export interface paths {
          *
          *     주별 생성은 `scheduler/habit_instances.py` cron 이 맡지만, 여기서도 만든다 — 주 중간에
          *     등록한 습관이 다음 월요일까지 오늘 화면에 안 보이면 안 된다. 같은 get-or-create 라
-         *     cron 과 겹쳐도 1행.
+         *     cron 과 겹쳐도 1행. 이번 주 목표는 남은 날만큼으로 줄인다(`week_target`). 응답에 그
+         *     인스턴스 id(`currentInstanceId`)를 실어 화면이 곧바로 체크할 수 있게 한다.
          */
         post: operations["create_habit_habits_post"];
         delete?: never;
@@ -684,6 +758,9 @@ export interface paths {
         /**
          * Update Habit
          * @description 습관 부분 수정 — 제목 · 빈도. 빈도 변경 시 `target_count` 도 동기화.
+         *
+         *     이번 주 인스턴스의 목표치도 함께 바꾼다 — 예전엔 `habits` 만 고쳐서 주 5회 → 2회로 줄여도
+         *     이번 주 카드가 0/5 로 남았다. 지난 주 기록은 그대로 둔다.
          */
         patch: operations["update_habit_habits__habit_id__patch"];
         trace?: never;
@@ -794,6 +871,11 @@ export interface paths {
         /**
          * Update Inbox
          * @description userCategory override 또는 status 변경.
+         *
+         *     - 옮긴(`promoted`) 항목을 `captured`/`classified` 로 되돌리면 옮기기 버튼이 다시 살아나
+         *       같은 메모로 목표·카드가 또 생긴다 → 409 `INBOX_ALREADY_PROMOTED`.
+         *     - `status="archived"` 는 `POST /inbox/{id}/archive` 와 같은 보관이다 — 예전엔 status 만
+         *       바꾸고 `archived_at` 이 비어 활성 목록과 보관함에 동시에 떴다.
          */
         patch: operations["update_inbox_inbox__inbox_id__patch"];
         trace?: never;
@@ -858,6 +940,10 @@ export interface paths {
         /**
          * Convert To Action
          * @description Inbox → ActionItem(source=inbox) 변환. inbox.status=promoted.
+         *
+         *     **멱등** — 이미 할 일로 옮긴 항목이면 카드를 또 만들지 않고 지금 상태를 200 으로.
+         *     목표로 옮긴 항목이면 409 `INBOX_ALREADY_PROMOTED`. 항목을 잠금 읽기로 가져와 두 번 탭이
+         *     직렬화된다(뒤 요청은 앞 요청이 commit 한 `promoted` 를 본다).
          */
         post: operations["convert_to_action_inbox__inbox_id__convert_to_action_post"];
         delete?: never;
@@ -878,6 +964,13 @@ export interface paths {
         /**
          * Convert To Goal
          * @description Inbox → Goal 변환 (tier=maintain default, 한도 enforce). inbox.status=promoted.
+         *
+         *     **멱등** — 이미 목표로 옮긴 항목이면 새로 만들지 않고 지금 상태를 200 으로 돌려준다.
+         *     할 일로 옮긴 항목이면 409 `INBOX_ALREADY_PROMOTED`.
+         *
+         *     순서가 핵심이다: tier lock → 항목 잠금 읽기 → 승격 여부 → 한도 → 생성 → commit.
+         *     항목을 lock **전에** 읽으면 앞 요청이 commit 하기 전 값("아직 승격 전")이 세션에 남아
+         *     두 요청이 모두 목표를 만든다.
          */
         post: operations["convert_to_goal_inbox__inbox_id__convert_to_goal_post"];
         delete?: never;
@@ -1613,7 +1706,9 @@ export interface paths {
          *
          *     - 대상: 다음 주 이후 미착수 블록의 액션 + 활성 블록 없는 planned 백로그(수락한 회복 포함).
          *       과거·시작/완료·user_edit 블록은 불변. 실패 원본은 미래 블록이 없어 자동 제외.
-         *     - busy = 확정(시작/완료·user_edit) 블록 + DB 시간정책 + **고정일정(#112 정합)**
+         *     - busy = 교체하지 않고 **남는 모든 블록**(확정 + 보존 카드의 예정 회차, planA-7)
+         *       + **활동 시간대 밖(인터뷰·설정, 첫 계획과 같은 조립 — `_replan_policies`)**
+         *       + DB 시간정책 + **고정일정(#112 정합)**
          *       + **Google 캘린더 일정**(첫 계획과 같은 다섯 번째 소스, ADR-0009 D4).
          *     - 각 새 블록에 '교체할 옛 블록 id'(replacesBlockId)를 실어, 승인이 blanket-cancel 없이
          *       그 블록만 현재 상태로 재조정 취소하게 한다(#117). 산출물은 Draft — 자동 적용 금지.
@@ -1749,6 +1844,13 @@ export interface paths {
          *     WELCOME 에 고정돼 새로고침 시 재-온보딩되던 문제가 있어 승인에서 ACTIVE 로 마감
          *     (api-contract §3).
          *     응답은 명시 승인이므로 `is_draft=false` (ADR-0005 §7.2).
+         *
+         *     **초안 편집 반영**(HITL '수정', planA-2, additive): 본문 `blocks` 가 오면 그것이 최종
+         *     블록 목록이다 — 옮긴 시각·지운 카드·바꾼 제목을 반영해 영속화한다(`apply_draft_edits`).
+         *     예전엔 본문을 아예 안 받아, 초안 화면에서 끌어 옮기고 지운 것이 승인 때 전부 버려지고
+         *     AI 원안이 그대로 저장됐다 — '수정' 버튼이 있는데 수정이 안 되는 HITL 이었다. 옮긴 블록은
+         *     생성과 같은 소스(기존 일정·고정 일정·시간 정책·캘린더)로 다시 대조하고(`_ensure_moved_blocks_fit`),
+         *     활동 시간대는 영속화 가드가 그대로 막는다. 본문이 없으면 종전과 같다.
          */
         post: operations["approve_plan_plans__plan_id__approve_post"];
         delete?: never;
@@ -1774,9 +1876,15 @@ export interface paths {
          * Edit Block
          * @description 블록 15분 snap 이동 + 목표(category)/제목 수정 (S15).
          *
-         *     충돌 422 `PLAN_BLOCK_CONFLICT` / 정책 422 `POLICY_VIOLATION`. `category`/`title` 을 주면
+         *     충돌 422 `PLAN_BLOCK_CONFLICT`(다른 블록 **또는 고정 일정**) / 정책 422 `POLICY_VIOLATION`
+         *     (수면·점심·심야 차단 **·노터치**). `category`/`title` 을 주면
          *     블록이 매달린 action_item 을 갱신한다(같은 액션의 모든 세션 블록 공유). 정책 검사는
          *     **변경된 category** 로 수행하고, 변경 반영은 성공 commit 시에만 영속된다(422 면 롤백).
+         *     시각을 지금 그대로 보낸 편집(제목·목표만)은 snap·겹침·정책 검사 없이 시각을 유지한다.
+         *
+         *     정책 집합은 DB `time_policies` + **인터뷰(·설정)의 활동 시간대 밖**으로, 승인·재계획과
+         *     똑같이 `_replan_policies` 로 조립한다 — 같은 시각이 편집기에서는 통과하고 승인에서는
+         *     막히는 일이 없게.
          */
         patch: operations["edit_block_plans__plan_id__blocks__block_id__patch"];
         trace?: never;
@@ -1987,9 +2095,15 @@ export interface paths {
         put?: never;
         /**
          * Generate Recovery Proposals
-         * @description 실패 컨텍스트 기반 회복 옵션 2~4개 생성 (LLM thinking 0 + ≤ 12s, 룰 fallback — ADR-0003 addendum).
+         * @description 실패 컨텍스트 기반 회복 옵션 2~4개 생성 (LLM thinking 0 + 12s × 1회, 룰 fallback — ADR-0003 addendum).
          *
          *     이미 pending 카드가 있으면 재생성하지 않고 그대로 반환한다 (중복 INSERT 방지).
+         *
+         *     ⚠️ **실행 행을 먼저 잠근다** (#481). 그 멱등이 순차 호출에서만 성립했다 — 동시 요청은
+         *     pending 조회를 나란히 통과해 각자 LLM 을 부르고 각자 세트를 INSERT 했다. 잠금은 pending
+         *     판정 **앞**이어야 하고(뒤면 이미 교차한다) 커밋까지 유지돼야 한다(INSERT 직전만 막으면
+         *     중복 LLM 호출과 rate 소비를 못 막는다). 뒤따르는 요청은 기다렸다가 pending 을 다시 보고
+         *     같은 세트를 반환한다 — 동시 호출도 멱등으로 수렴시키므로 새 409 는 만들지 않는다.
          */
         post: operations["generate_recovery_proposals_recovery_proposals_generate_post"];
         delete?: never;
@@ -2180,6 +2294,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reviews/habit-penalty/{habit_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Habit Penalty
+         * @description 빈도 재설계 거절('지금대로 유지') → 빈도는 그대로, 4주 동안 다시 제안하지 않는다.
+         *
+         *     **도메인 멱등** — 이미 cooldown 중이면 아무것도 바꾸지 않고 같은 응답을 준다(두 번 눌러도
+         *     cooldown 이 늘어나지 않는다). 그래서 accept 와 달리 Idempotency-Key 를 요구하지 않는다.
+         *     제안 조건(3주 미달)을 다시 따지지도 않는다 — 카드를 본 뒤 주가 바뀌어 조건이 풀렸어도
+         *     '지금대로 유지'는 사용자의 뜻 그대로 기록하는 게 맞다(422 로 막으면 유지 버튼이 실패한다).
+         *     이번 사이클에 이미 **수락**했다면 거절로 덮지 않는다(422, accept 와 같은 코드).
+         */
+        post: operations["reject_habit_penalty_reviews_habit_penalty__habit_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reviews/weekly": {
         parameters: {
             query?: never;
@@ -2189,7 +2329,14 @@ export interface paths {
         };
         /**
          * Get Weekly Review
-         * @description 이번 주(또는 지정 주차) 리뷰. precomputed 우선, 없으면 즉석 계산(쓰기 없음).
+         * @description 이번 주(또는 지정 주차) 리뷰. 확정본이 있으면 그것, 아니면 즉석 계산(쓰기 없음).
+         *
+         *     확정본 = 그 주의 회고 창이 닫힌 뒤 집계한 행(`is_final_summary`). 예전엔 저장된 행이면
+         *     무조건 믿었는데, 일요일 18:00 폴이 만든 행이 그 주 내내 잠겨 21:00 회고 알림을 받고 체크인한
+         *     결과가 점수·한 줄 평에 안 들어갔다 — 같은 응답의 `effort`·`mandala` 는 매번 새로 세므로
+         *     한 화면 안에서 두 시점의 숫자가 섞였다. 확정 전에는 저장본을 건너뛰고 즉석 계산한다.
+         *
+         *     그 주 실행 표본은 **한 번만** 읽어 `effort` 와 KPI 가 같이 쓴다.
          */
         get: operations["get_weekly_review_reviews_weekly_get"];
         put?: never;
@@ -2256,8 +2403,9 @@ export interface paths {
          * @description 즉시 익명화 — 2단계 확인.
          *
          *     - `confirmationToken` 없으면 step1: 확인 토큰 발급(미적용).
-         *     - `confirmationToken` 있으면 step2: 검증 후 `_encrypted` 필드 마스킹 + 이름 마스킹 +
-         *       `is_anonymized`/`anonymized_at` set. hard delete 아님(행 보존).
+         *     - `confirmationToken` 있으면 step2: 검증 후 `anonymize_account` — 캘린더 연결 해제 +
+         *       텍스트 마스킹(`PrivacyRepo.anonymize_user` 범위) + 이름 마스킹 + `is_anonymized`/
+         *       `anonymized_at` set. hard delete 아님(행 보존).
          */
         post: operations["anonymize_settings_anonymize_post"];
         delete?: never;
@@ -2281,7 +2429,9 @@ export interface paths {
          *
          *     `anonymize`(S28, 계정은 유지한 채 과거 텍스트만 마스킹)와는 다른 작업이다 — 이건 앱에
          *     다시 들어올 수 없게 만드는 것까지 포함한다. hard delete 는 하지 않는다(AGENTS §2) —
-         *     같은 `anonymize_user()` PII 마스킹 위에 `archived_at` 을 얹어 **soft delete** 한다.
+         *     같은 `anonymize_user()` 마스킹에 `purge_account_text()`(목표·할 일·습관·일정 제목, push
+         *     구독 등 나머지 텍스트)를 더하고 `archived_at` 을 얹어 **soft delete** 한다. 캘린더 연결은
+         *     우리 쪽에서 끊고 Google 쪽 권한도 회수한다(`anonymize_account`).
          *
          *     `archived_at` 을 세우는 순간 `UserRepo.get_by_id`/`get_by_email` 의 `archived_at IS NULL`
          *     필터에 걸려, 이미 발급된 access token 은 다음 요청의 `get_current_user` 에서 그대로
@@ -2389,7 +2539,8 @@ export interface paths {
         put?: never;
         /**
          * Prefill From Interview
-         * @description 인터뷰 답 기반 정책 후보 (DB 미저장).
+         * @description 정책 기본 후보 (DB 미저장) — 이름과 달리 아직 인터뷰 답을 쓰지 않는다
+         *     (`_build_prefill_candidates`). `user` 는 인증만 요구한다.
          *
          *     응답의 `policyId` 는 prefill 임시 식별자 — FE 는 사용자 선택 후 POST `/time-policies` 로 실제 저장.
          */
@@ -2459,7 +2610,8 @@ export interface paths {
          *
          *     "이건 처음부터 없던 일" 이라는 의사표시다. 그래서 `archived_at` 만 세팅하고
          *     **`status` 는 건드리지 않으며**, 지표에서는 분모째로 빠진다(조회가 archived 를
-         *     거른다). 취소 가능한 카드는 실행 이력이 없으므로 주간 KPI 는 애초에 이 카드를
+         *     거른다). 남은 미종결 블록은 repo 가 함께 cancel 한다 — 안 그러면 주간 그리드에
+         *     유령 블록으로 남아 그 시간대를 계속 막는다(data-2). 취소 가능한 카드는 실행 이력이 없으므로 주간 KPI 는 애초에 이 카드를
          *     join 한 적이 없다 — 지워도 과거 통계가 흔들리지 않는다.
          *
          *     **보관된 카드를 다시 취소해도 204** 다. FE 는 5초 스낵바 뒤에 호출하므로 재시도가
@@ -2487,13 +2639,21 @@ export interface paths {
          * @description [▶ 시작] → execution_events 생성 (#19-B).
          *
          *     카드의 미종결 scheduled_block 이 있으면 사용, 없으면 즉석 블록 생성
-         *     (source='user_edit'). 같은 카드의 in_progress 실행이 있으면 409.
+         *     (source='user_edit').
+         *
+         *     **같은 카드가 이미 진행 중이면 그 실행을 200 으로 돌려준다**(새로 만들지 않는다).
+         *     예전엔 409 였는데, FE 는 실행 id 를 sessionStorage 에만 들고 있어서 앱이 백그라운드에서
+         *     죽거나 탭을 닫으면 그게 비고, [이어서 하기] 가 start 를 다시 부른다 — 그러면 409 가
+         *     끝없이 반복되고 [완료] 가 영영 막혔다. 끝낸 일을 '일부만/잘 안됐어요' 로만 남길 수
+         *     있었다(today-1). 응답 모양은 같다 — `actualStartAt` 은 **처음 시작한 시각**이라 FE 가
+         *     타이머를 그 시각부터 이어 붙일 수 있다.
          *
          *     카드는 **행 잠금으로 읽는다**(#368). 계획 교체·목표 완료가 같은 카드를 보관하는
          *     중이면 여기서 기다렸다가 `archived_at IS NULL` 재평가에 걸려 404 로 끝난다 —
          *     execution_events·scheduled_block 을 만들기 **전에** 걸러야 한다. 상태만 조건부로
          *     막으면 실행 행이 남고, `list_pending_reflection` 은 `action_items` 에 join 하지
-         *     않으므로 그 실행이 회고 화면까지 새어 나간다.
+         *     않으므로 그 실행이 회고 화면까지 새어 나간다. 같은 잠금 덕에 [시작] 연타도 직렬화돼
+         *     두 번째 요청은 첫 요청이 만든 실행을 돌려받는다(실행이 두 개 생기지 않는다).
          */
         post: operations["start_action_today_actions__action_id__start_post"];
         delete?: never;
@@ -2563,7 +2723,11 @@ export interface paths {
          * Pause Focus
          * @description [⏸] 집중 세션 일시정지 (#83) — user_pause interruption 을 연다.
          *
-         *     execution 은 in_progress 유지. 이미 정지 중이면 409. 재개 시 누적 시간이 반영된다.
+         *     execution 은 in_progress 유지. 재개 시 누적 시간이 반영된다.
+         *
+         *     **이미 정지 중이면 새 구간을 열지 않고 200 `paused`** 다(예전 409 `TODAY_ALREADY_PAUSED`).
+         *     정지는 서버에 들어갔는데 응답만 잃은 FE 가 다시 보내면 409 가 끝없이 반복돼 '저장되지
+         *     않았어요' 배너가 사라지지 않았다(today-5). 결과 상태가 같으니 멱등이 맞다.
          */
         post: operations["pause_focus_today_focus__execution_id__pause_post"];
         delete?: never;
@@ -2585,7 +2749,12 @@ export interface paths {
          * Resume Focus
          * @description [▶ 계속] 집중 세션 재개 (#83) — 열린 정지 구간을 닫고 pause_total_minutes 누적.
          *
-         *     정지 중이 아니면 409. 정지 시작(created_at)부터 지금까지를 지연분으로 기록한다.
+         *     정지 시작(created_at)부터 지금까지를 지연분으로 기록한다. 6h cron 이 '6시간 안에 안
+         *     돌아옴' 으로 표시한 정지도 아직 열린 정지다 — 아침에 멈추고 저녁에 돌아와 [계속] 을
+         *     눌러도 재개되고, 그 시간이 정지 시간에 들어간다(sched-14).
+         *
+         *     **정지 중이 아니면 아무것도 바꾸지 않고 200 `in_progress`** 다(예전 409
+         *     `TODAY_NOT_PAUSED`). 재개 응답을 잃은 FE 의 재시도가 영영 실패하지 않게(today-5).
          */
         post: operations["resume_focus_today_focus__execution_id__resume_post"];
         delete?: never;
@@ -2664,6 +2833,11 @@ export interface components {
             calendarConflict: boolean;
             /** Cancellable */
             cancellable: boolean;
+            /**
+             * Carriedover
+             * @default false
+             */
+            carriedOver: boolean;
             /** Category */
             category: string;
             /** Estimatedminutes */
@@ -2973,8 +3147,11 @@ export interface components {
          * @description 화면(오늘·주간) 응답에 실리는 캘린더 확인 결과.
          *
          *     - `ok` — 읽었다. 겹치는 블록은 각 블록의 `calendarConflict` 로 표시된다.
-         *     - `failed` — 연결돼 있는데 못 읽었다(Google 지연·오류). 겹침 표시가 **없다는 뜻이 아니다**.
+         *     - `failed` — 연결돼 있는데 못 읽었다(Google 지연·오류, 토큰 갱신의 일시 실패). 겹침 표시가
+         *       **없다는 뜻이 아니다**.
          *     - `not_connected` — 연결 안 함(또는 서버에서 기능이 꺼짐). 아무 안내도 하지 않는다.
+         *       Google 쪽에서 끊긴 연결도 여기다 — 재연결 안내는 화면마다 반복하지 않고
+         *       `GET /calendar/connect` 의 `needsReconnect` 와 계획 `warnings` 가 맡는다.
          *
          *     `checkedAt` 은 실제로 Google 에서 읽은 시각이다 — 화면 조회는 5분 캐시라 최대 5분 전일 수
          *     있다. `ok` 가 아니면 null.
@@ -2999,11 +3176,21 @@ export interface components {
         };
         /**
          * CalendarConnection
-         * @description 캘린더 연결 상태 — POST /calendar/connect 응답.
+         * @description 캘린더 연결 상태 — GET/POST /calendar/connect 응답.
+         *
+         *     `needs_reconnect` — 연결이 없는데(`connected=false`) 그게 **Google 쪽에서 끊겨서**다
+         *     (권한 철회·refresh token 만료로 갱신이 실패). 앱에서 직접 해제했거나 연결한 적이 없으면
+         *     false 다. FE 는 true 일 때 '연결이 끊겼어요 · 다시 연결' 을 그린다. 다시 연결하거나
+         *     DELETE(해제)하면 false 로 돌아간다.
          */
         CalendarConnection: {
             /** Connected */
             connected: boolean;
+            /**
+             * Needsreconnect
+             * @default false
+             */
+            needsReconnect: boolean;
             /** Provider */
             provider: string;
             /** Scopes */
@@ -3195,6 +3382,7 @@ export interface components {
          *
          *     pause 는 interruption_events(user_pause) 를 열고, resume 은 그 구간을 닫아
          *     execution.pause_total_minutes 에 누적한다. execution 자체는 in_progress 유지.
+         *     둘 다 멱등 — 이미 정지 중인 pause·정지 중이 아닌 resume 도 200 으로 현재 상태를 돌려준다.
          */
         ExecutionEventResponse: {
             /** Actionitemid */
@@ -3274,6 +3462,39 @@ export interface components {
             hasMemo: boolean;
             /** Tagcodes */
             tagCodes: string[];
+        };
+        /**
+         * FirstPlanApproveBlock
+         * @description 승인 요청에 싣는 **편집된** 초안 블록 한 칸 (HITL '수정', additive).
+         *
+         *     `originId` 는 초안 블록의 `originId` 를 그대로 되돌려 보낸다(같은 카드의 나뉜 회차는
+         *     같은 값). 시각은 KST ISO 8601 — 손대지 않은 블록은 받은 `start`/`end` 를 **그대로** 돌려
+         *     보낸다(초안과 같으면 초안 시각으로 저장). 옮긴 블록은 보낸 시각 그대로(분 단위) 저장하고
+         *     15분 경계로 맞추지 않는다 — 초안 시각이 15분 격자가 아니어서(쉬는 시간 10분 등) 맞추면
+         *     승인한 화면과 다른 시각이 저장된다.
+         *     `title` 을 바꾸면 그 카드 이름이 바뀐다(회차 꼬리표 "(1/2)" 는 떼고 저장).
+         */
+        FirstPlanApproveBlock: {
+            /** End */
+            end: string;
+            /** Originid */
+            originId: string;
+            /** Start */
+            start: string;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * FirstPlanApproveRequest
+         * @description POST /plans/{planId}/approve 본문 — **선택**. 본문이 없거나 `blocks` 가 없으면 초안 그대로.
+         *
+         *     `blocks` 를 보내면 그것이 **최종 블록 목록 전체**다: 옮긴 블록은 새 시각으로, 목록에서
+         *     빠진 카드는 만들지 않고, 바꾼 제목은 카드 이름으로 저장한다. 초안에 없던 `originId` 는
+         *     받지 않는다(422) — 승인은 초안을 고치는 자리지 새 카드를 만드는 자리가 아니다.
+         */
+        FirstPlanApproveRequest: {
+            /** Blocks */
+            blocks?: components["schemas"]["FirstPlanApproveBlock"][] | null;
         };
         /**
          * FirstPlanApproveResponse
@@ -3401,6 +3622,9 @@ export interface components {
         /**
          * FixedScheduleCreateRequest
          * @description POST /fixed-schedules 요청.
+         *
+         *     제목 앞뒤 공백 제거·200자 상한(`fixed_schedules.title` String(200))·요일 중복 제거·
+         *     `HH:MM`(24:00 허용) 검사는 라우터가 한다 — 사용자에게 보일 한국어 문구로 422 를 내려고.
          */
         FixedScheduleCreateRequest: {
             /** Daysofweek */
@@ -3414,7 +3638,8 @@ export interface components {
         };
         /**
          * FixedScheduleUpdateRequest
-         * @description PATCH /fixed-schedules/{id} 요청 — 부분 수정.
+         * @description PATCH /fixed-schedules/{id} 요청 — 부분 수정. 준 필드는 생성과 같은 검사를 받는다
+         *     (빈 제목·빈 요일 목록은 422 — '안 바꿈' 은 필드를 빼는 것이다).
          */
         FixedScheduleUpdateRequest: {
             /** Daysofweek */
@@ -3682,6 +3907,8 @@ export interface components {
         Habit: {
             /** Category */
             category: string;
+            /** Currentinstanceid */
+            currentInstanceId?: string | null;
             /** Frequencyperweek */
             frequencyPerWeek: number;
             /** Goalnodeid */
@@ -3778,6 +4005,18 @@ export interface components {
             candidates?: components["schemas"]["HabitPenaltyCandidate"][];
         };
         /**
+         * HabitPenaltyRejectResponse
+         * @description POST /reviews/habit-penalty/{habitId}/reject — '지금대로 유지' 결과 (빈도 변화 없음).
+         */
+        HabitPenaltyRejectResponse: {
+            /** Frequency */
+            frequency: number;
+            /** Habitid */
+            habitId: string;
+            /** Message */
+            message: string;
+        };
+        /**
          * HabitUpdateRequest
          * @description PATCH /habits/{id} 요청 — 제목·빈도 (api-contract §7).
          */
@@ -3796,6 +4035,23 @@ export interface components {
             doneCount: number;
             /** Targetcount */
             targetCount: number;
+        };
+        /**
+         * HabitWeekSummary
+         * @description 만다라에 걸리지 않은 습관 1개의 그 주 체크인 현황 (v2.30).
+         *
+         *     주간 KPI 는 카드 실행만 세서, 습관만 쓰는 사용자는 체크인을 몇 번 해도 "집계할 활동이
+         *     없어요" 를 봤다. 만다라 반복형 칸의 습관은 `mandala.habits` 에 이미 있어 여기서 뺀다.
+         */
+        HabitWeekSummary: {
+            /** Donecount */
+            doneCount: number;
+            /** Habitid */
+            habitId: string;
+            /** Targetcount */
+            targetCount: number;
+            /** Title */
+            title: string;
         };
         /**
          * HealthResponse
@@ -5241,6 +5497,11 @@ export interface components {
         Question: {
             /** Answertype */
             answerType: string;
+            /**
+             * Multiple
+             * @default false
+             */
+            multiple: boolean;
             /** Options */
             options: string[];
             /** Slotkey */
@@ -5365,6 +5626,11 @@ export interface components {
              * @default true
              */
             isDraft: boolean;
+            /**
+             * Personalizationskipped
+             * @default false
+             */
+            personalizationSkipped: boolean;
             /**
              * Recoverymode
              * @default standard
@@ -5536,6 +5802,10 @@ export interface components {
             end: string;
             /** Replacesblockid */
             replacesBlockId?: string | null;
+            /** Replacesend */
+            replacesEnd?: string | null;
+            /** Replacesstart */
+            replacesStart?: string | null;
             /**
              * Start
              * Format: date-time
@@ -5681,6 +5951,11 @@ export interface components {
             isRequired: boolean;
             /** Label */
             label: string;
+            /**
+             * Multiple
+             * @default false
+             */
+            multiple: boolean;
             /** Options */
             options?: string[];
             /** Slotkey */
@@ -5953,6 +6228,11 @@ export interface components {
         /**
          * UserProfile
          * @description 사용자 프로필 — GET /auth/me 및 로그인 응답에 포함.
+         *
+         *     `tone_mode` 는 아직 톤을 고르지 않은 사용자(인터뷰 전)에서 **null**. 예전엔 여기서만
+         *     빈 문자열로 내려 `GET /settings` 의 같은 사용자 같은 값이 `null` 과 `""` 로 갈렸다
+         *     (재검증 P4). 빈 문자열은 "고르지 않음"이 아니라 "고른 값이 비어 있음"처럼 읽히는
+         *     거짓말이고, 두 화면이 같은 사람을 다르게 말하면 그걸 읽는 쪽이 둘 다 방어해야 한다.
          */
         UserProfile: {
             /** Email */
@@ -5964,7 +6244,7 @@ export interface components {
             /** Timezone */
             timezone: string;
             /** Tonemode */
-            toneMode: string;
+            toneMode: ("gentle" | "strict" | "encouraging") | null;
             /** Userid */
             userId: string;
         };
@@ -6084,6 +6364,8 @@ export interface components {
             calendarConflict: boolean;
             /** Category */
             category: string;
+            /** Completionstatus */
+            completionStatus?: ("done" | "partial_done" | "failed" | "over_done") | null;
             /**
              * Endat
              * Format: date-time
@@ -6093,6 +6375,27 @@ export interface components {
             goalId?: string | null;
             /** Source */
             source: string;
+            /**
+             * Startat
+             * Format: date-time
+             */
+            startAt: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * WeeklyFixedSchedule
+         * @description 그날의 고정 일정(수업·알바) 한 칸 — 옮길 수 없는 시간 (planA-13, additive).
+         *
+         *     블록 편집은 이 시간과 겹치면 422 로 막는다. 그리드에 안 보이면 사용자는 막히는 이유를 모른다.
+         *     자정을 넘는 일정은 그날 안의 조각으로 나뉘어 온다(예: 22:00~02:00 → 00:00~02:00, 22:00~24:00).
+         */
+        WeeklyFixedSchedule: {
+            /**
+             * Endat
+             * Format: date-time
+             */
+            endAt: string;
             /**
              * Startat
              * Format: date-time
@@ -6126,6 +6429,8 @@ export interface components {
              * Format: date
              */
             date: string;
+            /** Fixedschedules */
+            fixedSchedules?: components["schemas"]["WeeklyFixedSchedule"][];
             /** Weekday */
             weekday: string;
         };
@@ -6211,6 +6516,8 @@ export interface components {
             generatedAt: string;
             /** Goalcompletionproposals */
             goalCompletionProposals?: components["schemas"]["GoalCompletionProposal"][];
+            /** Habits */
+            habits?: components["schemas"]["HabitWeekSummary"][];
             mandala?: components["schemas"]["MandalaWeeklySummary"] | null;
             /** Nextcycleproposals */
             nextCycleProposals?: components["schemas"]["NextCycleProposal"][];
@@ -6232,6 +6539,11 @@ export interface components {
             staleAxisProposals?: components["schemas"]["StaleAxisProposal"][];
             /** Topfailurecontexts */
             topFailureContexts?: components["schemas"]["TopFailureContext"][];
+            /**
+             * Unstartedblocks
+             * @default 0
+             */
+            unstartedBlocks: number;
             /**
              * Weekend
              * Format: date
@@ -7293,6 +7605,39 @@ export interface operations {
             };
         };
     };
+    uncheck_instance_habit_instances__instance_id__uncheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HabitInstance"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_habits_habits_get: {
         parameters: {
             query?: never;
@@ -7450,7 +7795,7 @@ export interface operations {
     list_inbox_inbox_get: {
         parameters: {
             query?: {
-                status?: string | null;
+                status?: ("captured" | "classified" | "archived" | "promoted") | null;
             };
             header?: {
                 authorization?: string | null;
@@ -8913,7 +9258,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FirstPlanApproveRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -9552,6 +9901,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HabitPenaltyAcceptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_habit_penalty_reviews_habit_penalty__habit_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                habit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HabitPenaltyRejectResponse"];
                 };
             };
             /** @description Validation Error */
