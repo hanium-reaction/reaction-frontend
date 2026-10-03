@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { FAIL_REASONS } from '../data';
 import { reflectionApi } from '../lib/api';
+import { hasAvoidanceReason } from '../lib/failureReason';
 import { Segmented } from './Segmented';
 
 export interface FailureTagOption {
@@ -64,6 +65,11 @@ export function FailureTagPicker({
   aversiveness,
   onAversivenessChange,
 }: FailureTagPickerProps) {
+  const asksAversion = hasAvoidanceReason(selected.map((reason) => reason.code));
+  useEffect(() => {
+    if (!asksAversion && aversiveness != null) onAversivenessChange?.(null);
+  }, [asksAversion, aversiveness, onAversivenessChange]);
+
   return (
     <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
@@ -85,19 +91,20 @@ export function FailureTagPicker({
         최대 2개까지 고를 수 있어요{selected.length > 0 ? ` · ${selected.length}/2` : ''}
       </div>
 
-      {onAversivenessChange && (
+      {asksAversion && onAversivenessChange && (
         <>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', marginBottom: 8 }}>이 일이 얼마나 하기 싫었나요?</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', marginBottom: 8 }}>이 일 자체를 얼마나 피하고 싶었나요? (선택)</div>
+          <p style={{ fontSize: 12, color: 'var(--text-2)', margin: '0 0 8px', lineHeight: 1.5 }}>피곤함이나 시간 부족과는 별개로, 이 일을 하고 싶지 않았던 정도예요.</p>
           <Segmented
             fluid
-            ariaLabel="하기 싫은 정도 1~5"
+            ariaLabel="이 일을 피하고 싶었던 정도 1~5 (선택)"
             value={aversiveness ?? 0}
             onChange={(v) => onAversivenessChange(aversiveness === v ? null : v)}
             options={[1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }))}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-3)', margin: '4px 0 14px' }}>
             <span>전혀 아니었어요</span>
-            <span>정말 하기 싫었어요</span>
+            <span>매우 피하고 싶었어요</span>
           </div>
         </>
       )}

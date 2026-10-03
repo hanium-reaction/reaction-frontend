@@ -84,7 +84,7 @@ interface MergedTodayScreenProps {
   onPartial: (id: string, pct: number) => void;
   // reason 은 표시용 labelKo, tagCode 는 reflectionApi.tagExecution 저장용(#80).
   // reason 은 표시용 라벨, tagCodes 는 최대 2개 저장용, memo 는 선택 자유 텍스트(S18).
-  // taskAversiveness — "이 일이 얼마나 하기 싫었나요?" 1~5 (#222). 실패로 기록될 때만 노출.
+  // taskAversiveness — 회피 사유를 선택한 경우에만 받는 선택 문항, 1~5 (#222).
   // 백엔드 openapi 에 task_aversiveness 필드가 아직 없어 전송하지 않는다 — 연결 지점은
   // ReActionMerged.markFailed 안에 주석으로 남겨둠.
   onFail: (id: string, reason: string, tagCodes?: string[], memo?: string, taskAversiveness?: number) => void;
@@ -1023,10 +1023,9 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
         <div onClick={() => setFailSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 18px 44px', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ width: 36, height: 4, borderRadius: 9999, background: 'var(--sand-300)', margin: '0 auto 14px' }} />
-            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 4, color: 'var(--text-1)' }}>지금 어떤 상태예요?</div>
+            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 4, color: 'var(--text-1)' }}>계획대로 하지 못한 이유가 무엇인가요?</div>
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>이유를 기록하면 더 잘 맞는 복구안을 제안해드려요.</p>
-            {/* 정서 1문항(#222)은 이 시트에서만 노출한다 — 실패로 기록되는 경로라서
-                markFailed 가 답을 이어받을 수 있기 때문이다. */}
+            {/* 회피 사유의 선택 문항은 공용 폼에서 관리한다. */}
             <FailureTagPicker
               reasons={failReasons}
               selected={failTags}
