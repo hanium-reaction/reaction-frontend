@@ -2,6 +2,7 @@
 // 응답·에러·인증·Idempotency 규약은 docs/api-contract.md v0.7 의 §1 을 따른다.
 
 import { Capacitor } from '@capacitor/core';
+import { normalizeFailureTagRequest } from './failureReason';
 import type { components } from '../types/openapi';
 import {
   clearSession,
@@ -785,7 +786,7 @@ export const reflectionApi = {
   tagExecution: (executionId: string, body: FailureTagRequest) =>
     request<FailureTagResponse>(`/reflection/failure-tags/${executionId}`, {
       method: 'POST',
-      body,
+      body: normalizeFailureTagRequest(body),
     }),
 };
 
