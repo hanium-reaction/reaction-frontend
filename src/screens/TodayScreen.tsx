@@ -22,6 +22,7 @@ import { categoryLabel, goalColor } from '../data';
 import { DemoNotice } from '../components/DemoNotice';
 import { FailureTagPicker, useFailureTagCatalog, type FailureTagOption } from '../components/FailureTagPicker';
 import { HeroTaskCard } from '../components/HeroTaskCard';
+import { RestartCard } from '../components/RestartCard';
 import { TodayTimeline } from '../components/TodayTimeline';
 import { ProgressSheet } from '../components/ProgressSheet';
 import { EmptyState } from '../components/EmptyState';
@@ -691,9 +692,13 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           </div>
         </div>
 
+        {!agendaLoading && usingRealAgenda && <RestartCard tasks={tasks}
+          onReview={(id) => { setSelectedTaskId(id); setDetailTask(tasks.find((task) => task.id === id) ?? null); }}
+          onRecovery={onOpenRecovery} />}
+
         {/* 서버 missedCheckIn 인앱 넛지(#341) — 앱을 열었을
             때만 보인다. 닫으면(X) 같은 블록은 localStorage 로 다시 안 뜬다(반복 노출 방지). */}
-        {!agendaLoading && uncheckedBlocks.length > 0 && (
+        {!agendaLoading && !usingRealAgenda && uncheckedBlocks.length > 0 && (
           <div
             role="status"
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--coral-200)', background: 'var(--brand-soft)' }}
@@ -1003,7 +1008,8 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--coral-700)', lineHeight: 1.55 }}>{detailTask.firstStep}</p>
               </div>
             )}
-            <button onClick={() => { const id = detailTask.id; setDetailTask(null); onOpen(id); }} style={{ width: '100%', height: 48, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer' }}>시작하기</button>
+            {detailTask.missedCheckIn && <div className="reentry-review"><strong>실제로 한 만큼 확인해 주세요</strong><p>기록이 비어 있어요. 아직 결과를 알 수 없어요.</p><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}><button className="reentry-secondary" onClick={() => { onMarkDone(detailTask.id); setDetailTask(null); }}>완료했어요</button><button className="reentry-secondary" onClick={() => { setPartialSheet(detailTask.id); setDetailTask(null); }}>일부 했어요</button><button className="reentry-secondary" onClick={() => { setFailSheet(detailTask.id); setFailTags([]); setFailMemo(''); setDetailTask(null); }}>아직 못 했어요</button></div></div>}
+            <button onClick={() => { const id = detailTask.id; setDetailTask(null); onOpen(id); }} style={{ width: '100%', height: 48, marginTop: 12, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer' }}>시작하기</button>
             {/* 취소는 BE 가 가능하다고 한 카드에만 보여준다(cancellable). 이미 시작했거나
                 회복·목표에서 파생된 카드는 취소 대상이 아니라 버튼 자체를 만들지 않는다. */}
             {detailTask.cancellable && (

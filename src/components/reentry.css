@@ -1,0 +1,34 @@
+.restart-card { padding: 24px; border: 1px solid var(--coral-200); border-radius: 24px; background: radial-gradient(ellipse at 100% 0, #f6d9c5 0, transparent 65%), var(--brand-soft); color: var(--text-1); }
+.reentry-eyebrow { display: flex; align-items: center; gap: 7px; color: var(--coral-700); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.restart-card h2 { font-size: 29px; line-height: 1.24; letter-spacing: -.055em; margin: 14px 0 10px; font-weight: 800; }
+.restart-card p, .reentry-page p { color: var(--text-2); font-size: 14px; line-height: 1.65; }
+.restart-select-label { display: flex; justify-content: space-between; margin: 22px 0 8px; font-weight: 700; font-size: 12px; }
+.restart-select-label span { color: var(--text-3); }
+.restart-card select { width: 100%; min-height: 52px; padding: 12px; border: 1px solid var(--sand-300); border-radius: 12px; background: var(--surface-raised); font: inherit; font-size: 15px; font-weight: 700; color: var(--text-1); text-overflow: ellipsis; }
+.restart-context { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 18px; font-size: 12px; color: var(--text-2); }
+.restart-context span + span::before { content: '·'; margin-right: 8px; }
+.reentry-primary { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 50px; padding: 12px 16px; border: 0; border-radius: 12px; background: var(--brand-surface); color: #fffcf6; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.reentry-primary:disabled { opacity: .45; cursor: not-allowed; }
+.restart-card small { display: block; font-size: 11px; color: var(--text-2); line-height: 1.6; margin-top: 12px; }
+.reentry-steps { display: flex; gap: 8px; margin: 0 0 24px; padding: 0; list-style: none; color: var(--text-3); font-size: 11px; }
+.reentry-steps li { flex: 1; border-top: 3px solid var(--sand-200); padding-top: 8px; }
+.reentry-steps [aria-current="step"] { border-color: var(--brand); color: var(--coral-700); font-weight: 700; }
+.reentry-overlay { position: absolute; inset: 0; z-index: 50; padding: 16px; display: flex; align-items: center; justify-content: center; }
+.reentry-sheet { position: relative; width: 100%; max-width: 700px; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px; border-radius: 26px; background: var(--surface-raised); border: 1px solid var(--sand-200); box-shadow: var(--shadow-xl); }
+.reentry-sheet h1, .reentry-page h1 { font-size: 27px; font-weight: 800; line-height: 1.3; letter-spacing: -.04em; margin: 12px 0; }
+.reentry-review { margin-top: 16px; padding: 16px; border: 1px solid var(--coral-200); border-radius: 14px; background: var(--brand-soft); font-size: 13px; line-height: 1.65; }
+.reentry-review strong { display: block; margin-bottom: 5px; }
+.reentry-page { height: 100%; overflow-y: auto; padding: 28px 22px; background: var(--surface-ground); }
+.reentry-page-inner { max-width: 720px; margin: auto; }
+.reentry-diff { display: grid; gap: 12px; margin: 22px 0; }
+.reentry-diff article { border: 1px solid var(--sand-200); border-radius: 18px; background: var(--surface-raised); padding: 20px; min-width: 0; }
+.reentry-diff article:last-child { background: var(--brand-soft); border-color: var(--coral-200); }
+.reentry-diff h2 { font-size: 18px; line-height: 1.5; margin: 12px 0; overflow-wrap: anywhere; }
+.reentry-diff dl { margin: 16px 0 0; font-size: 13px; }
+.reentry-diff dt { color: var(--text-3); font-size: 11px; margin-top: 12px; }
+.reentry-diff dd { margin: 4px 0 0; line-height: 1.6; }
+.reentry-footnote { border-top: 1px solid var(--sand-200); padding-top: 16px; margin: 22px 0; }
+.reentry-secondary { background: transparent; border: 1px solid var(--sand-300); border-radius: 12px; min-height: 44px; padding: 10px 16px; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; }
+.reentry-page button:focus-visible, .restart-card :focus-visible, .reentry-sheet :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+@media (min-width: 640px) { .reentry-diff { grid-template-columns: 1fr 1fr; } .reentry-page { padding: 40px; } .restart-card { padding: 28px; } }
+@media (max-width: 380px) { .reentry-sheet { padding: 18px; } .restart-card { padding: 18px; } }

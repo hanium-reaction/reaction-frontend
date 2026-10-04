@@ -10,6 +10,27 @@ vi.mock('../lib/api', async (original) => ({
 const applied = { taskTitle: '공부', failReason: '', proposalTitle: '회복', proposalDesc: '', proposalTime: '' };
 beforeEach(() => vi.clearAllMocks());
 
+it('승인하지 않고 돌아가기는 변경을 승인하지 않는다', async () => {
+  vi.mocked(replanApi.diff).mockResolvedValue({ before: { title: '공부' }, after: { title: '10분 공부' } } as never);
+  const onDone = vi.fn();
+  render(<RecoveredScreen recoveryCount={9} executionId="exec-1" applied={applied} onDone={onDone} />);
+  await screen.findByText('10분 공부');
+  expect(screen.queryByText('이번 세션 회복')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('지금은 반영하지 않고 돌아가기'));
+  expect(onDone).toHaveBeenCalledOnce();
+  expect(replanApi.approve).not.toHaveBeenCalled();
+});
+
+it('이미 승인한 일정은 다시 승인하지 않는다', async () => {
+  vi.mocked(replanApi.diff).mockResolvedValue({ before: { title: '공부' }, after: { title: '10분 공부' }, alreadyApproved: true } as never);
+  const onDone = vi.fn();
+  render(<RecoveredScreen recoveryCount={1} executionId="exec-1" applied={applied} onDone={onDone} />);
+  await screen.findByText('일정 반영됨');
+  fireEvent.click(screen.getByText('오늘로 돌아가기'));
+  expect(onDone).toHaveBeenCalledOnce();
+  expect(replanApi.approve).not.toHaveBeenCalled();
+});
+
 it('회복 기록 없이 진입하면 일정 승인이나 알림을 약속하지 않는다', () => {
   const onDone = vi.fn();
   render(<RecoveredScreen recoveryCount={0} onDone={onDone} />);

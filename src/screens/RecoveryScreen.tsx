@@ -18,6 +18,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { localDateStr, defaultCarryOverAnchorDate, defaultReEngagementAnchorDate, DEFAULT_REENGAGEMENT_TIME } from '../lib/dates';
 import type { Task, RecoveryProposal } from '../types';
 import type { RecoveryCard } from '../types/api';
+import '../components/reentry.css';
 
 // 이 optionGroup 은 "보류·이월" 계열 — 수락 시 재관여 앵커(#221)를 같이 정한다.
 // PARK("지금은 접어두기") / CARRY_OVER("내일 이어서") 만 해당. DOWNSCOPE/RESCHEDULE 는
@@ -249,8 +250,8 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
     if (executionId) {
       setDeciding(true);
       setDecideError(null);
-      // PARK/CARRY_OVER 는 재관여 앵커(#221)를 함께 넘긴다 — 지금은 스펙 대기라
-      // recoveryApi.decide 안에서 버려지지만, 값 자체는 여기서부터 만들어 둔다.
+      // PARK/CARRY_OVER는 현재 계약의 reEngagementAnchorAt으로 확인 시점을 저장한다.
+      // 푸시 전달 여부를 뜻하지 않는다.
       const reEngagementAnchorAt = needsAnchor ? `${anchorDate}T${anchorTime}:00+09:00` : null;
       try {
         const result = await recoveryApi.decide(
@@ -266,11 +267,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
         setDeciding(false);
       }
     }
-    // #223 ↔ #221 연결 지점: 재협상 3장(DOWNSCOPE/RESCHEDULE/PARK) 중 하나를
-    // 여기서 수락하면 재관여 앵커(#221 — "다음 주 리뷰 때 다시 볼지" 설정)가
-    // 함께 필요하다. #221 은 다른 에이전트가 별도 브랜치에서 진행 중이라 여기
-    // 서는 앵커 호출을 추가하지 않는다 — 그 작업이 머지되면 renegotiating===true
-    // 분기에서 앵커 설정 API를 이어붙이면 된다.
+    // 선택 저장 다음에 변경 내용을 검토한다. 일정 승인은 다음 화면에서 따로 한다.
     setAccepted(true);
     if (chosen) setTimeout(() => onAccept(chosen, requiresReplan), 1400);
   };
@@ -283,18 +280,19 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
           <ArrowsClockwise size={32} weight="fill" color="var(--brand)" />
         </div>
         <div style={{ fontSize: 30, fontWeight: 500, letterSpacing: '-0.01em' }}>좋아요.</div>
-        <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 260 }}>{p?.title} — 복구안을 적용하고 있어요…</p>
+        <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 260 }}>{p?.title} — 선택을 저장했어요. 변경 내용을 확인해 주세요.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 16px 36px' }}>
+    <div className="reentry-overlay">
       <div onClick={onDismiss} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)' }} />
-      <div style={{ position: 'relative', background: 'var(--surface-raised)', borderRadius: 28, padding: 22, border: `1px solid ${renegotiating ? 'var(--sand-300)' : 'var(--coral-200)'}`, boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}>
+      <div className="reentry-sheet" role="region" aria-label="다시 시작할 방법 선택">
         {/* 재협상 톤 — coral(에너지) 대신 sand(차분함) 그라디언트로 "잠깐 멈춤"을 신호한다. */}
         <div style={{ position: 'absolute', inset: 0, background: renegotiating ? 'radial-gradient(circle at 90% -10%, rgba(180,163,129,0.14) 0%, transparent 50%)' : 'radial-gradient(circle at 90% -10%, rgba(226,109,78,0.10) 0%, transparent 50%)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative' }}>
+          <ol className="reentry-steps" aria-label="다시 시작 순서"><li>01 항목 확인</li><li aria-current="step">02 방법 선택</li><li>03 변경 확인</li></ol>
           {task && (
             // 여기는 "무엇이 멈췄나"를 알려주는 자리지 경고가 아니다. 예전엔 빨간 에러
             // 박스(#FAE2D8 + danger 아이콘/글씨)라, 회복 화면에서 제일 먼저 보이는 게
@@ -303,9 +301,10 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, padding: '9px 11px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 10 }}>
               <Flag size={14} color="var(--text-3)" weight="fill" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 1 }}>여기서 멈췄어요</div>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 1 }}>다시 살펴볼 항목</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
-                {failReason && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{failReason} · 실행 기록에 남겼어요</div>}
+                {task.dur && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>원래 계획 {task.dur}{task.time ? ` · ${task.time}` : ''}</div>}
+                {failReason && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>선택한 이유 · {failReason}</div>}
               </div>
             </div>
           )}
@@ -317,13 +316,11 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             {renegotiating ? '잠깐 멈춤 · 다시 정하기' : 'AI 추천 · 회복 제안'}
           </div>
 
-          <div style={{ fontWeight: 800, fontSize: 26, letterSpacing: '-0.01em', lineHeight: 1.2, marginBottom: 6 }}>
-            {renegotiating ? '지금 잠깐 멈춰서 생각해볼까요' : '오늘은 절반쯤 왔어요.'}
-          </div>
+          <h1>{renegotiating ? '지금에 맞게 다시 정해요' : '어떻게 이어가면 좋을까요?'}</h1>
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12, lineHeight: 1.55 }}>
             {renegotiating
-              ? '같은 방식으로는 잘 안 풀렸어요. 크기·시점·지속 여부 중에서 다시 정해볼게요.'
-              : '끝까지 가지 못해도 괜찮아요. 다시 시작할 방법이 있어요.'}
+              ? '크기를 줄이거나, 시간을 바꾸거나, 잠시 보류할 수 있어요.'
+              : '지금 가능한 방법 하나를 골라요. 일정은 변경 내용을 확인한 뒤 반영해요.'}
           </p>
 
           {/* 대기 안내는 DemoNotice 로 띄우지 않는다 — 그건 sessionStorage 로 한 번
@@ -356,7 +353,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
           )}
           {usingRealProposals && aiSource === 'rule' && proposals.length > 0 && (
             <div style={{ marginBottom: 12, padding: '8px 10px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 10, fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>
-              오프라인 모드(룰 기반)로 제안했어요. AI 호출이 가능해지면 더 맞춤 제안을 받을 수 있어요.
+              기본 규칙으로 만든 제안이에요. 지금 상황에 맞는지 살펴봐 주세요.
             </div>
           )}
 
@@ -395,9 +392,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             />
           )}
 
-          <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
-            {renegotiating ? '지금 고른 방식은 다음 주 리뷰 때 다시 볼 수 있어요.' : '실패는 데이터예요. 다시 한 번이면 충분해요.'}
-          </div>
+          {selectedProposal && <div className="reentry-review" aria-live="polite"><strong>선택한 방법 · {selectedProposal.title}</strong>{selectedProposal.desc}<div>아래 버튼은 이 선택을 저장해요. 새 일정이 있으면 다음 화면에서 승인해요.</div></div>}
 
           {decideError && (
             <div style={{ marginBottom: 10 }}>

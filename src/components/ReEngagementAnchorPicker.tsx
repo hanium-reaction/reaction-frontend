@@ -7,9 +7,8 @@ import { TimeDial } from './TimeDial';
 // 주간 리뷰 시점을 기본값으로 먼저 보여주고, 원하면 [바꾸기]로 직접 조정하게 한다
 // (근거 A3 — 보류·이월 후 안 돌아오는 사용자를 붙잡을 재관여 장치 부재).
 //
-// ⚠️ 여기서 고른 값은 아직 백엔드로 전송되지 않는다 — `re_engagement_anchor_at` 이
-// openapi 스펙에 없다(백엔드 컬럼·저장 로직 미착수, 이슈 #221 참고). 연결 지점은
-// src/lib/api.ts 의 recoveryApi.decide 세 번째 인자.
+// recoveryApi.decide의 reEngagementAnchorAt으로 전송한다.
+// 다시 확인할 시점의 저장과 푸시 알림의 실제 전달은 별개다.
 
 const DOW_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -45,7 +44,7 @@ export function ReEngagementAnchorPicker({ date, time, minDate, onChangeDate, on
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)' }}>다음엔 언제 다시 볼까요?</div>
           <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, marginTop: 1 }}>
-            {formatAnchorLabel(date, time)} 에 다시 확인할게요
+            {formatAnchorLabel(date, time)} · 다시 확인할 시점
           </div>
         </div>
         <button
@@ -69,6 +68,8 @@ export function ReEngagementAnchorPicker({ date, time, minDate, onChangeDate, on
           <PencilSimple size={11} /> {editing ? '접기' : '바꾸기'}
         </button>
       </div>
+
+      <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--text-3)', lineHeight: 1.6 }}>선택과 함께 저장할 시점이에요. 알림 발송을 예약하는 기능은 아니에요.</p>
 
       {editing && (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
