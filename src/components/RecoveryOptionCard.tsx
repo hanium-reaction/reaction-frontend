@@ -52,14 +52,19 @@ export function RecoveryOptionCard({
 }: RecoveryOptionCardProps) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={title}
+      onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect(); } }}
       onClick={onSelect}
       style={{
         borderRadius: 14,
-        border: `${selected ? '1.5px' : '1px'} dashed ${selected ? colors.bc : 'var(--sand-300)'}`,
+        border: `${selected ? '2px' : '1px'} solid ${selected ? colors.ac : 'var(--sand-200)'}`,
         background: selected ? colors.bg : 'var(--surface-raised)',
         cursor: 'pointer',
         transition: 'all 160ms',
-        padding: '12px 14px',
+        padding: '16px 14px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: whyOpen ? 8 : 0 }}>

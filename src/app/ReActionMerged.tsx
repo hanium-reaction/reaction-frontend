@@ -49,7 +49,7 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   // 공용 헤더의 별도 뒤로가기를 노출하면 그 정리 경로를 우회하므로 숨긴다.
   'focus':                  { label: '집중 모드',      back: null },
   'recovery':               { label: '복구 코치',      back: 'today' },
-  'recovered':              { label: '회복 완료',      back: null },
+  'recovered':              { label: '변경 확인',      back: null },
   'evening':                { label: '저녁 체크인',    back: 'today' },
   'weekly':                 { label: '주간 계획',      back: null },
   'inbox':                  { label: 'LIFE INBOX',     back: null },
@@ -146,8 +146,6 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   // 회복 화면으로 먼저 넘어간 뒤 체크인·태그 저장이 도는 동안 true — 회복 화면이
   // 빈 카드 자리 대신 "저장하는 중" 을 보여줄 수 있게 한다.
   const [recoveryPreparing, setRecoveryPreparing] = useState(false);
-  // 이번 세션에서 수락한 복구 횟수 (백엔드 누적 집계 엔드포인트가 없어 세션 카운트로 정직하게).
-  const [recoveryCount, setRecoveryCount] = useState(0);
   // 사용자가 회복 화면에서 고른 제안 — RecoveredScreen 의 before→after 카드용.
   const [appliedRecovery, setAppliedRecovery] = useState<AppliedRecovery | null>(null);
   // 블록 종료 +20분 미체크 개수(#224 T1) — TodayScreen 안에서 계산되고, 탭바 배지는
@@ -316,7 +314,6 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   // (예전엔 optionId 만 받아 더미 데이터에서 재조회했었다 — 실 회복 카드의
   // 제목/설명이 더미로 가려지던 문제 #80)
   const acceptRecovery = (proposal: RecoveryProposal, requiresReplan = true) => {
-    setRecoveryCount((c) => c + 1);
     if (activeTask) {
       setAppliedRecovery({
         taskTitle: activeTask.title,
@@ -451,7 +448,6 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         )}
         {screen === 'recovered' && (
           <RecoveredScreen
-            recoveryCount={recoveryCount}
             applied={appliedRecovery}
             onOpenWeekly={() => { setWeekOffset(0); setTab('weekly'); setScreen('weekly'); }}
             onDone={() => { setTab('today'); setScreen('today'); setAppliedRecovery(null); }}
