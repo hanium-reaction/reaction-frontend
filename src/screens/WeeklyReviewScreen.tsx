@@ -1,4 +1,5 @@
 import { ScoreDonut } from '../components/ScoreDonut';
+import '../styles/planning-redesign.css';
 import { SectionHeader } from '../components/SectionHeader';
 import React, { useEffect, useState } from 'react';
 import { Sparkle, ArrowRight } from '@phosphor-icons/react';
@@ -171,14 +172,15 @@ export function WeeklyReviewScreenV2() {
     : null;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)', overflow: 'hidden' }}>
+    <div className="planning-screen" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Scrollable content */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '14px 18px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="planning-scroll">
 
         {/* Header */}
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 3 }}>{weekLabel}</div>
-          <h1 style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', margin: '0 0 10px' }}>{headline}</h1>
+        <header className="planning-heading">
+          <div className="planning-eyebrow">WEEKLY REVIEW · {weekLabel}</div>
+          <h1 className="planning-title">{headline}</h1>
+          <p className="planning-description">이번 주의 기록에서 다음 주에 이어갈 리듬을 찾아요.</p>
           {reviewLoading ? null : !usingReal ? (
             <div role="alert">
               <p>주간 리뷰를 불러오지 못했어요.</p>
@@ -186,11 +188,12 @@ export function WeeklyReviewScreenV2() {
               <button onClick={() => setRetry((value) => value + 1)}>다시 시도</button>
             </div>
           ) : connectedEmpty ? (
-            <div style={{ border: '1px dashed var(--sand-200)', borderRadius: 12, padding: '12px 14px', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            <div className="planning-empty" style={{ marginTop: 16 }}>
+              <strong>기록이 쌓이면 돌아볼 수 있어요</strong>
               이번 주는 아직 집계할 활동이 없어요. 주간 계획을 실행하면 리뷰가 채워져요.
             </div>
           ) : null}
-        </div>
+        </header>
 
         {/* Habit Penalty — 3주 연속 미달 습관 재설계 제안(S22). 비난 X, 조정 제안 톤. */}
         {penalties.map((c) => (
@@ -262,24 +265,24 @@ export function WeeklyReviewScreenV2() {
         ) : usingReal && !connectedEmpty ? (
         <>
         {/* Hero: Score donut */}
-        <div style={{ background: 'linear-gradient(135deg, var(--coral-50) 0%, var(--surface-raised) 100%)', border: '1px solid var(--coral-200)', borderRadius: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-          <ScoreDonut score={score} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--coral-600)', marginBottom: 3 }}>주간 점수</div>
+        <section className="planning-review-score" aria-label="주간 점수 요약">
+          <div style={{ background: 'white', borderRadius: '50%', flexShrink: 0 }}><ScoreDonut score={score} /></div>
+          <div className="planning-review-score-copy">
+            <div className="planning-review-score-label">주간 점수</div>
             {real?.oneLiner && (
-              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.01em', color: 'var(--text-1)', lineHeight: 1.3, marginBottom: 5 }}>
+              <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.01em', color: 'white', lineHeight: 1.5, marginBottom: 5 }}>
                 {real.oneLiner}
               </div>
             )}
             {/* 백엔드가 실행시간 필드를 안 주므로 mock "Xh 실행"은 표시하지 않는다. 복구율도
                 실제 값이 없으면 문장 자체를 생략한다(#67). */}
             {recoveryPct != null && (
-              <p style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5, margin: 0 }}>
-                복구 <span style={{ color: 'var(--success-ink)', fontWeight: 700 }} className="tnum">{recoveryPct}%</span> 성공
+              <p style={{ fontSize: 12, color: '#CBD5E1', lineHeight: 1.5, margin: 0 }}>
+                복구 <span style={{ color: '#D9F99D', fontWeight: 700 }} className="tnum">{recoveryPct}%</span> 성공
               </p>
             )}
           </div>
-        </div>
+        </section>
 
         {/* 백엔드가 주는 최고/소진 시간대 한 줄 */}
         {peakDrain && (
@@ -299,7 +302,7 @@ export function WeeklyReviewScreenV2() {
 
         {/* KPI grid — 백엔드가 주는 지표만. */}
         {realKpi.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="planning-review-kpis" role="group" aria-label="이번 주 실행 지표">
           {realKpi.map((k, i) => {
             const pctOfTarget = Math.min((k.val / (k.unit === '분' ? 30 : 100)) * 100, 100);
             return (
@@ -368,7 +371,7 @@ export function WeeklyReviewScreenV2() {
       </div>
 
       {/* Sticky CTA */}
-      <div style={{ flexShrink: 0, padding: '12px 18px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))', background: 'var(--surface-ground)' }}>
+      <div className="planning-review-footer">
         <button onClick={goToNextWeekPlan} data-tour-help="이번 리뷰를 반영하러 다음 주 계획 화면으로 넘어가요." style={{ width: '100%', height: 'var(--ctrl-lg)', borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           다음 주 계획 확인 <ArrowRight size={15} />
         </button>

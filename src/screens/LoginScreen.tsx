@@ -3,6 +3,7 @@ import { Sparkle } from '@phosphor-icons/react';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { stubDemoAvailable } from '../lib/api';
 import { GOOGLE_CLIENT_ID } from '../lib/googleIdentity';
+import '../styles/guided-redesign.css';
 
 // 모듈 지역 const 로 받아야 아래 콜백 안에서 `if (!CLIENT_ID) return` 좁히기가 유지된다.
 const CLIENT_ID = GOOGLE_CLIENT_ID;
@@ -47,7 +48,7 @@ export function LoginScreen({ onGoogleCredential, onDemoLogin, isBusy, error }: 
         shape: 'pill',
         text: 'continue_with',
         logo_alignment: 'left',
-        width: 280,
+        width: Math.min(280, buttonRef.current.clientWidth || 280),
       });
       setButtonReady(true);
     };
@@ -59,45 +60,27 @@ export function LoginScreen({ onGoogleCredential, onDemoLogin, isBusy, error }: 
   }, [onGoogleCredential]);
 
   return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 28,
-        padding: '32px 24px',
-        background: 'var(--surface-ground)',
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 18,
-            background: 'var(--sand-950)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Sparkle size={26} weight="fill" color="#FAF6EE" />
-        </div>
-        <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', color: 'var(--text-1)' }}>
-          Re:Action
-        </div>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0, maxWidth: 260, lineHeight: 1.6 }}>
-          계획이 흔들려도 괜찮아요. 로그인하고 계속해봐요.
-        </p>
-      </div>
+    <div className="guided-surface guided-login">
+      <section className="guided-login-story" aria-label="Re:Action 소개">
+        <div className="guided-wordmark"><Sparkle size={26} weight="fill" /> Re:Action</div>
+        <span className="guided-kicker">계획의 다음은, 다시 행동.</span>
+        <h1>완벽한 하루보다<br /><span>다시 시작하는 힘.</span></h1>
+        <p>목표를 작은 실행으로 나누고,<br />계획이 흔들리면 지금에 맞게 조정해요.</p>
+        <ol className="guided-product-path">
+          <li><span>01</span><div><strong>하고 싶은 일에서 출발</strong><p>대화로 목표와 상황을 정리해요.</p></div></li>
+          <li><span>02</span><div><strong>지금 할 한 가지에 집중</strong><p>작은 실행부터 하나씩 이어가요.</p></div></li>
+          <li><span>03</span><div><strong>멈춰도 다시 계획</strong><p>변경 내용을 확인하고 직접 승인해요.</p></div></li>
+        </ol>
+      </section>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, width: '100%', maxWidth: 300 }}>
+      <section className="guided-login-access" aria-label="로그인">
+        <span className="guided-kicker">나의 다음 한 걸음</span>
+        <h2>여기서 이어가세요.</h2>
+        <p>로그인하고 나에게 맞는 계획을 시작해요.</p>
+        <div className="guided-login-buttons">
         {CLIENT_ID ? (
           <>
-            <div ref={buttonRef} style={{ minHeight: 44 }} />
+            <div ref={buttonRef} style={{ minHeight: 44, width: '100%' }} />
             {!buttonReady && (
               <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
                 Google 로그인 준비 중…
@@ -141,7 +124,8 @@ export function LoginScreen({ onGoogleCredential, onDemoLogin, isBusy, error }: 
           {isBusy ? '로그인 중…' : '데모 계정으로 체험하기'}
         </button>
         )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

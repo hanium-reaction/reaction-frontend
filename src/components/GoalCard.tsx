@@ -64,19 +64,15 @@ export function GoalCard({
 }: GoalCardProps) {
   const m = GOAL_STATUS_META[tier];
   return (
-    <div
-      style={{
-        background: 'var(--surface-raised)',
-        border: `1.5px solid ${expanded ? m.border : 'var(--sand-200)'}`,
-        borderRadius: 14,
-        padding: 12,
-      }}
-    >
-      <div
+    <div className="planning-goal-card" data-expanded={expanded}>
+      <button
+        type="button"
+        className="planning-goal-toggle"
+        aria-expanded={expanded}
         onClick={onToggle}
-        style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: onToggle ? 'pointer' : 'default' }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
+          <span className="planning-goal-name">{title}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
             <span
               style={{
@@ -96,7 +92,6 @@ export function GoalCard({
             </span>
             {categoryLabel && <span style={chip}>{categoryLabel}</span>}
           </div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>{title}</div>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
             {unplanned && (
               <span
@@ -123,10 +118,12 @@ export function GoalCard({
             )}
           </div>
         </div>
-      </div>
+        <span aria-hidden="true" style={{ color: '#4F46E5', fontSize: 20 }}>{expanded ? '−' : '+'}</span>
+      </button>
 
       {expanded && children && (
         <div
+          className="planning-goal-detail"
           onClick={(e) => e.stopPropagation()}
           style={{
             marginTop: 10,

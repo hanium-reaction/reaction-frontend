@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import '../styles/planning-redesign.css';
 import { Plus, Trash, PencilSimple, TreeStructure, Target, ChatCircleDots, SquaresFour, ArrowUpRight } from '@phosphor-icons/react';
 import { ApiError, friendlyError, goalsApi } from '../lib/api';
 import type { ApiGoal, GoalDecomposition, GoalTier } from '../types/api';
@@ -7,7 +8,6 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { ReButton } from '../components/ReButton';
 import { GoalCard } from '../components/GoalCard';
 import { IconAction } from '../components/IconAction';
-import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { SkeletonBlock } from '../components/SkeletonBlock';
 import { ReinterviewSheet } from '../components/ReinterviewSheet';
@@ -216,26 +216,27 @@ export function GoalsScreen() {
   };
 
   return (
-    <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="planning-screen" style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="planning-scroll planning-goals-scroll">
         {/* 헤더 + tier 사용량 */}
-        <div>
+        <div className="planning-heading planning-goals-heading">
+          <div className="planning-eyebrow">MY GOALS</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <Target size={18} weight="fill" color="var(--brand)" />
-            <h1 style={{ fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em', margin: 0 }}>목표 관리</h1>
+            <h1 className="planning-title">목표 관리</h1>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--text-2)', margin: '0 0 8px' }}>
+          <p className="planning-description">
             {isLoading ? '목표를 불러오는 중…' : '집중·유지·보류로 나눠 관리해요. 집중은 최대 3개, 유지는 5개까지.'}
           </p>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className="planning-capacity">
             {(['focus', 'maintain'] as GoalTier[]).map((t) => {
               const m = GOAL_STATUS_META[t];
               const limit = TIER_LIMIT[t];
               const n = count(t);
               const full = limit != null && n >= limit;
               return (
-                <span key={t} className="tnum" style={{ height: 'var(--ctrl-xs)', padding: '0 10px', background: m.bg, border: `1px solid ${m.border}`, color: m.color, borderRadius: 9999, fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: full ? 1 : 0.92 }}>
-                  {m.label} {n}/{limit}{full ? ' · 가득참' : ''}
+                <span key={t} className="planning-capacity-item tnum">
+                  <span>{m.label}{full ? ' · 가득참' : ''}</span><strong>{n}<small style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}> / {limit}</small></strong>
                 </span>
               );
             })}
@@ -253,7 +254,7 @@ export function GoalsScreen() {
 
           {/* 궁극적 목표(#220) — 한 학기가 아니라 여러 학기를 관통하는 목표.
               tier="parked" 로 아래 목록에도 섞여 나오지만, 여기서 만다라트로 바로 들어간다. */}
-          <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 16, background: ultimateGoal ? 'var(--surface-raised)' : 'var(--brand-soft)', border: `1px solid ${ultimateGoal ? 'var(--sand-200)' : 'var(--coral-200)'}` }}>
+          <div className="planning-vision">
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <SquaresFour size={14} weight="fill" color="var(--brand)" />
               <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-1)' }}>궁극적 목표 만다라트</span>
@@ -299,9 +300,10 @@ export function GoalsScreen() {
           <SkeletonBlock count={3} height={72} radius={14} />
         )}
         {!isLoading && usingReal && goals.length === 0 && (
-          <EmptyState>
+          <div className="planning-empty">
+            <strong>첫 목표부터 시작해요</strong>
             아직 등록된 목표가 없어요. 아래 <b>+ 목표 추가</b>로 만들어보세요.
-          </EmptyState>
+          </div>
         )}
 
         {/* tier 별 그룹 */}
@@ -310,10 +312,8 @@ export function GoalsScreen() {
           if (items.length === 0) return null;
           const m = GOAL_STATUS_META[tier];
           return (
-            <div key={tier} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)' }}>
-                {m.label} · {items.length}
-              </div>
+            <section key={tier} className="planning-group" aria-label={`${m.label} 목표`}>
+              <h2 className="planning-group-heading">{m.label} <span>{items.length}</span></h2>
               {items.map((g) => {
                 const isExp = expandedId === g.goalId;
                 const isEditing = editId === g.goalId;
@@ -444,7 +444,7 @@ export function GoalsScreen() {
                   </GoalCard>
                 );
               })}
-            </div>
+            </section>
           );
         })}
 
@@ -511,6 +511,7 @@ export function GoalsScreen() {
 }
 
 const inputStyle: React.CSSProperties = {
+  minWidth: 0,
   padding: '9px 11px',
   borderRadius: 9,
   border: '1px solid var(--sand-200)',

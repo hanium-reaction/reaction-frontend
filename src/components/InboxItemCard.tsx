@@ -33,6 +33,7 @@ export function InboxItemCard({ text, badges = [], aiCategory, actions, onOpen, 
   const interactive = Boolean(onOpen);
   return (
     <div
+      className="planning-inbox-card"
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? `${text}, ${openLabel}` : undefined}
@@ -45,17 +46,10 @@ export function InboxItemCard({ text, badges = [], aiCategory, actions, onOpen, 
         }
       }}
       style={{
-        background: 'var(--surface-raised)',
-        border: '1px solid var(--sand-200)',
-        borderRadius: 14,
-        padding: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
         cursor: interactive ? 'pointer' : undefined,
       }}
     >
-      <div style={{ fontSize: 13, color: 'var(--text-1)', lineHeight: 1.5 }}>{text}</div>
+      <div className="planning-inbox-text">{text}</div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
         {badges.map((b, i) => (
           <span
@@ -97,10 +91,9 @@ export function InboxItemCard({ text, badges = [], aiCategory, actions, onOpen, 
             <Sparkle size={9} weight="fill" /> {aiCategory}
           </span>
         )}
-        <div style={{ flex: 1 }} />
-        <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} style={{ display: 'contents' }}>
+      </div>
+      <div className="planning-inbox-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           {actions}
-        </div>
       </div>
       {interactive && (
         <div aria-hidden="true" style={{ fontSize: 11, fontWeight: 700, color: 'var(--coral-700)', alignSelf: 'flex-end' }}>

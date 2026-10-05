@@ -131,10 +131,8 @@ export function SettingsScreen() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)', position: 'relative' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h1 style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', margin: 0 }}>설정</h1>
-        </div>
+      <div className="account-workspace">
+        <header className="account-heading"><span>내 워크스페이스</span><h1>내 방식대로 설정</h1><p>코칭 방식부터 알림과 개인정보까지, 필요한 만큼 조절하세요.</p></header>
 
         {user && (
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -148,6 +146,7 @@ export function SettingsScreen() {
           </div>
         )}
 
+        <div className="account-settings-grid">
         {/* Tone mode */}
         <section>
           <SectionHeader icon={<Sparkle size={11} weight="fill" />}>코칭 톤</SectionHeader>
@@ -332,6 +331,7 @@ export function SettingsScreen() {
         </section>
       </div>
 
+      </div>
       {toast && (
         <Toast>{toast}</Toast>
       )}

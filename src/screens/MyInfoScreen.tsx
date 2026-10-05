@@ -65,10 +65,8 @@ export function MyInfoScreen() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)', position: 'relative' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h1 style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', margin: 0 }}>내 정보</h1>
-        </div>
+      <div className="account-workspace account-profile">
+        <header className="account-heading"><span>나에게 맞는 실행 환경</span><h1>나의 리듬</h1><p>집중이 잘되는 시간과 편한 코칭 방식을 계획에 반영해요.</p></header>
 
         {user && (
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>

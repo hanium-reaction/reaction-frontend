@@ -93,7 +93,7 @@ describe('FocusScreen execution contract', () => {
     view(onComplete, onBack);
     await waitFor(() => expect(api.start).toHaveBeenCalledOnce());
 
-    fireEvent.click(screen.getByRole('button', { name: /Today/ }));
+    fireEvent.click(screen.getByRole('button', { name: '오늘로' }));
 
     expect(onBack).toHaveBeenCalledOnce();
     expect(onComplete).not.toHaveBeenCalled();

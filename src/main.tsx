@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import { registerServiceWorker } from './lib/push';
 import './index.css';
+import './styles/interface.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

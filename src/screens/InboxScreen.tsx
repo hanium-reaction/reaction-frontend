@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import '../styles/planning-redesign.css';
 import { Sparkle, ArrowUp, Archive, TreeStructure, ListChecks, ArrowCounterClockwise, ArrowRight, BookOpen, X } from '@phosphor-icons/react';
 import { ApiError, friendlyError, inboxApi } from '../lib/api';
 import { Segmented } from '../components/Segmented';
@@ -264,18 +265,18 @@ export function InboxScreen() {
   const visibleItems = categoryFilter ? items.filter((it) => itemCategory(it) === categoryFilter) : items;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
+    <div className="planning-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: '14px 18px 10px' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--brand-ink)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <header className="planning-inbox-header">
+        <div className="planning-eyebrow">
           <Sparkle size={11} weight="fill" /> 인박스
         </div>
-        <h2 style={{ fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em', margin: '0 0 4px' }}>떠오르면 일단 적어요</h2>
-        <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>AI 가 카테고리를 추정해두고, 나중에 목표로 올릴 수 있어요.</p>
-      </div>
+        <h1 className="planning-title">떠오르면 일단 적어요</h1>
+        <p className="planning-description">생각을 모으고, 준비되면 목표나 오늘 할 일로 옮겨요.</p>
+      </header>
 
       {/* Filter — 공용 Segmented 로 통일 (계획/리뷰·이번주/다음주 토글과 동일 스타일) */}
-      <div style={{ flexShrink: 0, padding: '0 18px 10px' }}>
+      <div className="planning-filters">
         <Segmented
           fluid
           ariaLabel="인박스 상태 필터"
@@ -300,7 +301,7 @@ export function InboxScreen() {
       )}
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="planning-inbox-list">
         {isAdviceLoading && (
           <section aria-label="나를 위한 조언을 불러오는 중">
             <SkeletonBlock count={1} height={132} radius={16} />
@@ -347,7 +348,8 @@ export function InboxScreen() {
         )}
         {isLoading && <SkeletonBlock count={3} height={64} radius={14} />}
         {!isLoading && visibleItems.length === 0 && !error && (
-          <div style={{ padding: '40px 12px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+          <div className="planning-empty">
+            <strong>{filter === 'classified' ? '생각을 담을 여유가 있어요' : FILTER_LABEL[filter]}</strong>
             {items.length > 0
               ? '이 카테고리에 항목이 없어요.'
               : filter === 'promoted'
@@ -425,8 +427,11 @@ export function InboxScreen() {
       </div>
 
       {/* Capture input */}
-      <div style={{ flexShrink: 0, padding: '10px 18px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))', borderTop: '1px solid var(--sand-200)', background: 'rgba(250,246,238,.92)', backdropFilter: 'blur(20px)', display: 'flex', gap: 8 }}>
+      <div className="planning-capture">
+        <label htmlFor="planning-inbox-draft">새로운 생각 담기</label>
+        <div className="planning-capture-row">
         <input
+          id="planning-inbox-draft"
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -434,7 +439,7 @@ export function InboxScreen() {
           placeholder="한 줄로 적어요…"
           data-tour-help="떠오른 일을 한 줄로 적어두는 곳이에요. AI 가 카테고리를 붙여두고, 나중에 목표나 오늘 할 일로 올릴 수 있어요."
           disabled={isCreating}
-          style={{ flex: 1, padding: '11px 14px', borderRadius: 12, border: '1.5px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-1)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+          style={{ flex: 1, minWidth: 0, padding: '11px 14px', borderRadius: 12, border: '1px solid #E2E8F0', background: '#F5F7FB', color: '#17233D', fontSize: 13, fontFamily: 'inherit' }}
         />
         <button
           onClick={capture}
@@ -444,6 +449,7 @@ export function InboxScreen() {
         >
           <ArrowUp size={14} weight="fill" />
         </button>
+        </div>
       </div>
 
       {/* 추천 자료 뷰어(#163) — 마크다운 본문. 시트가 화면을 덮으므로 최상단에 렌더. */}

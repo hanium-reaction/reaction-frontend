@@ -5,7 +5,8 @@ import { friendlyError, goalsApi } from '../lib/api';
 import type { ApiGoal, GoalCandidate, GoalsByTier, InterviewOutcome } from '../types/api';
 import type { Goal, GoalStatus } from '../types';
 import { SetupProgress } from '../components/SetupProgress';
-import { AiDraftCard } from '../components/AiDraftCard';
+import { PlanningApprovalPanel } from '../components/PlanningApprovalPanel';
+import '../styles/planning-flow-redesign.css';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { SkeletonBlock } from '../components/SkeletonBlock';
 import { isPersistedGoalId } from '../lib/goalIdentity';
@@ -123,23 +124,23 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="plan-flow plan-flow-split">
+      <div className="plan-flow-scroll">
         <SetupProgress current={2} total={4} label="분류" />
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--brand-ink)', marginBottom: 4 }}>목표 분류</div>
-          <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 4 }}>무엇에 집중할까요?</div>
-          <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>
+        <header className="plan-flow-heading">
+          <span className="plan-flow-eyebrow">목표 분류</span>
+          <h1 className="plan-flow-title">무엇에 집중할까요?</h1>
+          <p className="plan-flow-description">
             {isLoading ? '대화에서 파악한 목표를 불러오는 중…' : '대화에서 파악한 목표들이에요. 분류를 조정할 수 있어요.'}
           </p>
           {!isLoading && goals.length > 1 && <p role="status" style={{ margin: '8px 0 0', padding: '9px 11px', borderRadius: 10, background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', color: 'var(--coral-700)', fontSize: 11.5, lineHeight: 1.5 }}><b>{goals.length}개의 목표</b>를 함께 찾았어요. 각 카드를 눌러 집중·유지·보류를 따로 정할 수 있어요.</p>}
-        </div>
+        </header>
 
         {error && (
           <ErrorBanner>{error}</ErrorBanner>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="plan-flow-list">
           {isLoading && <SkeletonBlock count={3} height={68} radius={14} />}
           {!isLoading && usingReal && goals.length === 0 && (
             <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--surface-raised)', border: '1px dashed var(--sand-200)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
@@ -151,6 +152,7 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
             const isSel = selected === g.id;
             return (
               <div
+                className="plan-flow-goal"
                 key={g.id}
                 onClick={() => setSelected(isSel ? null : g.id)}
                 role="button"
@@ -163,17 +165,16 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
                     setSelected(isSel ? null : g.id);
                   }
                 }}
-                style={{ background: isSel ? m.bg : 'var(--surface-raised)', border: `1.5px solid ${isSel ? m.border : 'var(--sand-200)'}`, borderRadius: 16, padding: 12, cursor: 'pointer', transition: 'all 160ms var(--ease-out)' }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="plan-flow-goal-name">{g.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                       <div style={{ height: 'var(--ctrl-xs)', padding: '0 8px', borderRadius: 9999, background: m.bg, border: `1px solid ${m.border}`, fontSize: 10, fontWeight: 700, color: m.color, letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center' }}>{m.label}</div>
                       {g.status === 'focus' && (
                         <div style={{ height: 'var(--ctrl-xs)', padding: '0 7px', borderRadius: 9999, background: 'var(--brand-surface)', color: '#FFFCF6', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>ACTIVE</div>
                       )}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-1)', marginBottom: 4, letterSpacing: '-0.01em' }}>{g.name}</div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {g.deadline !== 'ongoing' && g.deadline !== '—' && (
                         <span style={{ height: 'var(--ctrl-xs)', padding: '0 7px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 9999, fontSize: 10, color: 'var(--text-2)', fontWeight: 500, display: 'inline-flex', alignItems: 'center' }}>{g.deadline}</span>
@@ -217,7 +218,7 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
           })}
         </div>
 
-        <div style={{ padding: '10px 12px', background: 'var(--brand-soft)', borderRadius: 12, border: '1px solid var(--coral-200)', display: 'flex', gap: 8, marginBottom: 0 }}>
+        <div className="plan-flow-note">
           <Sparkle size={13} weight="fill" color="var(--brand)" style={{ flexShrink: 0, marginTop: 1 }} />
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--coral-700)', marginBottom: 2 }}>스케줄 배치 방식</div>
@@ -230,8 +231,8 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
       {/* AI Draft footer — Issue #12 §1.4 잠금 결정 시각화.
           isDraft=true: 분류 결과가 AI 초안임을 점선/뱃지로 박제.
           onEdit 은 별도 인라인 편집 UI 가 없어서 '직접 분류해주세요' 안내 후 그대로. */}
-      <div style={{ flexShrink: 0, padding: '10px 14px', paddingBottom: 'max(14px, env(safe-area-inset-bottom, 14px))' }}>
-        <AiDraftCard
+      <aside className="plan-flow-footer">
+        <PlanningApprovalPanel
           isDraft={true}
           aiSource="llm"
           onAccept={() => !isLoading && onNext()}
@@ -253,8 +254,8 @@ export function GoalClassificationScreen({ onNext, outcome }: GoalClassification
               );
             })}
           </div>
-        </AiDraftCard>
-      </div>
+        </PlanningApprovalPanel>
+      </aside>
     </div>
   );
 }

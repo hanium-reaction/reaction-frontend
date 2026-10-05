@@ -37,29 +37,29 @@
 
 :root {
   /* COLOR — Sand */
-  --sand-50:  #FAF6EE;
-  --sand-100: #F4EEE2;
-  --sand-200: #E8DFCB;
-  --sand-300: #D4C7AC;
-  --sand-400: #B4A381;
-  --sand-500: #8A7B5E;
-  --sand-600: #5C5240;
-  --sand-700: #3D3729;
-  --sand-800: #2A251B;
-  --sand-900: #1A1714;
-  --sand-950: #0F0D0A;
+  --sand-50:  #F5F7FB;
+  --sand-100: #EDF1F7;
+  --sand-200: #E2E8F0;
+  --sand-300: #CBD5E1;
+  --sand-400: #94A3B8;
+  --sand-500: #64748B;
+  --sand-600: #475569;
+  --sand-700: #334155;
+  --sand-800: #24324B;
+  --sand-900: #17233D;
+  --sand-950: #10182B;
 
   /* COLOR — Brand */
-  --coral-50:  #FDF2EC;
-  --coral-100: #FADCCC;
-  --coral-200: #F4B89E;
-  --coral-300: #ED9270;
-  --coral-400: #E77A5C;
-  --coral-500: #E26D4E;
-  --coral-600: #C4593E;
-  --coral-700: #9E472F;
-  --coral-800: #783424;
-  --coral-900: #4E2118;
+  --coral-50:  #EEF2FF;
+  --coral-100: #E0E7FF;
+  --coral-200: #C7D2FE;
+  --coral-300: #A5B4FC;
+  --coral-400: #818CF8;
+  --coral-500: #6366F1;
+  --coral-600: #4F46E5;
+  --coral-700: #4338CA;
+  --coral-800: #3730A3;
+  --coral-900: #312E81;
 
   /* --brand 는 '면' 전용 — 아이콘, 진행 바, 오늘 표시, 현재시각 선처럼 글씨가 아닌 것.
      비텍스트라 3:1 만 넘으면 되고 coral-500 은 크림 위 2.98 로 아슬하게 통과한다.
@@ -69,12 +69,12 @@
      coral-500 면에 흰 글씨는 3.14 로 미달이었다(주 CTA 전부). */
   --brand:           var(--coral-500);
   --brand-ink:       var(--coral-700);
-  --brand-surface:   var(--coral-700);
+  --brand-surface:   var(--coral-600);
   --brand-surface-hover: var(--coral-800);
   --brand-hover:     var(--coral-600);
   --brand-pressed:   var(--coral-700);
   --brand-soft:      var(--coral-50);
-  --brand-focus-ring: rgba(226, 109, 78, 0.32);
+  --brand-focus-ring: rgba(79, 70, 229, 0.32);
 
   /* COLOR — Stage palette */
   --stage-discover-50:  #EAF0F7;
@@ -137,24 +137,22 @@
   --info-soft:      #E2ECF5;
 
   /* COLOR — Semantic text
-     크림 바탕(#FAF6EE) 기준 대비 사다리 — 전부 WCAG 4.5:1 이상:
-       text-1 16.56 · text-2 7.12 · text-3 5.44 · text-4 4.52
-     text-3/4 는 일부러 sand 스케일을 참조하지 않는다. sand 스케일은 면·보더용이라
-     4.5:1 제약이 없고, 예전처럼 sand-500/400 을 그대로 쓰면 3.84 / 2.29 로 미달했다. */
+     보조 본문도 밝은 배경에서 읽히도록 면·테두리용 색상과 분리한다. */
   --text-1: var(--sand-900);
   --text-2: var(--sand-600);
-  --text-3: #70634C;
-  --text-4: #816F4D;
-  --text-on-brand: #FFFCF6;
+  --text-3: #5F6D82;
+  --text-4: #667389;
+  --text-on-brand: #FFFFFF;
   --text-link: var(--coral-700);
 
   /* COLOR — Surfaces */
   --surface-ground:  var(--sand-50);
-  --surface-raised:  #FFFCF6;
+  --surface-raised:  #FFFFFF;
   --surface-sunken:  var(--sand-100);
-  --surface-overlay: rgba(26, 23, 20, 0.48);
-  --surface-blur:    rgba(250, 246, 238, 0.72);
-  --recovery-wash:   radial-gradient(circle at 90% -10%, rgba(226, 109, 78, 0.08) 0%, transparent 50%);
+  --surface-overlay: rgba(16, 24, 43, 0.48);
+  --surface-blur:    rgba(245, 247, 251, 0.9);
+  --recovery-wash:   radial-gradient(circle at 90% -10%, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
+  --accent-lime: #D9F99D;
 
   /* SPACING */
   --space-1:  4px;
@@ -435,10 +433,10 @@ body {
 
 .app-main > * {
   width: 100%;
-  max-width: 560px;
+  max-width: none;
   height: 100%;
   background: var(--surface-ground);
-  box-shadow: 0 0 0 1px var(--sand-200);
+  box-shadow: none;
 }
 
 /* 자릿수 정렬만 한다. 서체는 바꾸지 않는다 — 모노를 걸면 한글이 섞인 라벨

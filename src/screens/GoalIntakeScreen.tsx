@@ -9,6 +9,7 @@ import { openInterview, requestInterviewRestart } from '../lib/interviewSession'
 import { ErrorBanner } from '../components/ErrorBanner';
 import { DateAnswerField, TimeRangeAnswerField, isValidRange, parseRange } from '../components/TypedAnswerField';
 import { useSpeechInput } from '../lib/useSpeechInput';
+import '../styles/guided-redesign.css';
 
 interface GoalIntakeScreenProps {
   onDone: () => void;
@@ -360,7 +361,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
 
   return (
     <div
-      className={`goal-intake${inputFocused ? ' goal-intake--keyboard' : ''}`}
+      className={`goal-intake guided-surface guided-interview${inputFocused ? ' goal-intake--keyboard' : ''}`}
       onFocusCapture={(event) => {
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
           setInputFocused(true);
@@ -373,12 +374,12 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
           setInputFocused(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement);
         }, 0);
       }}
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--surface-ground)' }}
     >
       {/* Header */}
-      <div className="goal-intake__header" style={{ padding: '12px 16px', borderBottom: '1px solid var(--sand-200)', flexShrink: 0 }}>
+      <div className="goal-intake__header guided-interview-header">
         <div className="goal-intake__setup-progress"><SetupProgress current={1} total={4} label="목표" /></div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <header className="guided-interview-intro"><span className="guided-kicker">시작을 위한 대화</span><h1>어떤 일을<br />해내고 싶으세요?</h1><p>완벽하게 정리하지 않아도 괜찮아요.<br />하나씩 이야기하며 구체화해 봐요.</p></header>
+        <div className="guided-interview-agent">
           <div style={{ width: 32, height: 32, borderRadius: 9999, background: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Sparkle size={16} weight="fill" color="#FAF6EE" />
           </div>
@@ -415,7 +416,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
       </div>
 
       {/* Chat feed */}
-      <div ref={bodyRef} className="goal-intake__feed" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div ref={bodyRef} className="goal-intake__feed guided-conversation" role="log" aria-label="목표 인터뷰 대화">
         {error && (
           <ErrorBanner
             action={
@@ -428,7 +429,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
           </ErrorBanner>
         )}
         {messages.map((m) => (
-          <div key={m.id} style={{ display: 'flex', justifyContent: m.who === 'user' ? 'flex-end' : 'flex-start' }}>
+          <div key={m.id} className={`guided-message guided-message--${m.who}`} style={{ display: 'flex', justifyContent: m.who === 'user' ? 'flex-end' : 'flex-start' }}>
             {m.who === 'ai' ? (
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', maxWidth: '90%' }}>
                 <div style={{ width: 26, height: 26, borderRadius: 9999, background: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -456,7 +457,7 @@ export function GoalIntakeScreen({ onDone, onOutcome }: GoalIntakeScreenProps) {
       </div>
 
       {/* Input */}
-      <div className="goal-intake__composer" style={{ padding: '10px 16px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))', borderTop: '1px solid var(--sand-200)', flexShrink: 0, background: 'rgba(250,246,238,.92)', backdropFilter: 'blur(20px)' }}>
+      <div className="goal-intake__composer guided-composer">
         {!isFinished && currentQuestion ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
