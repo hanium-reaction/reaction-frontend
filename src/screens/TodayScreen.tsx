@@ -23,7 +23,7 @@ import { DemoNotice } from '../components/DemoNotice';
 import { FailureTagPicker, useFailureTagCatalog, type FailureTagOption } from '../components/FailureTagPicker';
 import { HeroTaskCard } from '../components/HeroTaskCard';
 import { RestartCard } from '../components/RestartCard';
-import { TodayTimeline } from '../components/TodayTimeline';
+import { TodayWorkList } from '../components/TodayWorkList';
 import { ProgressSheet } from '../components/ProgressSheet';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonBlock } from '../components/SkeletonBlock';
@@ -616,15 +616,6 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
       if (bt) return 1;
       return a.index - b.index;
     });
-  const timelineTasks = sortedTimelineTasks.filter(({ task }) =>
-    task.id !== heroTask?.id && (task.status === 'todo' || task.status === 'in_progress'),
-  );
-  const executionHistory = sortedTimelineTasks.filter(({ task }) =>
-    task.status === 'done'
-    || task.status === 'failed'
-    || task.status === 'partial_done'
-    || task.status === 'recovery_pending',
-  );
 
   // 히어로 카드가 화면 밖으로 나가면 상단 스트립을 띄운다(#214). 스트립이 가리키는 카드는
   // 항상 heroTask 그 자체다 — 선정 로직을 복제하면 언젠가 조용히 어긋난다.
@@ -776,25 +767,13 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
             {usingRealAgenda && <RestartCard tasks={tasks}
               onReview={(id) => { setSelectedTaskId(id); setDetailTask(tasks.find((task) => task.id === id) ?? null); }}
               onRecovery={onOpenRecovery} />}
-            {/* C안 — 나머지 할 일을 예정 시각 기준의 하루 타임라인으로 보여준다. */}
-            <TodayTimeline
-              items={timelineTasks.map(({ task, meta }) => ({ task, ...meta }))}
-              title={usingWeeklyFallback ? '이번 주 남은 일정' : '오늘의 타임라인'}
-              orderLabel={usingWeeklyFallback ? '예정순' : '시간순'}
+            {/* 시간순은 유지하고, 예정·재계획·완료를 한 목록에서 찾고 미리 본다. */}
+            <TodayWorkList
+              items={sortedTimelineTasks.map(({ task, meta }) => ({ task, ...meta }))}
+              title={usingWeeklyFallback ? '이번 주 남은 일정' : '오늘의 작업'}
               interactive={!usingWeeklyFallback}
-              onSelect={setSelectedTaskId}
-              onFailedRecover={onOpenRecovery}
-              onPartialRecover={onOpenRecovery}
-            />
-
-            <TodayTimeline
-              items={executionHistory.map(({ task, meta }) => ({ task, ...meta }))}
-              title="오늘 실행 기록"
-              orderLabel={`${executionHistory.length}건`}
-              interactive={!usingWeeklyFallback}
-              onSelect={setSelectedTaskId}
-              onFailedRecover={onOpenRecovery}
-              onPartialRecover={onOpenRecovery}
+              onDetail={(id) => setDetailTask(tasks.find((task) => task.id === id) ?? null)}
+              onRecovery={onOpenRecovery}
             />
           </>
         )}
