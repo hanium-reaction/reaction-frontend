@@ -20,7 +20,7 @@ import { localDateStr } from '../lib/dates';
 import { dismissUncheckedBlocks, filterDismissedBlocks, findUncheckedBlocks } from '../lib/uncheckedBlocks';
 import { categoryLabel, goalColor } from '../data';
 import { DemoNotice } from '../components/DemoNotice';
-import { FailureTagPicker, useFailureTagCatalog, type FailureTagOption } from '../components/FailureTagPicker';
+import { FailureTagPicker, useFailureTagCatalog, canContinueInterruption, type FailureTagOption } from '../components/FailureTagPicker';
 import { HeroTaskCard } from '../components/HeroTaskCard';
 import { RestartCard } from '../components/RestartCard';
 import { TodayWorkList } from '../components/TodayWorkList';
@@ -567,10 +567,10 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   const allDone = tasks.length > 0 && doneTasks.length === tasks.length;
 
   const submitFail = () => {
-    if (failTags.length === 0 || !failSheet) return;
+    if (!canContinueInterruption(failTags, failMemo) || !failSheet) return;
     onFail(
       failSheet,
-      failTags.map((t) => t.labelKo).join(', '),
+      failTags.map((t) => t.labelKo).join(', ') || '사유를 남기지 않았어요',
       failTags.map((t) => t.code),
       failMemo.trim() || undefined,
       taskAversiveness ?? undefined,
@@ -1015,10 +1015,9 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
       {/* Fail reason sheet */}
       {failSheet && (
         <div onClick={() => setFailSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 18px 44px', boxShadow: 'var(--shadow-xl)' }}>
+          <div className="interruption-today-sheet" role="dialog" aria-label="멈춘 상황 남기기" onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 18px 24px', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ width: 36, height: 4, borderRadius: 9999, background: 'var(--sand-300)', margin: '0 auto 14px' }} />
-            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 4, color: 'var(--text-1)' }}>계획대로 하지 못한 이유가 무엇인가요?</div>
-            <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>이유를 기록하면 더 잘 맞는 복구안을 제안해드려요.</p>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, color: 'var(--text-1)' }}>어떤 상황이었나요?</div>
             {/* 회피 사유의 선택 문항은 공용 폼에서 관리한다. */}
             <FailureTagPicker
               reasons={failReasons}
@@ -1029,7 +1028,8 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
               aversiveness={taskAversiveness}
               onAversivenessChange={setTaskAversiveness}
             />
-            <button onClick={submitFail} disabled={failTags.length === 0} style={{ width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: failTags.length ? 'pointer' : 'not-allowed', opacity: failTags.length ? 1 : 0.35 }}>기록하고 복구안 보기</button>
+            <p className="interruption-hint">실행하지 못한 기록을 남기고, 다음 행동을 살펴봐요.</p>
+            <button onClick={submitFail} disabled={!canContinueInterruption(failTags, failMemo)} style={{ width: '100%', minHeight: 48, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}>{failTags.length ? '상황 남기고 다음 행동 보기' : '사유 없이 다음 행동 보기'}</button>
           </div>
         </div>
       )}

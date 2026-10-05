@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FailureTagPicker, type FailureTagOption } from './FailureTagPicker';
+import { FailureTagPicker, primaryFailureReasons, canContinueInterruption, type FailureTagOption } from './FailureTagPicker';
 import { normalizeFailureTagRequest } from '../lib/failureReason';
 
 const reasons = [
@@ -17,6 +17,10 @@ function Form() {
     memo="" onMemoChange={() => {}} aversiveness={score} onAversivenessChange={setScore} />;
 }
 
+function expandDetails() {
+  document.querySelectorAll('details').forEach((detail) => { detail.open = true; });
+}
+
 describe('사유별 회피 문항', () => {
   it('피로와 시간 부족만 선택하면 회피 정도를 묻지 않는다', () => {
     render(<Form />);
@@ -28,7 +32,9 @@ describe('사유별 회피 문항', () => {
 
   it('회피와 피로를 함께 선택하면 선택 문항을 표시하고 점수를 취소할 수 있다', () => {
     render(<Form />);
+    expandDetails();
     fireEvent.click(screen.getByRole('button', { name: '회피' }));
+    expandDetails();
     fireEvent.click(screen.getByRole('button', { name: '피곤함' }));
     expect(screen.getByRole('tablist')).toHaveAccessibleName(/선택/);
     fireEvent.click(screen.getByRole('tab', { name: '4' }));
@@ -39,7 +45,9 @@ describe('사유별 회피 문항', () => {
 
   it.each(['직접 해제', '세 번째 사유로 교체'])('%s 시 이전 회피 점수를 지운다', (mode) => {
     render(<Form />);
+    expandDetails();
     fireEvent.click(screen.getByRole('button', { name: '회피' }));
+    expandDetails();
     fireEvent.click(screen.getByRole('tab', { name: '5' }));
     if (mode === '직접 해제') fireEvent.click(screen.getByRole('button', { name: '회피' }));
     else {
@@ -48,6 +56,7 @@ describe('사유별 회피 문항', () => {
     }
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '회피' }));
+    expandDetails();
     expect(screen.getByRole('tab', { name: '5' })).toHaveAttribute('aria-selected', 'false');
   });
 
@@ -61,7 +70,34 @@ describe('사유별 회피 문항', () => {
   it('카탈로그 장애 시 한글 회피 코드도 지원한다', () => {
     render(<FailureTagPicker reasons={[]} selected={[{ code: '회피', labelKo: '회피' }]}
       onChange={() => {}} memo="" onMemoChange={() => {}} onAversivenessChange={() => {}} />);
+    expandDetails();
     expect(screen.getByRole('tablist')).toBeInTheDocument();
+  });
+});
+
+describe('상황 입력 간소화', () => {
+  it('기본 목록은 최대 네 개이며 서버 코드와 라벨을 그대로 보존한다', () => {
+    const catalog = [...reasons, { code: 'PLAN_TOO_BIG', labelKo: '분량이 많았어요' },
+      { code: 'AMBIGUITY', labelKo: '무엇부터 할지 몰랐어요' }, { code: 'NEW_CODE', labelKo: '새 상황' }];
+    expect(primaryFailureReasons(catalog).map((r) => r.code)).toEqual(['TIME_SHORTAGE', 'FATIGUE', 'AMBIGUITY', 'PLAN_TOO_BIG']);
+    render(<FailureTagPicker reasons={catalog} selected={[]} onChange={() => {}} memo="" onMemoChange={() => {}} />);
+    expect(within(screen.getByRole('group', { name: '자주 쓰는 상황' })).getAllByRole('button')).toHaveLength(4);
+    expect(document.querySelector('details')!.open).toBe(false);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expandDetails();
+    expect(screen.getByRole('button', { name: '새 상황' })).toBeInTheDocument();
+  });
+  it('미응답을 임의 태그로 바꾸지 않고, 메모만 저장하는 잘못된 요청을 막는다', () => {
+    expect(canContinueInterruption([], '')).toBe(true);
+    expect(canContinueInterruption([], '   ')).toBe(true);
+    expect(canContinueInterruption([], '졸려서 멈췄어요')).toBe(false);
+    expect(canContinueInterruption([reasons[1]], '졸려서 멈췄어요')).toBe(true);
+    expect(primaryFailureReasons([])).toEqual([]);
+  });
+  it('마지막 태그를 해제해도 작성한 메모를 버리지 않고 저장 조건을 알린다', () => {
+    render(<FailureTagPicker reasons={reasons} selected={[]} onChange={() => {}} memo="쓰던 내용" onMemoChange={() => {}} />);
+    expect(screen.getByRole('textbox')).toHaveValue('쓰던 내용');
+    expect(screen.getByRole('alert')).toHaveTextContent('메모를 저장하려면 상황을 하나');
   });
 });
 

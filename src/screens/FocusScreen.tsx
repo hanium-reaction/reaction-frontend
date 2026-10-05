@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { CaretLeft, Pause, Play, Check, X } from '@phosphor-icons/react';
 import { Chip } from '../components/Chip';
-import { FailureTagPicker, useFailureTagCatalog, type FailureTagOption } from '../components/FailureTagPicker';
+import { FailureTagPicker, useFailureTagCatalog, canContinueInterruption, type FailureTagOption } from '../components/FailureTagPicker';
 import { ReButton } from '../components/ReButton';
 import { ApiError, friendlyError, todayApi } from '../lib/api';
 import { readFocusSession, removeFocusSession, writeFocusSession, type RunIntent } from '../lib/executionSync';
@@ -431,10 +431,7 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
               <>
                 {/* 2단계 — 왜 끊겼는지. 오늘 화면의 실패 시트와 **같은 폼**을 쓴다.
                     문구를 따로 쓰면 두 경로가 갈리고, 한쪽만 고쳐지는 날이 온다. */}
-                <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-0.01em' }}>왜 끊겼을까요?</div>
-                <p style={{ fontSize: 13, color: 'var(--text-2)', margin: '0 0 12px', lineHeight: 1.55 }}>
-                  이유를 기록하면 더 잘 맞는 복구안을 제안해드려요.
-                </p>
+                <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-0.01em' }}>어떤 상황이었나요?</div>
                 <FailureTagPicker
                   reasons={failReasons}
                   selected={failTags}
@@ -452,10 +449,10 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
                       taskAversiveness,
                     })
                   }
-                  disabled={failTags.length === 0}
-                  style={{ marginTop: 12, minHeight: 48, borderRadius: 14, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: failTags.length ? 'pointer' : 'not-allowed', opacity: failTags.length ? 1 : 0.35 }}
+                  disabled={!canContinueInterruption(failTags, failMemo)}
+                  style={{ marginTop: 12, minHeight: 48, borderRadius: 14, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}
                 >
-                  기록하고 복구안 보기
+                  {failTags.length ? '상황 남기고 다음 행동 보기' : '사유 없이 다음 행동 보기'}
                 </button>
                 <button
                   onClick={() => setAskingReason(false)}

@@ -148,8 +148,8 @@ describe('FocusScreen 중단 시트', () => {
     fireEvent.click(await screen.findByRole('button', { name: /중단/ }));
     fireEvent.click(screen.getByRole('button', { name: /잘 안됐어요/ }));
 
-    expect(screen.getByText('왜 끊겼을까요?')).toBeInTheDocument();
-    // ⚠️ 아직 넘기면 안 된다 — 태그 없이 넘어가면 회복 제안이 일반 카드로 나간다.
+    expect(screen.getByText('어떤 상황이었나요?')).toBeInTheDocument();
+    // 상황 입력을 열기만 해서는 저장하지 않는다.
     expect(onStop).not.toHaveBeenCalled();
   });
 
@@ -159,9 +159,8 @@ describe('FocusScreen 중단 시트', () => {
     fireEvent.click(await screen.findByRole('button', { name: /중단/ }));
     fireEvent.click(screen.getByRole('button', { name: /잘 안됐어요/ }));
 
-    const submit = screen.getByRole('button', { name: /기록하고 복구안 보기/ });
-    // 하나도 안 고르면 못 넘어간다 — 빈 태그로 넘기면 고치려던 상태 그대로다.
-    expect(submit).toBeDisabled();
+    const submit = screen.getByRole('button', { name: /사유 없이 다음 행동 보기/ });
+    expect(submit).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: /과대 과제/ }));
     fireEvent.click(submit);
@@ -172,5 +171,14 @@ describe('FocusScreen 중단 시트', () => {
       expect.any(Number),
       expect.objectContaining({ tagCodes: ['과대 과제'] }),
     );
+  });
+
+  it('상황을 모르면 태그와 회피 점수를 만들지 않고 넘긴다', async () => {
+    const onStop = vi.fn();
+    view(vi.fn(), vi.fn(), onStop);
+    fireEvent.click(await screen.findByRole('button', { name: /중단/ }));
+    fireEvent.click(screen.getByRole('button', { name: /잘 안됐어요/ }));
+    fireEvent.click(screen.getByRole('button', { name: '사유 없이 다음 행동 보기' }));
+    expect(onStop).toHaveBeenCalledWith(task.id, 'failed', expect.any(Number), { tagCodes: [], memo: '', taskAversiveness: null });
   });
 });

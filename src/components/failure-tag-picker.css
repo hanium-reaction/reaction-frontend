@@ -1,0 +1,9 @@
+.interruption-input { min-width: 0; margin-bottom: 16px; }
+.interruption-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.interruption-option { min-height: 48px; padding: 12px; border: 1px solid var(--sand-200); border-radius: 12px; background: var(--surface-raised); color: var(--text-1); font: inherit; font-size: 14px; line-height: 1.45; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.interruption-option[aria-pressed="true"] { border: 2px solid var(--brand); padding: 11px; background: var(--brand-soft); font-weight: 700; }
+.interruption-option:focus-visible, .interruption-more summary:focus-visible, .interruption-input textarea:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.interruption-hint { display: block; color: var(--text-2); font-size: 12px; line-height: 1.6; margin: 8px 0 12px; }
+.interruption-more { margin-top: 8px; }
+.interruption-more summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 600; }
+.interruption-today-sheet { max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; }
