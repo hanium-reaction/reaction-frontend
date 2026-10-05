@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import '../styles/planning-flow-redesign.css';
 import { Plus, X, Sparkle, ArrowRight, Path } from '@phosphor-icons/react';
 import { ApiError, plansApi } from '../lib/api';
 import { useNavigation } from '../contexts/NavigationContext';
@@ -191,20 +192,20 @@ export function MilestoneConfirmScreen() {
   const canConfirm = milestones.some((m) => m.title.trim());
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="plan-flow plan-flow-split">
+      <div className="plan-flow-scroll">
+        <header className="plan-flow-heading">
+          <span className="plan-flow-eyebrow">MILESTONES</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <Path size={20} weight="fill" color="var(--brand)" />
-            <h1 style={{ fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em', margin: 0 }}>계획의 큰 그림</h1>
+            <h1 className="plan-flow-title">계획의 큰 그림</h1>
           </div>
-        </div>
-
-        <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, margin: 0 }}>
+        <p className="plan-flow-description">
           목표를 이 <b style={{ color: 'var(--text-1)' }}>중간 단계</b>들로 나눠 계획을 세울게요.
           고치고 더하고 빼도 되고, <b style={{ color: 'var(--text-1)' }}>카드를 꾹 눌러 끌면</b> 순서가 바뀌어요 —
           확정하면 이 구조 그대로 계획이 만들어져요.
         </p>
+        </header>
 
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '30px 0', justifyContent: 'center', color: 'var(--text-3)', fontSize: 13 }}>
@@ -221,6 +222,7 @@ export function MilestoneConfirmScreen() {
               const lifted = drag?.from === i;
               return (
                 <div
+                  className="plan-flow-milestone"
                   key={m.uid}
                   data-ms-card
                   onPointerDown={(e) => startPress(e, i)}
@@ -231,12 +233,6 @@ export function MilestoneConfirmScreen() {
                     e.stopPropagation();
                   }}
                   style={{
-                    background: 'var(--surface-raised)',
-                    border: '1px solid var(--sand-200)',
-                    borderRadius: 14,
-                    padding: 12,
-                    display: 'flex',
-                    gap: 10,
                     position: 'relative',
                     zIndex: lifted ? 2 : 1,
                     transform: `translateY(${shiftOf(i)}px)${lifted ? ' scale(1.02)' : ''}`,
@@ -257,8 +253,7 @@ export function MilestoneConfirmScreen() {
                         move(i, e.key === 'ArrowUp' ? -1 : 1);
                       }}
                       aria-label={`${i + 1}번째 중간 목표. 위·아래 화살표 키로 순서를 옮길 수 있어요`}
-                      className="tnum"
-                      style={{ width: 22, height: 22, borderRadius: 7, border: 'none', padding: 0, background: 'var(--brand-soft)', color: 'var(--brand-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'grab' }}
+                      className="plan-flow-milestone-number tnum"
                     >
                       {previewIndex(i) + 1}
                     </button>
@@ -299,7 +294,8 @@ export function MilestoneConfirmScreen() {
       </div>
 
       {!loading && !failed && (
-        <div style={{ padding: '12px 18px calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid var(--sand-200)', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="plan-flow-footer" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="plan-flow-approval-heading"><span className="plan-flow-draft-badge">중간 목표 {milestones.length}개</span><span className="plan-flow-approval-hint">순서와 내용을 확인해 주세요</span></div>
           <button
             onClick={confirmAndPlan}
             disabled={!canConfirm}
@@ -313,7 +309,7 @@ export function MilestoneConfirmScreen() {
           >
             그냥 자동으로 세워줘 (마일스톤 없이)
           </button>
-        </div>
+        </aside>
       )}
     </div>
   );

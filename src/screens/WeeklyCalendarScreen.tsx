@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import '../styles/planning-redesign.css';
 import { visibleCalendarConflict } from '../lib/calendarConflict';
 import { Plus, CalendarPlus, ChatCircleDots } from '@phosphor-icons/react';
 import { DEFAULT_GOAL_CATEGORY, goalColor } from '../data';
@@ -691,17 +692,20 @@ export function WeeklyCalendarScreenV2() {
   };
 
   return (
-    <div ref={rootRef} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
+    <div ref={rootRef} className="planning-screen" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div className="weekly-calendar-header" style={{ flexShrink: 0, padding: '10px 14px 8px', borderBottom: '1px solid var(--sand-200)' }}>
+      <div className="planning-calendar-header">
+        <div className="planning-calendar-tools">
+          <h1>주간 계획</h1>
+        </div>
         <WeeklyReplanCard onApproved={() => setPlanRefresh((value) => value + 1)} />
         {calendarFailed && <p role="status">캘린더를 확인하지 못했어요. 일정 겹침 여부는 다음 조회에서 다시 확인해요.</p>}
         {/* 주 단위 이동(#119) — 마감까지 여러 주에 걸친 계획을 이전/다음 주로 열람.
             주간 리뷰의 "다음 주 계획 확인" 은 weekOffset=1 로 진입한다. */}
-        <div className="weekly-week-nav" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div className="planning-calendar-date" role="group" aria-label="주간 날짜 탐색">
           <button
             onClick={goPrev}
-            style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}
+            className="planning-calendar-arrow"
             aria-label="이전 주"
           >‹</button>
           <div style={{ flex: 1, textAlign: 'center' }}>
@@ -712,7 +716,7 @@ export function WeeklyCalendarScreenV2() {
           </div>
           <button
             onClick={goNext}
-            style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--sand-200)', background: 'var(--surface-raised)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}
+            className="planning-calendar-arrow"
             aria-label="다음 주"
           >›</button>
           {/* 오늘 버튼은 항상 같은 자리에 둔다. 이번 주를 보고 있을 때는 선택된 컨트롤로
@@ -725,6 +729,10 @@ export function WeeklyCalendarScreenV2() {
             data-tour-help="오늘이 들어 있는 날짜로 돌아가요."
             >오늘</button>
           </div>
+        </div>
+        <div className="planning-calendar-legend" aria-label="일정 상태 범례" style={{ marginTop: 6 }}>
+          <span><i className="is-done" />완료 {blocks.filter((b) => b.status === 'done').length}</span>
+          <span><i />대기 {blocks.filter((b) => b.status === 'pending').length}</span>
         </div>
         {/* 조작 안내는 상시 UI 로 두지 않는다 — 헤더가 화면의 35% 를 먹던 원인 중 하나.
             블록을 처음 만졌을 때 한 번만 토스트로 알려준다. */}
@@ -742,15 +750,6 @@ export function WeeklyCalendarScreenV2() {
             </EmptyState>
           </div>
         )}
-        {/* 칩은 완료·대기만. 이월은 0 일 때가 대부분이라 자리만 차지했다. */}
-        <div className="weekly-status-chips" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          {[
-            { label: '완료', n: blocks.filter((b) => b.status === 'done').length, bg: '#E5EFE3', bd: '#b4dfc8', fg: 'var(--success-ink)' },
-            { label: '대기', n: blocks.filter((b) => b.status === 'pending').length, bg: 'var(--sand-100)', bd: 'var(--sand-200)', fg: 'var(--text-2)' },
-          ].map((c, i) => (
-            <span key={i} className="tnum" style={{ height: 'var(--ctrl-xs)', padding: '0 9px', background: c.bg, border: `1px solid ${c.bd}`, borderRadius: 9999, fontSize: 10, color: c.fg, fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>{c.label} {c.n}</span>
-          ))}
-        </div>
         {!planLoading && conflictIds.size > 0 && (
           <div role="status" style={{ marginTop: 8, padding: '8px 10px', borderRadius: 10, background: '#FFF1EC', border: '1px solid var(--coral-200)', color: 'var(--coral-700)', fontSize: 11, lineHeight: 1.45 }}>
             같은 시간대 일정 {conflictIds.size}개를 위아래로 나눠 표시했어요. 일정을 눌러 시간을 조정할 수 있어요.

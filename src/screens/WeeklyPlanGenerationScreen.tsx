@@ -3,7 +3,8 @@ import { Clock, Lightbulb, DotsThreeOutline } from '@phosphor-icons/react';
 import { DEFAULT_GOAL_CATEGORY, categoryLabel, goalColor } from '../data';
 import { SetupProgress } from '../components/SetupProgress';
 import { requestInterviewRestart } from '../lib/interviewSession';
-import { AiDraftCard } from '../components/AiDraftCard';
+import { PlanningApprovalPanel } from '../components/PlanningApprovalPanel';
+import '../styles/planning-flow-redesign.css';
 import { BlockEditSheet } from '../components/BlockEditSheet';
 import { PlanOptionsSheet } from '../components/PlanOptionsSheet';
 import { WeekGrid, scrollColIntoView, type WeekGridBlock } from '../components/WeekGrid';
@@ -522,16 +523,16 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
   if (generating) return <PlanGeneratingView />;
 
   return (
-    <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)', position: 'relative' }}>
+    <div ref={rootRef} className="plan-flow plan-flow-calendar" style={{ position: 'relative' }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, padding: '10px 16px 8px', borderBottom: '1px solid var(--sand-200)' }}>
+      <div className="plan-flow-calendar-header">
         <SetupProgress current={4} total={4} label="계획" />
         {/* 헤더 'AI 생성 완료' 뱃지는 AiDraftCard 가 푸터에서 동일 정보 (LLM 아이콘 + 점선 +
             '수락/수정/재생성' 라벨) 를 표시하므로 중복 제거. §1.4 잠금 결정의 시각 통일. */}
         {/* 제목과 '이번 주 N개'를 한 줄로 묶는다. 예전엔 제목·안내문·뱃지·3일토글이
             각각 한 줄씩 네 줄을 먹어서, 정작 판단 근거인 시간표가 아래로 밀려 있었다. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <h2 style={{ fontWeight: 800, fontSize: 19, letterSpacing: '-0.02em', margin: 0, flex: 1, minWidth: 0 }}>계획이 만들어졌어요</h2>
+        <div className="plan-flow-calendar-title">
+          <h1>계획이 만들어졌어요</h1>
           <span className="tnum" style={{ flexShrink: 0, height: 'var(--ctrl-xs)', padding: '0 9px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 9999, fontSize: 12, fontWeight: 700, color: 'var(--brand-ink)', display: 'inline-flex', alignItems: 'center' }}>
             이번 주 {weekBlocks.length}개
           </span>
@@ -646,8 +647,8 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
       {/* AI Draft footer — Issue #12 §1.4 잠금 결정 시각화.
           onAccept 은 우리 handleContinue (plansApi.approve mock-and-replace 포함) 사용.
           onReject 는 generating=true 로 되돌려 useEffect 의 plansApi.generate 재호출. */}
-      <div style={{ flexShrink: 0, padding: '8px 12px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))', background: 'var(--surface-ground)' }}>
-        <AiDraftCard
+      <div className="plan-flow-footer">
+        <PlanningApprovalPanel
           isDraft={true}
           aiSource={planAiSource}
           onAccept={handleContinue}
@@ -693,7 +694,7 @@ export function WeeklyPlanGenerationScreen({ onContinue }: WeeklyPlanGenerationS
               );
             })}
           </div>
-        </AiDraftCard>
+        </PlanningApprovalPanel>
       </div>
 
       {/* 계획 분량 + '다시 인터뷰하기'. 되돌아가는 길 자체는 그대로 남기고(없으면 사용자가

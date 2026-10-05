@@ -30,8 +30,8 @@ export function WeeklyReplanCard({ onApproved }: { onApproved: () => void }) {
       } else setError(friendlyError(err, '계획을 처리하지 못했어요. 다시 시도해 주세요.'));
     } finally { lock.current = false; setBusy(false); }
   };
-  return <section aria-label="남은 일 다시 배치" style={{ padding: 12, borderRadius: 12, background: 'var(--surface-raised)' }}>
-    {!draft && <ReButton size="sm" disabled={busy} onClick={() => void run(false)}>{busy ? '초안 만드는 중…' : '남은 일 다시 배치'}</ReButton>}
+  return <section aria-label="남은 일 다시 배치" className="planning-replan" style={{ marginBottom: 6 }}>
+    {!draft && <div className="planning-replan-summary"><ReButton size="sm" disabled={busy} onClick={() => void run(false)}>{busy ? '초안 만드는 중…' : '남은 일 다시 배치'}</ReButton><span>미리 보고 적용해요</span></div>}
     {error && <p role="alert">{error}</p>}
     {result && <p role="status">일정 {result.createdBlocks}개를 배치하고 {result.cancelledBlocks}개를 정리했어요. 이미 시작했거나 변경된 일정 {result.skippedBlocks}개는 보존했어요.</p>}
     {draft && <>

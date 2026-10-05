@@ -1,0 +1,47 @@
+.plan-flow { height: 100%; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #F5F7FB; color: #17233D; font-family: Pretendard, sans-serif; }
+.plan-flow-scroll { flex: 1; min-height: 0; overflow: auto; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.plan-flow-heading { padding-bottom: 18px; border-bottom: 1px solid #E2E8F0; }
+.plan-flow-eyebrow { display: block; color: #4F46E5; font-size: 11px; font-weight: 800; letter-spacing: .08em; margin-bottom: 8px; }
+.plan-flow-title { margin: 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.3; letter-spacing: -.04em; font-weight: 800; }
+.plan-flow-description { margin: 8px 0 0; font-size: 13px; line-height: 1.7; color: #64748B; }
+.plan-flow-list { display: flex; flex-direction: column; gap: 12px; }
+.plan-flow-goal { padding: 18px; background: white; border: 1px solid #E2E8F0; border-radius: 16px; cursor: pointer; }
+.plan-flow-goal[aria-pressed=true] { border-color: #818CF8; box-shadow: 0 0 0 2px #EEF2FF; }
+.plan-flow-goal-name { font-size: 16px; font-weight: 750; line-height: 1.5; margin-bottom: 10px; overflow-wrap: anywhere; }
+.plan-flow-note { padding: 16px; border: 1px solid #C7D2FE; border-radius: 12px; background: #EEF2FF; display: flex; gap: 10px; }
+.plan-flow-footer { flex-shrink: 0; padding: 14px 24px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid #E2E8F0; background: white; }
+.plan-flow-approval { min-width: 0; }
+.plan-flow-approval-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.plan-flow-draft-badge { flex-shrink: 0; padding: 4px 8px; border: 1px dashed #818CF8; background: #EEF2FF; border-radius: 6px; color: #4F46E5; font-size: 11px; font-weight: 800; }
+.plan-flow-approval-hint { flex: 1; font-size: 11px; color: #64748B; }
+.plan-flow-approval-summary { margin-bottom: 12px; min-width: 0; }
+.plan-flow-rule-note { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: #64748B; }
+.plan-flow-approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.plan-flow-primary, .plan-flow-secondary { min-height: 42px; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.plan-flow-primary { grid-column: 1 / -1; border: 1px solid #4F46E5; background: #4F46E5; color: white; }
+.plan-flow-primary:disabled { opacity: .45; cursor: not-allowed; }
+.plan-flow-secondary { border: 1px solid #E2E8F0; background: white; color: #64748B; }
+.plan-flow-milestone { background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 16px; display: flex; gap: 12px; }
+.plan-flow-milestone input { min-width: 0; }
+.plan-flow-milestone-number { width: 30px; height: 30px; border: 0; border-radius: 9px; background: #EEF2FF; color: #4F46E5; font: inherit; font-size: 13px; font-weight: 800; cursor: grab; }
+.plan-flow-calendar-header { flex-shrink: 0; background: white; border-bottom: 1px solid #E2E8F0; padding: 12px 16px; }
+.plan-flow-calendar-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.plan-flow-calendar-title h1 { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -.03em; }
+.plan-flow :focus-visible { outline: 2px solid #4F46E5; outline-offset: 3px; }
+@media (max-width: 430px) {
+  .plan-flow-scroll { padding: 18px 14px; gap: 14px; }
+  .plan-flow-footer { padding: 12px 14px max(12px, env(safe-area-inset-bottom)); }
+  .plan-flow-goal, .plan-flow-milestone { padding: 14px; }
+  .plan-flow-calendar-header { padding: 8px 12px; }
+  .plan-flow-calendar .plan-flow-approval-actions { grid-template-columns: 1fr 1fr 1.4fr; }
+  .plan-flow-calendar .plan-flow-primary { grid-column: auto; }
+  .plan-flow-calendar .plan-flow-approval-actions button { padding: 8px 4px; font-size: 12px; }
+}
+@media (min-width: 900px) {
+  .plan-flow-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+  .plan-flow-split > .plan-flow-footer { border-top: 0; border-left: 1px solid #E2E8F0; padding-top: 28px; overflow-y: auto; }
+  .plan-flow-scroll { padding: 32px; }
+  .plan-flow-calendar .plan-flow-approval { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 24px; align-items: center; }
+  .plan-flow-calendar .plan-flow-approval-actions { grid-column: 2; grid-row: 1 / 3; display: flex; }
+  .plan-flow-calendar .plan-flow-approval-summary { margin: 0; }
+}
