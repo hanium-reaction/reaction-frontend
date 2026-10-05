@@ -6,6 +6,7 @@ import { ReButton } from '../components/ReButton';
 import { ApiError, friendlyError, todayApi } from '../lib/api';
 import { readFocusSession, removeFocusSession, writeFocusSession, type RunIntent } from '../lib/executionSync';
 import type { Task } from '../types';
+import '../styles/guided-redesign.css';
 
 interface FocusScreenProps {
   // 잘못된 상태(force navigation, 빈 tasks 등)로 마운트되어도 폭발하지 않도록 null 허용.
@@ -220,7 +221,7 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
   // task 없이 잘못 마운트된 경우 — 빈 흰 화면 대신 명확한 안내 + 뒤로가기.
   if (!task) {
     return (
-      <div style={{ padding: '60px 24px', background: 'var(--surface-ground)', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center' }}>
+      <div className="guided-surface guided-focus-empty" style={{ padding: '60px 24px', background: 'var(--surface-ground)', minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center' }}>
         <div style={{ fontWeight: 700, fontSize: 22, color: 'var(--text-1)' }}>시작할 카드가 없어요</div>
         <p style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 260, margin: 0, lineHeight: 1.6 }}>오늘 화면에서 카드를 골라 시작해주세요.</p>
         <ReButton variant="primary" size="md" onClick={onBack}>오늘로 돌아가기</ReButton>
@@ -354,11 +355,12 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
   const circumference = 2 * Math.PI * R;
 
   return (
-    <div style={{ padding: '12px 20px 110px', background: 'var(--surface-ground)', minHeight: '100%' }}>
+    <div className="guided-surface guided-focus">
+      <div className="guided-focus-inner">
       <button onClick={handleExit} style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-2)', padding: 0, marginBottom: 20, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>
-        <CaretLeft size={20} /> Today
+        <CaretLeft size={20} /> 오늘로
       </button>
-      <Chip tone={running ? 'amber' : 'neutral'} style={{ marginBottom: 12 }}>
+      <Chip tone={running ? 'amber' : 'neutral'} style={{ marginBottom: 12, background: running ? '#D9F99D' : '#E2E8F0', color: running ? '#365314' : '#64748B' }}>
         {running ? '● 집중 중' : '❚❚ 일시정지됨'}
       </Chip>
       {syncState !== 'synced' && (
@@ -374,11 +376,14 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
           )}
         </div>
       )}
-      <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 4 }}>{task.title}</h1>
+      <header className="guided-focus-heading"><span className="guided-kicker">FOCUS / 지금 이 한 가지</span>
+      <h1>{task.title}</h1>
       <p className="tnum" style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 36 }}>시작 {startLabel} · 목표 {totalMin}분</p>
+      </header>
 
-      <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0 28px' }}>
-        <svg width="280" height="280" viewBox="0 0 280 280">
+      <section className="guided-timer-stage" aria-label="집중 타이머">
+      <div className="guided-timer">
+        <svg width="280" height="280" viewBox="0 0 280 280" role="img" aria-label={`경과 ${timeLabel}, ${remainLabel}`}>
           <circle cx="140" cy="140" r={R} stroke="var(--sand-200)" strokeWidth="10" fill="none" />
           <circle
             cx="140" cy="140" r={R} stroke={running ? 'var(--brand)' : 'var(--sand-300)'} strokeWidth="10" fill="none"
@@ -394,29 +399,33 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
           </text>
         </svg>
       </div>
+      <p className="guided-timer-note">{running ? '지금은 이 일에만 집중해도 괜찮아요.' : '잠깐 숨을 고르고, 준비되면 이어가세요.'}</p>
+      </section>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <ReButton variant="ghost" size="lg" full onClick={toggleRun}>
+      <div className="guided-focus-controls">
+        <ReButton variant="ghost" size="lg" full style={{ padding: '0 12px' }} onClick={toggleRun}>
           {running ? <><Pause size={16} /> 멈춤</> : <><Play size={16} weight="fill" /> 이어서</>}
         </ReButton>
-        <ReButton variant="ghost" size="lg" full onClick={() => setExitSheet(true)}>
+        <ReButton variant="ghost" size="lg" full style={{ padding: '0 12px' }} onClick={() => setExitSheet(true)}>
           <X size={16} /> 중단
         </ReButton>
-        <ReButton variant="primary" size="lg" full onClick={() => void handleComplete()} disabled={completing || syncState === 'pending' || syncState === 'retrying'}>
+        <ReButton variant="primary" size="lg" full style={{ padding: '0 12px' }} onClick={() => void handleComplete()} disabled={completing || syncState === 'pending' || syncState === 'retrying'}>
           <Check size={16} /> {completing ? '저장 중…' : '완료'}
         </ReButton>
+      </div>
+      <p className="guided-focus-footnote">경과 시간과 실제 완료는 달라요. 일을 마쳤다면 완료를 눌러 기록해 주세요.</p>
       </div>
 
       {exitSheet && (
         <div
+          className="guided-focus-backdrop"
           onClick={() => { setExitSheet(false); setAskingReason(false); }}
-          style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(26,23,20,.45)', display: 'flex', alignItems: 'flex-end' }}
         >
           <div
+            className="guided-focus-sheet"
             role="dialog"
             aria-label="중단하고 나가기"
             onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', background: 'var(--surface-raised)', borderRadius: '24px 24px 0 0', padding: '22px 18px calc(22px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', gap: 8 }}
           >
             {askingReason ? (
               <>

@@ -19,6 +19,7 @@ import { localDateStr, defaultCarryOverAnchorDate, defaultReEngagementAnchorDate
 import type { Task, RecoveryProposal } from '../types';
 import type { RecoveryCard } from '../types/api';
 import '../components/reentry.css';
+import '../styles/guided-redesign.css';
 
 // 이 optionGroup 은 "보류·이월" 계열 — 수락 시 재관여 앵커(#221)를 같이 정한다.
 // PARK("지금은 접어두기") / CARRY_OVER("내일 이어서") 만 해당. DOWNSCOPE/RESCHEDULE 는
@@ -205,7 +206,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   // 이미 회복 결정을 마친 실행에 재진입 — 에러가 아니라 정상 상태로 안내한다(#164).
   if (alreadyDecided) {
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 14 }}>
+      <div className="guided-surface guided-recovery-state" style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 22 }}>이미 회복 계획을 골랐어요</div>
         <p style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 260, margin: 0, lineHeight: 1.6 }}>이 실행에는 이미 저장한 회복 선택이 있어요. 주간 계획에서 일정을 확인해 주세요.</p>
         <button onClick={onOpenWeekly}>주간 계획 열기</button>
@@ -217,7 +218,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   // task 없이 잘못 마운트된 경우 — 회색 빈 영역을 보여주지 않도록 안내 화면.
   if (!task) {
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 14 }}>
+      <div className="guided-surface guided-recovery-state" style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 22 }}>회복할 카드를 먼저 골라주세요</div>
         <p style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 260, margin: 0, lineHeight: 1.6 }}>오늘 화면에서 ‘일부만’ 또는 ‘잘 안됨’ 으로 표시한 카드가 있으면 여기서 회복 제안을 받을 수 있어요.</p>
         <button onClick={onDismiss} style={{ height: 44, padding: '0 20px', borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}>오늘로 돌아가기</button>
@@ -275,7 +276,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   if (accepted) {
     const p = proposals.find((x) => x.id === sel);
     return (
-      <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 18 }}>
+      <div className="guided-surface guided-recovery-state" style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 24px', gap: 18 }}>
         <div style={{ width: 72, height: 72, borderRadius: 9999, background: 'var(--coral-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowsClockwise size={32} weight="fill" color="var(--brand)" />
         </div>
@@ -286,28 +287,31 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   }
 
   return (
-    <div className="reentry-overlay">
-      <div onClick={onDismiss} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)' }} />
+    <div className="reentry-overlay guided-surface guided-recovery">
+      <div className="guided-recovery-backdrop" onClick={onDismiss} />
       <div className="reentry-sheet" role="region" aria-label="다시 시작할 방법 선택">
-        {/* 재협상 톤 — coral(에너지) 대신 sand(차분함) 그라디언트로 "잠깐 멈춤"을 신호한다. */}
-        <div style={{ position: 'absolute', inset: 0, background: renegotiating ? 'radial-gradient(circle at 90% -10%, rgba(180,163,129,0.14) 0%, transparent 50%)' : 'radial-gradient(circle at 90% -10%, rgba(226,109,78,0.10) 0%, transparent 50%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative' }}>
+        <div className="guided-recovery-layout">
           <ol className="reentry-steps" aria-label="다시 시작 순서"><li>01 항목 확인</li><li aria-current="step">02 방법 선택</li><li>03 변경 확인</li></ol>
+          <header className="guided-page-heading"><span className="guided-kicker">RE:PLAN / 다시 시작</span><h2>계획을 지금의 나에게 맞춰요.</h2><p>멈춘 지점부터, 가능한 한 걸음으로.</p></header>
+          <aside className="guided-context">
           {task && (
             // 여기는 "무엇이 멈췄나"를 알려주는 자리지 경고가 아니다. 예전엔 빨간 에러
             // 박스(#FAE2D8 + danger 아이콘/글씨)라, 회복 화면에서 제일 먼저 보이는 게
             // 빨간 경고였다 — 바로 아래 "괜찮아요" 카피와 정면으로 어긋난다.
             // 사실만 중립 톤으로: 무엇을 · 언제 · 왜.
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, padding: '9px 11px', background: 'var(--sand-100)', border: '1px solid var(--sand-200)', borderRadius: 10 }}>
+            <div className="guided-context-task">
               <Flag size={14} color="var(--text-3)" weight="fill" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 1 }}>다시 살펴볼 항목</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
+                <div className="guided-context-title">{task.title}</div>
                 {task.dur && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>원래 계획 {task.dur}{task.time ? ` · ${task.time}` : ''}</div>}
                 {failReason && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>선택한 이유 · {failReason}</div>}
               </div>
             </div>
           )}
+          <p className="guided-context-note">선택 → 변경 확인 → 일정 승인<br />내가 확인한 계획만 반영해요.</p>
+          </aside>
+          <section className="guided-options" aria-label="회복 방법">
 
           {/* 통상 회복 카드와 구분되는 신호(#223) — 같은 화면·같은 카드 인터랙션을
               쓰되 헤더 아이콘/카피/톤을 바꿔 "지금은 다시 정하는 시점"임을 알린다. */}
@@ -357,7 +361,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="guided-option-grid">
             {/* 기다리는 동안 카드 자리를 스켈레톤으로 잡아둔다. 비워 두면 위아래 문구만
                 남아 "제안이 없는 화면" 으로 읽힌다. */}
             {waiting && proposals.length === 0 && <SkeletonBlock count={3} height={76} radius={14} />}
@@ -381,6 +385,8 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
               />
             ))}
           </div>
+          </section>
+          <section className="guided-approval" aria-label="선택 확인 및 저장">
 
           {needsAnchor && (
             <ReEngagementAnchorPicker
@@ -400,11 +406,12 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             </div>
           )}
           {/* 3버튼: 나중에(거절) / 다른 제안(수정=재생성) / 이 방법으로(수락) — S19 */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <div className="guided-recovery-actions">
             <button onClick={reject} disabled={deciding} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-3)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>나중에</button>
             <button onClick={loadProposals} disabled={!executionId || loadingProposals || deciding} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: executionId && !loadingProposals ? 'pointer' : 'not-allowed', opacity: executionId && !loadingProposals ? 1 : 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><ArrowsClockwise size={13} /> {proposalError ? '다시 시도' : '다른 제안'}</button>
             <button onClick={accept} disabled={!sel || deciding} style={{ flex: 1.6, height: 44, borderRadius: 12, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: sel && !deciding ? 'pointer' : 'not-allowed', opacity: sel && !deciding ? 1 : 0.35, transition: 'opacity 160ms' }}>{deciding ? '저장하는 중…' : '이 방법으로'}</button>
           </div>
+          </section>
         </div>
       </div>
     </div>
