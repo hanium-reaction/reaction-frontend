@@ -147,8 +147,8 @@ export function mountPreview() {
   inboxApi.coachingAdvice = async () => [];
   const interview = {
     sessionId: "fixture-interview",
-    ambiguityScore: 0.65,
-    totalTurns: 2,
+    ambiguityScore: 10,
+    totalTurns: 0,
     endReason: null,
     currentQuestion: {
       slotKey: "goals.primary",
@@ -159,6 +159,18 @@ export function mountPreview() {
   } as Awaited<ReturnType<typeof interviewApi.start>>;
   interviewApi.start = async () => interview;
   interviewApi.get = async () => interview;
+  // Presentation fixture: exercise the real chat UI without changing an account.
+  interviewApi.submitAnswer = async (_sessionId, body) => ({
+    ...interview,
+    ambiguityScore: 8,
+    totalTurns: body.clientTurn + 1,
+    currentQuestion: {
+      slotKey: "goals.available_time",
+      text: "퇴근 후 포트폴리오에 쓸 수 있는 시간은 하루에 얼마나 되나요?",
+      answerType: "text",
+      options: [],
+    },
+  });
   interviewApi.slotCatalog = async () => [];
   habitsApi.list = async () => [];
   habitsApi.instancesForWeek = async () => [];
