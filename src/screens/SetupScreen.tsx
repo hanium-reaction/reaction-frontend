@@ -16,6 +16,8 @@ import { SetupProgress } from '../components/SetupProgress';
 import { useToast } from '../contexts/ToastContext';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { SkeletonBlock } from '../components/SkeletonBlock';
+import '../styles/guided-redesign.css';
+import '../styles/onboarding-redesign.css';
 
 interface SetupScreenProps {
   onDone: () => void;
@@ -179,15 +181,18 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
   const sleepWindow = sleepPolicy ? summarize(sleepPolicy) : null;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-ground)' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 0' }}>
+    <div className="guided-surface guided-setup">
+      <div className="guided-setup-layout">
+        <header className="guided-setup-heading">
         <SetupProgress current={3} total={4} label="마무리" />
-        <h1 style={{ fontWeight: 800, fontSize: 26, lineHeight: 1.2, letterSpacing: '-0.02em', marginBottom: 6 }}>
+        <span className="guided-kicker">나의 생활에 맞는 계획</span>
+        <h1>
           마지막 확인이에요
         </h1>
         <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 16 }}>
           AI 가 인터뷰 답에서 일정·시간·알림을 미리 잡아뒀어요. 맞으면 그대로 다음으로.
         </p>
+        <ol className="guided-setup-checklist"><li><span>01</span> 이미 정해진 일정</li><li><span>02</span> 꼭 지킬 시간</li><li><span>03</span> 알림 받을 때</li></ol>
 
         {sleepWindow && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 14, padding: '8px 10px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 10 }}>
@@ -197,6 +202,8 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
             </div>
           </div>
         )}
+        </header>
+        <div className="guided-setup-sections">
 
         {error && (
           <div style={{ marginBottom: 12 }}>
@@ -205,6 +212,7 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
         )}
 
         {/* 1. 캘린더 + 고정 일정 */}
+        <section className="guided-setup-section" aria-label="일정 설정">
         <SectionTitle>일정</SectionTitle>
         {/* 캘린더에 있는 일정은 계획이 알아서 피한다. 캘린더에 없는 고정 일정만 아래에 추가. */}
         <div style={{ marginBottom: 8 }}>
@@ -252,8 +260,10 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
             </button>
           )}
         </div>
+        </section>
 
         {/* 2. 시간 정책 */}
+        <section className="guided-setup-section" aria-label="시간 정책 설정">
         <SectionTitle>지킬 시간</SectionTitle>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
           {isLoading && <SkeletonRow />}
@@ -281,8 +291,10 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
             );
           })}
         </div>
+        </section>
 
         {/* 3. 알림 */}
+        <section className="guided-setup-section" aria-label="알림 설정">
         <SectionTitle>알림</SectionTitle>
         {!isLoading && settings && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 16 }}>
@@ -302,9 +314,12 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
             </button>
           </div>
         )}
+        </section>
+        </div>
       </div>
 
-      <div style={{ flexShrink: 0, padding: '12px 20px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))' }}>
+      <div className="guided-setup-actions">
+        <p>확인한 설정으로 다음 단계를 시작해요.</p>
         <ReButton variant="primary" size="lg" full onClick={saveAndContinue} disabled={isLoading || isSaving}>
           <>{isSaving ? '저장 중…' : '다 좋아요'} <ArrowRight size={16} /></>
         </ReButton>
@@ -315,7 +330,7 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)', marginBottom: 8 }}>{children}</div>
+    <h2 className="guided-section-title">{children}</h2>
   );
 }
 

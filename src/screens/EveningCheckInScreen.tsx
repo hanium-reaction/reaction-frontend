@@ -8,6 +8,8 @@ import {
 } from '../components/FailureTagPicker';
 import { plansApi, reflectionApi } from '../lib/api';
 import { localDateStr, weekStartStr } from '../lib/dates';
+import '../styles/guided-redesign.css';
+import '../styles/onboarding-redesign.css';
 import type {
   CompletionStatus,
   ReflectionBatchItem,
@@ -21,6 +23,17 @@ interface EveningCheckInScreenProps {
 
 // 화면 단계. 'tags' 는 batch 응답의 needsFailureTags 가 비어 있지 않을 때만 거친다(#238).
 type Step = 'checkin' | 'tags' | 'tomorrow' | 'done';
+
+function EveningProgress({ step }: { step: Step }) {
+  const current = step === 'checkin' ? 0 : step === 'tags' ? 1 : 2;
+  return <header className="guided-evening-heading">
+    <span className="guided-kicker">DAILY REFLECTION / 하루 마무리</span>
+    <ol className="guided-intro-progress" aria-label="저녁 체크인 단계">
+      {['실행 돌아보기', '사유 남기기 · 선택', '내일 확인'].map((label, index) =>
+        <li key={label} aria-current={index === current ? 'step' : undefined}>{label}</li>)}
+    </ol>
+  </header>;
+}
 
 // 사유를 받아야 하는 실행 1건 — batch 를 보내고 나면 pending 목록에서 빠지기 때문에,
 // 제목과 날짜를 미리 떠 두었다가 사유 단계에서 그대로 보여 준다.
@@ -218,15 +231,16 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
   if (step === 'done') {
     const selectedEnergy = energyOptions.find((e) => e.v === energy);
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '40px 20px', background: 'var(--surface-ground)', gap: 18 }}>
+      <div className="guided-surface guided-evening guided-evening-done">
+        <EveningProgress step="done" />
         <div style={{ width: 64, height: 64, borderRadius: 9999, background: '#E5EFE3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <CheckCircle size={32} weight="fill" color="var(--success-ink)" />
         </div>
-        <div style={{ fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>저녁 체크인 완료.</div>
-        <p style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 260 }}>오늘의 실행 데이터가 저장됐어요. 내일 아침에 맞춤 모닝 브리프가 준비될 거예요.</p>
+        <h1>오늘을 돌아봤어요.</h1>
+        <p>선택한 실행 기록과 내일 계획을 확인했어요. 오늘의 속도로 하루를 마무리하세요.</p>
         {selectedEnergy && (
           <div style={{ padding: '10px 14px', background: 'var(--brand-soft)', borderRadius: 12, border: '1px solid var(--coral-200)', fontSize: 12, color: 'var(--coral-700)', textAlign: 'left', width: '100%' }}>
-            <b>내일 반영 사항:</b><br />에너지 "{selectedEnergy.label}" 기록 → 내일 블록 강도 자동 조정
+            <b>이번 체크인에서 고른 에너지:</b><br />{selectedEnergy.label} · 아직 서버에 저장하거나 내일 계획에 자동 반영하지 않아요.
           </div>
         )}
         {/* 사유를 실제로 남겼는지 그대로 알려 준다. 예전에는 "오늘 화면에서 이어서 할 수
@@ -247,7 +261,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
             에너지 기록은 아직 임시 저장돼요(저장 계약 준비 중). 실행별 회고는 실제로 저장됩니다.
           </DemoNotice>
         </div>
-        <button onClick={onDone} style={{ width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer' }}>주간 계획 보기 →</button>
+        <button onClick={onDone} className="guided-evening-cta">주간 계획 보기 →</button>
       </div>
     );
   }
@@ -267,7 +281,8 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
     const isLast = tagIndex === tagTargets.length - 1;
     const statusLabel = statusOptions.find((s) => s.v === target.status)?.label;
     return (
-      <div style={{ height: '100%', overflowY: 'auto', padding: '16px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="guided-surface guided-evening guided-evening-tags">
+        <EveningProgress step="tags" />
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)' }}>저녁 체크인 · 사유 남기기</div>
           <span className="tnum" style={{ fontSize: 11, color: 'var(--text-3)' }}>{tagIndex + 1} / {tagTargets.length}</span>
@@ -315,7 +330,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
           <button
             onClick={submitTag}
             disabled={tagSelected.length === 0 || tagSaving}
-            style={{ flex: 2, height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: tagSelected.length && !tagSaving ? 'pointer' : 'default', opacity: tagSelected.length && !tagSaving ? 1 : 0.35 }}
+            className="guided-evening-cta" style={{ flex: 2 }}
           >
             {tagSaving ? '저장하는 중…' : isLast ? '저장하고 완료 →' : '저장하고 다음 →'}
           </button>
@@ -332,10 +347,13 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '16px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)' }}>저녁 체크인 · 1/2</div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>오늘 하루 어땠나요?</h2>
-      <p style={{ fontSize: 13, color: 'var(--text-2)' }}>에너지 상태를 기록하면 내일 계획에 반영해요.</p>
+    <div className="guided-surface guided-evening guided-evening-checkin">
+      <EveningProgress step="checkin" />
+      <header className="guided-evening-intro"><h1>오늘 하루 어땠나요?</h1>
+      <p>한 일과 멈춘 지점을 돌아봐요. 남기고 싶은 실행만 선택해도 괜찮아요.</p></header>
+      <div className="guided-evening-columns">
+      <section className="guided-evening-panel" aria-label="실행 돌아보기">
+      <h2 className="guided-section-title">01 · 실행 돌아보기</h2>
 
       {/* 최근 3일 미체크(in_progress) 실행 — GET /reflection/pending 실연동 (#83).
           카드별 4칩을 고르면 [다음]에서 POST /reflection/batch 로 한 번에 종결한다. */}
@@ -365,7 +383,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
                       <div className="tnum" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-3)', flexShrink: 0 }}>{p.scheduledTime.slice(0, 5)}</div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 5 }}>
+                  <div className="guided-evening-status-options">
                     {statusOptions.map((s) => {
                       const sel = picked[p.executionId] === s.v;
                       return (
@@ -380,7 +398,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
                             }
                             return { ...m, [p.executionId]: s.v };
                           })}
-                          style={{ flex: 1, height: 30, borderRadius: 9999, border: `1px solid ${sel ? 'var(--text-1)' : 'var(--sand-200)'}`, background: sel ? 'var(--text-1)' : 'transparent', color: sel ? '#FAF6EE' : 'var(--text-2)', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 140ms' }}
+                          className="guided-evening-status-option"
                         >
                           {s.label}
                         </button>
@@ -398,14 +416,21 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
           미체크 실행 목록을 불러오지 못했어요.
         </DemoNotice>
       )}
+      {!pendingLoading && usingRealPending && pending.length === 0 && <p>아직 체크인하지 않은 실행이 없어요.</p>}
+      </section>
 
+      <section className="guided-evening-panel" aria-label="현재 에너지">
+      <h2 className="guided-section-title">02 · 지금의 에너지</h2>
+      <p>현재 화면에서만 선택해요. 서버 저장과 내일 계획 자동 반영은 아직 지원하지 않아요.</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {energyOptions.map((e) => (
-          <button key={e.v} onClick={() => setEnergy(e.v)} style={{ padding: '14px 16px', borderRadius: 12, textAlign: 'left', background: energy === e.v ? 'var(--text-1)' : 'var(--surface-raised)', color: energy === e.v ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${energy === e.v ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button key={e.v} aria-pressed={energy === e.v} onClick={() => setEnergy(e.v)} style={{ padding: '14px 16px', borderRadius: 12, textAlign: 'left', background: energy === e.v ? 'var(--text-1)' : 'var(--surface-raised)', color: energy === e.v ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${energy === e.v ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ width: 8, height: 8, borderRadius: 9999, background: energy === e.v ? '#FFFCF6' : e.color, flexShrink: 0 }} />
             {e.label}
           </button>
         ))}
+      </div>
+      </section>
       </div>
       {submitError && (
         <div role="alert" style={{ padding: '10px 12px', background: '#FBE9E7', border: '1px solid var(--danger)', borderRadius: 10, fontSize: 12, color: 'var(--danger-ink)', lineHeight: 1.5 }}>
@@ -415,7 +440,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
       <button
         onClick={goNext}
         disabled={!energy || submitting}
-        style={{ width: '100%', height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 14, fontFamily: 'inherit', cursor: energy && !submitting ? 'pointer' : 'default', opacity: energy && !submitting ? 1 : 0.35 }}
+        className="guided-evening-cta"
       >
         {submitting ? '기록하는 중…' : items.length > 0 ? `${items.length}건 기록하고 다음 →` : '다음 →'}
       </button>
@@ -452,8 +477,8 @@ function TomorrowPreview({ onBack, onConfirm }: { onBack: () => void; onConfirm:
   }, [tomorrowStr, tomorrow]);
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '16px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)' }}>저녁 체크인 · 2/2</div>
+    <div className="guided-surface guided-evening guided-evening-tomorrow">
+      <EveningProgress step="tomorrow" />
       <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 6px' }}>내일 계획 미리보기</h2>
       <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)', marginBottom: 10 }}>{weekdayLabel}요일 예정 블록 · {tomorrowStr.slice(5)}</div>
@@ -482,7 +507,7 @@ function TomorrowPreview({ onBack, onConfirm }: { onBack: () => void; onConfirm:
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={onBack} style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-1)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>이전</button>
-        <button onClick={onConfirm} style={{ flex: 2, height: 44, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>확인 →</button>
+        <button onClick={onConfirm} className="guided-evening-cta" style={{ flex: 2 }}>확인 →</button>
       </div>
     </div>
   );

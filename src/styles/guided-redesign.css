@@ -129,3 +129,20 @@
   .guided-login-access { padding: 20px 12px; }
   .guided-wordmark { margin-bottom: 28px; }
 }
+/* Mobile replan: keep task context, put choices above repeated explanation. */
+@media (max-width: 639px) {
+  .guided-recovery .reentry-sheet { padding: 16px; }
+  .guided-recovery-layout { gap: 14px; }
+  .guided-recovery-layout > .guided-page-heading { display: none; }
+  .guided-recovery .reentry-steps { margin-bottom: 0; gap: 10px; }
+  .guided-recovery .reentry-steps li { padding-top: 8px; }
+  .guided-recovery .guided-context { padding: 16px; border-radius: 16px; }
+  .guided-recovery .guided-context-title { font-size: 16px; line-height: 1.4; margin: 6px 0; }
+  .guided-recovery .guided-context-note { display: none; }
+  .guided-recovery .guided-options h1 { font-size: 22px; line-height: 1.3; margin: 6px 0; }
+  .guided-recovery .guided-option-grid { gap: 10px; }
+  .guided-recovery .guided-option-select { padding: 14px; }
+  .guided-recovery .guided-option-description { margin-top: 8px; line-height: 1.55; }
+  .guided-recovery .guided-option-meta { margin-top: 8px; }
+  .guided-recovery .guided-option-explanation { padding: 0 14px; }
+}
