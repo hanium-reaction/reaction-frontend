@@ -48,7 +48,7 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   // 집중 화면의 이탈은 FocusScreen이 타이머를 일시정지·보존한 뒤 처리한다.
   // 공용 헤더의 별도 뒤로가기를 노출하면 그 정리 경로를 우회하므로 숨긴다.
   'focus':                  { label: '집중 모드',      back: null },
-  'recovery':               { label: '복구 코치',      back: 'today' },
+  'recovery':               { label: '계획 다시 정하기', back: 'today' },
   'recovered':              { label: '변경 확인',      back: null },
   'evening':                { label: '저녁 체크인',    back: 'today' },
   'weekly':                 { label: '주간 계획',      back: null },
@@ -62,17 +62,13 @@ const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
   'my-info':                { label: '내 정보',        back: 'settings' },
 };
 
-const TAB_SCREENS: ScreenId[] = ['today', 'weekly', 'inbox', 'review'];
+const TAB_SCREENS: ScreenId[] = ['today', 'weekly', 'inbox', 'review', 'goals'];
 
 function MergedTopNav({ screen, onBack, onHelp }: { screen: ScreenId; onBack: () => void; onHelp: () => void }) {
   const meta = NAV_META[screen] || { label: 'RE:ACTION', back: null };
   if (screen === 'intro') return null;
   return (
-    <div className="merged-top-nav" style={{
-      height: 44, flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 18px', zIndex: 20,
-    }}>
+    <div className="workspace-topbar">
       {meta.back ? (
         <button aria-label="뒤로 가기" onClick={onBack} style={{
           width: 44, height: 44, borderRadius: 9999,
@@ -82,7 +78,7 @@ function MergedTopNav({ screen, onBack, onHelp }: { screen: ScreenId; onBack: ()
         }}>
           <CaretLeft size={14} color="var(--text-2)" />
         </button>
-      ) : <div style={{ width: 44 }} />}
+      ) : <span style={{fontSize:17,fontWeight:850,letterSpacing:'-.04em',color:'var(--brand-ink)'}}>Re:Action</span>}
       {screen === 'weekly' || screen === 'review' ? (
         // 주간 탭: 계획/리뷰 토글을 상단 바 중앙에 고정 — 전환해도 위치가 안 움직인다.
         <WeeklySwitch />
@@ -500,6 +496,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
       {showTabs && (
         <MergedTabBar
           active={tab}
+          screen={screen}
+          onGoals={() => setScreen('goals')}
           onChange={handleTabChange}
           // 확인 안 한 작업이 있을 때만 '오늘 실행' 탭에 점을 찍는다(#224 T1).
           dotTabs={uncheckedCount > 0 ? ['today'] : []}

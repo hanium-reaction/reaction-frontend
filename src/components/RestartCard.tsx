@@ -17,10 +17,10 @@ export function RestartCard({ tasks, onReview, onRecovery }: {
     ?? candidates[0];
   if (!selected) return null;
   const canReplan = ['partial_done', 'failed', 'recovery_pending'].includes(selected.status);
-  return <section className="restart-card" aria-labelledby="restart-title">
-    <div className="reentry-eyebrow"><ArrowsClockwise size={16} weight="bold" /> 내 속도로 이어가기</div>
-    <h2 id="restart-title">다시 시작,<br />하나부터 골라볼까요?</h2>
-    <p>남아 있는 계획을 살펴보고, 지금 할 일을 정해요.</p>
+  return <section className="restart-card workspace-restart" aria-labelledby="restart-title">
+    <div className="restart-heading-icon"><ArrowsClockwise size={20} weight="bold" /></div>
+    <h2 id="restart-title">다시 정할 일</h2>
+    <p>계획이 달라졌다면, 지금 가능한 방법으로.</p>
     <label className="restart-select-label" htmlFor="restart-task">다시 살펴볼 항목 <span>{candidates.length}개</span></label>
     <select id="restart-task" value={selected.id} onChange={(event) => setSelectedId(event.target.value)}>
       {candidates.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}

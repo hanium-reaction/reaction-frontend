@@ -311,13 +311,13 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
           )}
           <p className="guided-context-note">선택 → 변경 확인 → 일정 승인<br />내가 확인한 계획만 반영해요.</p>
           </aside>
-          <section className="guided-options" aria-label="회복 방법">
+          <section className="guided-options" aria-label="재계획 방법">
 
           {/* 통상 회복 카드와 구분되는 신호(#223) — 같은 화면·같은 카드 인터랙션을
               쓰되 헤더 아이콘/카피/톤을 바꿔 "지금은 다시 정하는 시점"임을 알린다. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: renegotiating ? 'var(--text-3)' : 'var(--coral-600)', marginBottom: 10 }}>
             {renegotiating ? <HourglassMedium size={12} weight="fill" /> : <Sparkle size={12} weight="fill" />}
-            {renegotiating ? '잠깐 멈춤 · 다시 정하기' : 'AI 추천 · 회복 제안'}
+            {renegotiating ? '잠깐 멈춤 · 다시 정하기' : 'AI 추천 · 재계획 제안'}
           </div>
 
           <h1>{renegotiating ? '지금에 맞게 다시 정해요' : '어떻게 이어가면 좋을까요?'}</h1>

@@ -33,10 +33,10 @@ export function TodayTimeline({ items, title = '오늘의 타임라인', orderLa
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby={titleId}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h2 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 750, color: 'var(--text-1)' }}>{title}</h2>
-        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{orderLabel}</span>
+    <section className="workspace-timeline" aria-labelledby={titleId}>
+      <div className="workspace-timeline-heading">
+        <h2 id={titleId}>{title}</h2>
+        <span>{orderLabel}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {items.map(({ task, time, dur, goalLabel, goalColor }, index) => {

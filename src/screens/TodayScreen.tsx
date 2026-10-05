@@ -662,17 +662,17 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           startLabel={heroStartsLater ? futureStartLabel : undefined}
         />
       )}
-      <div ref={scrollRef} style={{ height: '100%', overflowY: 'auto', padding: '12px 18px 32px', background: 'var(--surface-ground)', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div ref={scrollRef} className="today-workspace">
         {calendarFailed && <p role="status">캘린더를 확인하지 못했어요. 일정 겹침 여부는 다음 조회에서 다시 확인해요.</p>}
         {!calendarFailed && tasks.filter((task) => task.calendarConflict).map((task) => <button key={task.id}
           onClick={() => { setCalendarEditActionId(task.id); setWeekOffset(0); setTab('weekly'); setScreen('weekly'); }}>
           {task.title} · 캘린더 일정과 겹쳐요 — 주간에서 시간 옮기기
         </button>)}
         {/* Header — 한 줄로 압축. 열품타식 미니멀. */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-1)' }}>{userName}</span>
-            <span className="tnum" style={{ fontSize: 11, color: 'var(--text-3)' }}>{todayShortKo()}</span>
+        <div className="today-heading">
+          <div>
+            <span className="today-date tnum">{todayShortKo()} · {userName}</span>
+            <h1>오늘의 한 걸음</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {partialTasks.length > 0 && (
@@ -684,7 +684,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
                 style={{ height: 32, padding: '0 11px 0 9px', borderRadius: 9999, border: '1px solid var(--coral-200)', background: 'var(--brand-soft)', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 <ArrowsClockwise size={14} color="var(--brand-ink)" weight="fill" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-ink)' }}>회복</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-ink)' }}>재계획</span>
                 <span className="tnum" style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9999, background: 'var(--brand-surface)', color: '#FFFCF6', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{partialTasks.length}</span>
               </button>
             )}
@@ -692,9 +692,11 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           </div>
         </div>
 
-        {!agendaLoading && usingRealAgenda && <RestartCard tasks={tasks}
-          onReview={(id) => { setSelectedTaskId(id); setDetailTask(tasks.find((task) => task.id === id) ?? null); }}
-          onRecovery={onOpenRecovery} />}
+        <div className="today-summary" aria-label="오늘 계획 요약">
+          <div className="today-summary-item"><span>오늘 계획</span><strong>{agendaLoading || !usingRealAgenda ? '—' : tasks.length}</strong></div>
+          <div className="today-summary-item"><span>완료한 일</span><strong>{agendaLoading || !usingRealAgenda ? '—' : doneTasks.length}</strong></div>
+          <div className="today-summary-item"><span>다시 정할 일</span><strong>{agendaLoading || !usingRealAgenda ? '—' : partialTasks.length}</strong></div>
+        </div>
 
         {/* 서버 missedCheckIn 인앱 넛지(#341) — 앱을 열었을
             때만 보인다. 닫으면(X) 같은 블록은 localStorage 로 다시 안 뜬다(반복 노출 방지). */}
@@ -730,6 +732,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
         {/* 고정 일정은 할 일이 있든 없든 하루의 테두리다 — 카드 분기 바깥에 둔다.
             "오늘 등록된 일정이 없어요" 아래에 수업 3시간이 떠 있는 게 사실에 맞다. */}
         {!agendaLoading && <FixedScheduleStrip items={fixedSchedules} />}
+        <div className="today-columns"><div className="today-plan-column">
 
         {/* 첫 agenda fetch 가 끝나기 전엔 스켈레톤. 비었으면 배너 하나만(에러 or 안내),
             일정이 있으면 hero + row. 예전엔 배너 2개 + 빈 hero 가 겹쳐 3중으로 떴다. */}
@@ -753,7 +756,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
             {/* Hero — 지금 할 일. row 에서 promote 한 카드 또는 진행 중 카드.
                 ref 는 상단 스트립 노출 판정(IntersectionObserver)용. */}
             {heroTask && (
-              <div ref={heroRef}>
+              <div ref={heroRef} className="today-hero">
                 <HeroTaskCard
                   task={heroTask}
                   done={doneTasks.length}
@@ -770,6 +773,9 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
               </div>
             )}
 
+            {usingRealAgenda && <RestartCard tasks={tasks}
+              onReview={(id) => { setSelectedTaskId(id); setDetailTask(tasks.find((task) => task.id === id) ?? null); }}
+              onRecovery={onOpenRecovery} />}
             {/* C안 — 나머지 할 일을 예정 시각 기준의 하루 타임라인으로 보여준다. */}
             <TodayTimeline
               items={timelineTasks.map(({ task, meta }) => ({ task, ...meta }))}
@@ -793,6 +799,8 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           </>
         )}
 
+        </div><aside className="today-support-column" aria-label="계획 조정과 루틴">
+        {(hasMorningBrief || justOnboarded) && <button className="today-brief-link" onClick={() => setBriefOpen(true)}><Sparkle size={24} color="var(--brand-ink)"/><span><strong>오늘의 브리핑</strong><small>오늘의 우선순위와 달라진 계획</small></span><CaretRight size={16} style={{marginLeft:'auto'}}/></button>}
         {/* Habit Tracker — 습관이 없을 때도 추가 행동이 눈에 띄도록 작은 CTA 모듈을 둔다.
             긴 빈 상태 대신 목적·행동을 한 카드에 담아 오늘 실행 흐름을 방해하지 않는다. */}
         {!habitsLoading && habits.length === 0 && !addingHabit ? (
@@ -910,6 +918,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           </div>
         )}
 
+        </aside></div>
         {/* 실행 기록 안내 배너는 반복 노출되어 노이즈. Settings 로 옮길 예정. */}
       </div>
 
