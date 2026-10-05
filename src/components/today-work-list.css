@@ -1,0 +1,44 @@
+.work-list { min-width: 0; background: var(--surface-raised); border: 1px solid var(--sand-200); border-radius: 18px; overflow: hidden; }
+.work-list-heading { padding: 20px 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.work-list-heading h2 { margin: 0; font-size: 17px; font-weight: 750; }
+.work-list-heading > span, .work-list-hint { color: var(--text-3); font-size: 12px; }
+.work-list-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0 12px; gap: 2px; border-bottom: 1px solid var(--sand-200); }
+.work-list-filters button { min-width: 0; min-height: 46px; padding: 8px 4px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; }
+.work-list-filters button[aria-pressed="true"] { border-bottom-color: var(--brand); color: var(--brand-ink); font-weight: 750; }
+.work-list-filters button span { font-size: 11px; font-variant-numeric: tabular-nums; background: var(--sand-100); border-radius: 5px; padding: 2px 5px; }
+.work-list-search { margin: 16px 16px 0; display: flex; align-items: center; gap: 8px; min-height: 44px; border: 1px solid var(--sand-200); border-radius: 10px; padding: 0 12px; color: var(--text-3); }
+.work-list-search input { width: 100%; min-width: 0; min-height: 44px; border: none; background: transparent; color: var(--text-1); font: inherit; font-size: 16px; outline: none; }
+.work-list-search:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.work-list-hint { margin: 12px 16px; line-height: 1.6; }
+.work-list-item { border-top: 1px solid var(--sand-200); }
+.work-list-item summary { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 16px; gap: 10px; align-items: center; min-height: 76px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.work-list-item summary::-webkit-details-marker { display: none; }
+.work-list-item summary:hover { background: var(--sand-50, #f8fafc); }
+.work-list-item[open] { background: var(--brand-soft); }
+.work-list-item[open] .work-list-chevron { transform: rotate(180deg); }
+.work-list-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.work-list-main strong { font-size: 14px; line-height: 1.5; font-weight: 650; overflow-wrap: anywhere; }
+.work-list-meta { font-size: 12px; line-height: 1.5; color: var(--text-3); overflow-wrap: anywhere; }
+.work-list-state { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--sand-300); }
+.work-list-state--replan { background: var(--brand-soft); border-color: var(--brand); }
+.work-list-state--done { background: var(--success); border-color: var(--success); }
+.work-list-status { font-size: 11px; color: var(--text-2); }
+.work-list-status--replan { color: var(--brand-ink); font-weight: 700; }
+.work-list-status--done { color: var(--success-ink); }
+.work-list-preview { padding: 0 20px 20px 40px; }
+.work-list-preview p { margin: 0 0 12px; font-size: 14px; color: var(--text-2); line-height: 1.7; overflow-wrap: anywhere; }
+.work-list-preview p > strong { display: block; font-size: 12px; color: var(--brand-ink); margin-bottom: 4px; }
+.work-list-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-list-actions button, .work-list-empty button { min-height: 44px; border: 1px solid var(--sand-300); background: var(--surface-raised); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; color: var(--text-1); }
+.work-list-actions .work-list-replan { background: var(--brand-surface); color: white; border-color: var(--brand-surface); }
+.work-list-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.work-list-empty { padding: 10px 20px 24px; font-size: 14px; color: var(--text-2); }
+.work-list button:focus-visible, .work-list summary:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; }
+@media (max-width: 380px) {
+ .work-list-filters button { flex-direction: column; gap: 2px; font-size: 12px; white-space: nowrap; }
+ .work-list-item summary { grid-template-columns: 12px minmax(0, 1fr) 16px; gap: 8px; padding: 12px; }
+ .work-list-status { grid-column: 2; grid-row: 2; }
+ .work-list-chevron { grid-column: 3; grid-row: 1; }
+ .work-list-preview { padding: 0 16px 16px 32px; }
+ .work-list-heading { padding: 18px 16px 10px; }
+}
