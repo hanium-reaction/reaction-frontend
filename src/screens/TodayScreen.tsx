@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { todayPresentation } from '../lib/todayPresentation';
 import { visibleCalendarConflict } from '../lib/calendarConflict';
 import {
   ArrowsClockwise,
@@ -593,6 +594,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
   const partialTask = partialSheet ? tasks.find((t) => t.id === partialSheet) : null;
 
   const activeTask = tasks.find((t) => t.status === 'in_progress');
+  const presentation = todayPresentation(tasks);
   const pendingTasks = tasks.filter((t) => t.status === 'todo');
   // Hero 우선순위: ① 사용자가 선택(promote)한 카드 ② 진행 중 카드 ③ 첫 대기 카드.
   // 사용자가 row 를 클릭해 다른 카드를 보고 싶다는 의사를 명시했으면 그것이 최우선.
@@ -653,7 +655,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
           startLabel={heroStartsLater ? futureStartLabel : undefined}
         />
       )}
-      <div ref={scrollRef} className="today-workspace">
+      <div ref={scrollRef} className="today-workspace" data-mode={agendaLoading ? 'loading' : presentation.mode}>
         {calendarFailed && <p role="status">캘린더를 확인하지 못했어요. 일정 겹침 여부는 다음 조회에서 다시 확인해요.</p>}
         {!calendarFailed && tasks.filter((task) => task.calendarConflict).map((task) => <button key={task.id}
           onClick={() => { setCalendarEditActionId(task.id); setWeekOffset(0); setTab('weekly'); setScreen('weekly'); }}>
@@ -663,7 +665,8 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
         <div className="today-heading">
           <div>
             <span className="today-date tnum">{todayShortKo()} · {userName}</span>
-            <h1>오늘의 한 걸음</h1>
+            <h1>{agendaLoading ? '오늘' : presentation.title}</h1>
+            {!agendaLoading && <p className="today-intent">{presentation.subtitle}</p>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {partialTasks.length > 0 && (
@@ -825,9 +828,9 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
             {habits.map(h => {
               const done = h.doneDays >= h.targetDays;
               return (
-                <div key={h.id} style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div key={h.id} className="native-habit-row">
                   <span style={{ color: '#E8994A', fontSize: 10, flexShrink: 0, lineHeight: 1 }}>●</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="native-habit-content">
                     <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{h.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                       <span style={{ fontSize: 11, color: 'var(--text-3)' }}>이번 주 {h.doneDays} / {h.targetDays}일 완료</span>
@@ -846,6 +849,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
                   >{done ? '완료' : '체크'}</button>
                   <button
                     onClick={() => removeHabit(h.id)}
+                    aria-label={`${h.name} 루틴 삭제`}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-ink)', padding: 4, display: 'flex', alignItems: 'center', flexShrink: 0 }}
                   ><Trash size={16} /></button>
                 </div>

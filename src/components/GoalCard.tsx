@@ -30,12 +30,12 @@ export interface GoalCardProps {
 }
 
 const chip: React.CSSProperties = {
-  height: 'var(--ctrl-xs)',
+  minHeight: 28,
   padding: '0 7px',
   background: 'var(--sand-100)',
   border: '1px solid var(--sand-200)',
   borderRadius: 9999,
-  fontSize: 10,
+  fontSize: 13,
   color: 'var(--text-2)',
   display: 'inline-flex',
   alignItems: 'center',
@@ -76,12 +76,12 @@ export function GoalCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
             <span
               style={{
-                height: 'var(--ctrl-xs)',
+                minHeight: 28,
                 padding: '0 8px',
                 borderRadius: 9999,
                 background: m.bg,
                 border: `1px solid ${m.border}`,
-                fontSize: 10,
+                fontSize: 13,
                 fontWeight: 700,
                 color: m.color,
                 display: 'inline-flex',

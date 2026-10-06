@@ -5,6 +5,7 @@ import App from './App';
 import { registerServiceWorker } from './lib/push';
 import './index.css';
 import './styles/interface.css';
+import './styles/native-flow.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

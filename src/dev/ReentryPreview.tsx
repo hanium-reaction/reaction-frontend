@@ -32,6 +32,7 @@ import {
 import type { Task, ScreenId } from "../types";
 import "../index.css";
 import "../styles/interface.css";
+import "../styles/native-flow.css";
 
 const tasks: Task[] = [
   {
