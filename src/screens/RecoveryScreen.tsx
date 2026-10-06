@@ -398,7 +398,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
             />
           )}
 
-          {selectedProposal && <div className="reentry-review" aria-live="polite"><strong>선택한 방법 · {selectedProposal.title}</strong>{selectedProposal.desc}<div>아래 버튼은 이 선택을 저장해요. 새 일정이 있으면 다음 화면에서 승인해요.</div></div>}
+          {selectedProposal ? <div className="reentry-review" aria-live="polite"><strong>선택한 방법: {selectedProposal.title}</strong><dl className="native-change-summary"><div><dt>기존 작업</dt><dd>{task?.title}{task?.dur ? ` (${task.dur})` : ''}</dd></div><div><dt>다음 행동</dt><dd>{selectedProposal.desc || selectedProposal.title}{selectedProposal.time ? ` (${selectedProposal.time})` : ''}</dd></div></dl><p>지금은 선택만 저장해요. 새 일정이 있으면 다음 화면에서 확인하고 승인해요.</p></div> : <p className="native-selection-hint">가능한 방법을 선택하면 변경 내용을 비교할 수 있어요.</p>}
 
           {decideError && (
             <div style={{ marginBottom: 10 }}>

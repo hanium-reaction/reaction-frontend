@@ -4,11 +4,12 @@
 // 회고(EveningCheckInScreen)에서도 같은 입력을 받아야 해서(#238) 폼 본체만 떼어냈다.
 // 시트 껍데기(오버레이·바텀시트)는 화면마다 다르므로 여기 넣지 않는다 — 오늘 화면은
 // 바텀시트로, 저녁 체크인은 마법사 단계로 각각 감싼다.
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { FAIL_REASONS } from '../data';
 import { reflectionApi } from '../lib/api';
 import { hasAvoidanceReason } from '../lib/failureReason';
 import { Segmented } from './Segmented';
+import './failure-tag-picker.css';
 
 export interface FailureTagOption {
   code: string;
@@ -55,44 +56,72 @@ function toggle(selected: FailureTagOption[], r: FailureTagOption): FailureTagOp
   return [...selected, r];
 }
 
+// Show a short, stable entry list, without collapsing different server codes into
+// a guessed cause. The full catalog (including new codes) remains available.
+export function primaryFailureReasons(reasons: FailureTagOption[]): FailureTagOption[] {
+  const groups = [
+    ['TIME_SHORTAGE', 'CONFLICT', '일정 충돌'],
+    ['FATIGUE', 'LOW_ENERGY', '피곤함'],
+    ['AMBIGUITY', 'HARD_TO_START', '막막함'],
+    ['PLAN_TOO_BIG', '과대 과제'],
+  ];
+  return groups.flatMap((codes) => {
+    const found = codes.map((code) => reasons.find((r) => r.code === code)).find(Boolean);
+    return found ? [found] : [];
+  });
+}
+
+export function canContinueInterruption(selected: FailureTagOption[], memo: string): boolean {
+  // The API rejects a memo without a tag. Never invent a tag or discard a draft.
+  return selected.length > 0 || !memo.trim();
+}
+
 export function FailureTagPicker({
   reasons,
   selected,
   onChange,
   memo,
   onMemoChange,
-  memoPlaceholder = '메모 (선택) — 어떤 상황이었는지 적어두면 다음 제안이 더 잘 맞아요',
+  memoPlaceholder = '예: 하고 싶었는데 너무 졸려서 멈췄어요',
   aversiveness,
   onAversivenessChange,
 }: FailureTagPickerProps) {
+  const memoId = useId();
   const asksAversion = hasAvoidanceReason(selected.map((reason) => reason.code));
+  const primary = primaryFailureReasons(reasons);
+  const extra = reasons.filter((r) => !primary.some((p) => p.code === r.code));
   useEffect(() => {
     if (!asksAversion && aversiveness != null) onAversivenessChange?.(null);
   }, [asksAversion, aversiveness, onAversivenessChange]);
 
-  return (
-    <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-        {reasons.map((r) => {
+  const buttons = (options: FailureTagOption[]) => options.map((r) => {
           const sel = selected.some((t) => t.code === r.code);
           return (
             <button
+              type="button"
               key={r.code}
+              className="interruption-option"
               aria-pressed={sel}
               onClick={() => onChange(toggle(selected, r))}
-              style={{ padding: '9px 12px', borderRadius: 9999, background: sel ? 'var(--text-1)' : 'var(--surface-raised)', color: sel ? '#FAF6EE' : 'var(--text-1)', border: `1px solid ${sel ? 'var(--text-1)' : 'var(--sand-200)'}`, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 160ms' }}
             >
               {r.labelKo}
             </button>
           );
-        })}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 16 }}>
-        최대 2개까지 고를 수 있어요{selected.length > 0 ? ` · ${selected.length}/2` : ''}
-      </div>
+        });
+
+  return (
+    <div className="interruption-input">
+      <p className="interruption-hint">가까운 상황만 골라 주세요. 잘 모르겠으면 넘어가도 돼요.</p>
+      <div className="interruption-options" role="group" aria-label="자주 쓰는 상황">{buttons(primary)}</div>
+      {extra.length > 0 && <details className="interruption-more">
+        <summary>다른 상황{selected.filter((s) => extra.some((r) => r.code === s.code)).length > 0 ? ' · 선택 있음' : ''}</summary>
+        <div className="interruption-options" role="group" aria-label="다른 상황">{buttons(extra)}</div>
+      </details>}
+      <p className="interruption-hint">선택 사항 · 최대 2개{selected.length ? ` · ${selected.map((r) => r.labelKo).join(', ')}` : ''}</p>
 
       {asksAversion && onAversivenessChange && (
-        <>
+        <details className="interruption-more">
+          <summary>피하고 싶었던 정도 남기기 (선택)</summary>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', marginBottom: 8 }}>이 일 자체를 얼마나 피하고 싶었나요? (선택)</div>
           <p style={{ fontSize: 12, color: 'var(--text-2)', margin: '0 0 8px', lineHeight: 1.5 }}>피곤함이나 시간 부족과는 별개로, 이 일을 하고 싶지 않았던 정도예요.</p>
           <Segmented
@@ -106,10 +135,14 @@ export function FailureTagPicker({
             <span>전혀 아니었어요</span>
             <span>매우 피하고 싶었어요</span>
           </div>
-        </>
+        </details>
       )}
 
+      {(selected.length > 0 || memo.length > 0) && <details className="interruption-more" open={memo.length > 0 || undefined}>
+      <summary>내 말로 덧붙이기 (선택)</summary>
+      <label className="interruption-hint" htmlFor={memoId}>선택한 상황으로 설명하기 어려운 점을 적어 주세요.</label>
       <textarea
+        id={memoId}
         value={memo}
         onChange={(e) => onMemoChange(e.target.value)}
         placeholder={memoPlaceholder}
@@ -117,6 +150,8 @@ export function FailureTagPicker({
         maxLength={300}
         style={{ width: '100%', boxSizing: 'border-box', borderRadius: 12, border: '1px solid var(--sand-200)', background: 'var(--surface-ground)', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', color: 'var(--text-1)', outline: 'none', resize: 'none', marginBottom: 14 }}
       />
-    </>
+      {!canContinueInterruption(selected, memo) && <p role="alert" className="interruption-hint">메모를 저장하려면 상황을 하나 골라 주세요. 사유 없이 넘어가려면 메모를 지워 주세요.</p>}
+      </details>}
+    </div>
   );
 }

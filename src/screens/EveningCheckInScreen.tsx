@@ -287,9 +287,9 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-3)' }}>저녁 체크인 · 사유 남기기</div>
           <span className="tnum" style={{ fontSize: 11, color: 'var(--text-3)' }}>{tagIndex + 1} / {tagTargets.length}</span>
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>무엇이 막았나요?</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>어떤 상황이었나요?</h2>
         <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.55 }}>
-          사유를 남기면 그 상황에 맞는 회복안을 제안해드려요. 남기지 않으면 늘 같은 제안이 반복돼요.
+          기억나는 상황을 남기거나, 건너뛰고 체크인을 마쳐도 돼요.
         </p>
 
         <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--sand-200)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
