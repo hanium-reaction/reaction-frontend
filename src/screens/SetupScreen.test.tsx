@@ -31,3 +31,9 @@ it('서버 구독 저장 실패를 연결 성공으로 표시하지 않는다',a
  await waitFor(()=>expect(screen.getByText('원할 때만 알림 연결')).toBeEnabled());fireEvent.click(screen.getByText('원할 때만 알림 연결'));
  await screen.findByText(/알림 구독을 저장하지 못했어요/);expect(screen.getByText(/서버 구독:/)).toHaveTextContent('확인되지 않음');
 });
+
+it('알림 공급자 응답을 기다리는 동안에도 설정을 건너뛸 수 있다',async()=>{
+ vi.mocked(subscribePush).mockReturnValue(new Promise(()=>{}));const done=vi.fn();render(<SetupScreen onDone={done}/>);
+ await waitFor(()=>expect(screen.getByText('원할 때만 알림 연결')).toBeEnabled());fireEvent.click(screen.getByText('원할 때만 알림 연결'));
+ fireEvent.click(screen.getByText('나중에 설정하고 계속'));expect(done).toHaveBeenCalledOnce();
+});
