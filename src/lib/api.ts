@@ -888,5 +888,5 @@ export const privacyApi = {
 export const reentryApi = {
   prepare: (actionId: string, requestId: string) => request<import('../types/api').ReentryState>(`/reentry/actions/${actionId}/prepare`, { method: 'POST', body: { requestId } }),
   start: (attemptId: string, firstStep: string) => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/start`, { method: 'POST', body: { firstStep } }),
-  event: (attemptId: string, event: 'viewed' | 'first_step_completed' | 'leave') => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/events`, { method: 'POST', body: { event } }),
+  event: (attemptId: string, event: 'viewed' | 'selected' | 'start_clicked' | 'start_failed' | 'first_step_completed' | 'leave') => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/events`, { method: 'POST', body: { event } }),
 };

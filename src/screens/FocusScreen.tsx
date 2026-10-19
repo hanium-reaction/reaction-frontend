@@ -320,7 +320,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
 
       const executionId = executionIdRef.current;
       if (executionId) {
-        void todayApi.pause(executionId).then(
+        void (reentry ? reentryApi.event(reentry.attemptId, 'leave') : todayApi.pause(executionId)).then(
           () => {
             queuedRunIntentRef.current = null;
             persist({ running: false, queuedIntent: null });
@@ -330,6 +330,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
       }
     } else {
       persist({ running: false });
+      if (reentry) void reentryApi.event(reentry.attemptId, 'leave').catch(err => logMutationFailure('pause-on-exit', err));
     }
     onBack();
   };

@@ -32,6 +32,8 @@ it('renders a real proposal and waits for server start before opening focus', as
   fireEvent.click(screen.getByText('이 행동 시작하기'));
   await waitFor(() => expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ executionId: 'exec_real' })));
   expect(reentryApi.event).toHaveBeenCalledWith('attempt', 'viewed');
+  expect(reentryApi.event).toHaveBeenCalledWith('attempt', 'start_clicked');
+  expect(reentryApi.event).toHaveBeenCalledWith('attempt', 'start_failed');
 });
 it('requires a user action when no first step exists, without inventing history', async () => {
   vi.mocked(reentryApi.prepare).mockResolvedValue({ ...state, firstStep: null });

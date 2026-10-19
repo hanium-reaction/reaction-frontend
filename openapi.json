@@ -8002,6 +8002,9 @@
             "type": "string",
             "enum": [
               "viewed",
+              "selected",
+              "start_clicked",
+              "start_failed",
               "first_step_completed",
               "leave"
             ],

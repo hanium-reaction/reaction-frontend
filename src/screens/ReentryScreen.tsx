@@ -33,13 +33,19 @@ export function ReentryScreen({ task, onStart, onBack }: {
     if (!state || busy.current || !step.trim() || !state.canStart) return;
     busy.current = true; setSaving(true); setError(null);
     try {
+      await reentryApi.event(state.attemptId, 'selected').catch(() => undefined);
+      await reentryApi.event(state.attemptId, 'start_clicked').catch(() => undefined);
       const value = await reentryApi.start(state.attemptId, step.trim());
       onStart(value);
-    } catch (err) { setError(friendlyError(err, '시작 기록을 저장하지 못했어요. 다시 시도해 주세요.')); }
+    } catch (err) { void reentryApi.event(state.attemptId, 'start_failed').catch(() => undefined); setError(friendlyError(err, '시작 기록을 저장하지 못했어요. 다시 시도해 주세요.')); }
     finally { busy.current = false; setSaving(false); }
   };
+  const leave = () => {
+    if (state) void reentryApi.event(state.attemptId, 'leave').catch(() => undefined);
+    onBack();
+  };
   return <div className="reentry-page guided-surface"><div className="reentry-page-inner">
-    <button className="reentry-secondary" onClick={onBack} disabled={saving}>오늘로 돌아가기</button>
+    <button className="reentry-secondary" onClick={leave} disabled={saving}>오늘로 돌아가기</button>
     <header className="guided-page-heading">
       <span className="guided-kicker">RE:ACTION / 다음 행동</span>
       <h1>{!!state?.executionId ? '하던 일을 이어가요' : state?.entryKind === 'restart' ? '다시, 한 행동부터' : '한 행동부터 시작해요'}</h1>
@@ -60,7 +66,7 @@ export function ReentryScreen({ task, onStart, onBack }: {
       <button className="reentry-primary" disabled={saving || !state.canStart || !step.trim()} onClick={() => void start()}>
         {saving ? '시작 기록 저장 중…' : state.executionStatus === 'paused' ? '이 행동 이어 하기' : '이 행동 시작하기'}
       </button>
-      <button className="reentry-secondary" disabled={saving} onClick={onBack}>지금은 쉬기</button>
+      <button className="reentry-secondary" disabled={saving} onClick={leave}>지금은 쉬기</button>
     </section>}
     {error && <div role="alert"><p>{error}</p><button className="reentry-secondary" disabled={saving} onClick={() => setRetry(x => x + 1)}>상태 다시 불러오기</button></div>}
   </div></div>;
