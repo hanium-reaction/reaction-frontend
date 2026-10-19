@@ -64,3 +64,16 @@ it('records only the first step and restores the server execution', async () => 
   expect(complete).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: /전체 과제 완료/ })).toBeInTheDocument();
 });
+
+it('쉬기 저장 실패는 화면을 유지하고 저장 후에만 돌아간다', async () => {
+  const back = vi.fn();
+  vi.mocked(reentryApi.event).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(state);
+  render(<FocusScreen task={task} reentry={{ ...state, executionId: 'exec_server', startedAt: new Date().toISOString(), stepCompletedAt: new Date().toISOString() }}
+    elapsedMin={0} totalMin={30} onPause={vi.fn()} onComplete={vi.fn()} onBack={back} onStopWithResult={vi.fn()} />);
+  fireEvent.click(screen.getByText('여기까지 하고 쉬기'));
+  await screen.findByRole('alert');
+  expect(back).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('여기까지 하고 쉬기'));
+  await waitFor(() => expect(back).toHaveBeenCalledOnce());
+  expect(todayApi.pause).not.toHaveBeenCalled();
+});

@@ -40,9 +40,14 @@ export function ReentryScreen({ task, onStart, onBack }: {
     } catch (err) { void reentryApi.event(state.attemptId, 'start_failed').catch(() => undefined); setError(friendlyError(err, '시작 기록을 저장하지 못했어요. 다시 시도해 주세요.')); }
     finally { busy.current = false; setSaving(false); }
   };
-  const leave = () => {
-    if (state) void reentryApi.event(state.attemptId, 'leave').catch(() => undefined);
-    onBack();
+  const leave = async () => {
+    if (busy.current) return;
+    busy.current = true; setSaving(true); setError(null);
+    try {
+      if (state) await reentryApi.event(state.attemptId, 'leave');
+      onBack();
+    } catch (err) { setError(friendlyError(err, '쉬기 상태를 저장하지 못했어요. 다시 시도해 주세요.')); }
+    finally { busy.current = false; setSaving(false); }
   };
   return <div className="reentry-page guided-surface"><div className="reentry-page-inner">
     <button className="reentry-secondary" onClick={leave} disabled={saving}>오늘로 돌아가기</button>

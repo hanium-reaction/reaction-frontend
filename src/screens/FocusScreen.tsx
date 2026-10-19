@@ -38,6 +38,7 @@ interface FocusScreenProps {
 }
 
 export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+  const leaving = useRef(false);
   const [stepDone, setStepDone] = React.useState(!!reentry?.stepCompletedAt);
   const [stepSaving, setStepSaving] = React.useState(false);
   const [stepError, setStepError] = React.useState<string | null>(null);
@@ -278,6 +279,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
   const clearSession = () => { if (task) { try { removeFocusSession(sessionStorage, task.id); } catch { /* ignore */ } } };
 
   const handleComplete = async () => {
+    if (leaving.current) return;
     if (completing) return;
     if (!executionIdRef.current) {
       setSyncState('failed');
@@ -310,7 +312,22 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
 
   // 뒤로가기/중단은 결과 판정이 아니다. 로컬·서버 타이머를 멈춘 뒤 세션을 남겨
   // 오늘 화면에서 이어서 시작할 수 있게 한다. 완료는 handleComplete 성공 경로뿐이다.
-  const handleExit = () => {
+  const handleExit = async () => {
+    if (reentry) {
+      if (leaving.current) return;
+      leaving.current = true; setStepError(null);
+      try {
+        await reentryApi.event(reentry.attemptId, 'leave');
+        pauseAtRef.current = pauseAtRef.current ?? Date.now();
+        setRunning(false); runningRef.current = false;
+        queuedRunIntentRef.current = null;
+        persist({ running: false, queuedIntent: null });
+        onBack();
+      } catch (err) {
+        setStepError(friendlyError(err, '쉬기 상태를 저장하지 못했어요. 다시 시도해 주세요.'));
+      } finally { leaving.current = false; }
+      return;
+    }
     if (running) {
       pauseAtRef.current = Date.now();
       setRunning(false);
@@ -320,7 +337,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
 
       const executionId = executionIdRef.current;
       if (executionId) {
-        void (reentry ? reentryApi.event(reentry.attemptId, 'leave') : todayApi.pause(executionId)).then(
+        void todayApi.pause(executionId).then(
           () => {
             queuedRunIntentRef.current = null;
             persist({ running: false, queuedIntent: null });
@@ -330,7 +347,6 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
       }
     } else {
       persist({ running: false });
-      if (reentry) void reentryApi.event(reentry.attemptId, 'leave').catch(err => logMutationFailure('pause-on-exit', err));
     }
     onBack();
   };
@@ -358,6 +374,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
   };
 
   const reportStep = async () => {
+    if (leaving.current) return;
     if (!reentry || stepBusy.current || stepDone) return;
     stepBusy.current = true; setStepSaving(true); setStepError(null);
     try {
