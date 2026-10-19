@@ -2594,6 +2594,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reentry/actions/{action_id}/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare */
+        post: operations["prepare_reentry_actions__action_id__prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reentry/attempts/{attempt_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start */
+        post: operations["start_reentry_attempts__attempt_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reentry/attempts/{attempt_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record */
+        post: operations["record_reentry_attempts__attempt_id__events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/quick-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quick Action */
+        post: operations["quick_action_work_context_quick_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/actions/{action_id}/resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resource */
+        get: operations["get_resource_work_context_actions__action_id__resource_get"];
+        /** Put Resource */
+        put: operations["put_resource_work_context_actions__action_id__resource_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/actions/{action_id}/resource/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink Resource */
+        post: operations["unlink_resource_work_context_actions__action_id__resource_unlink_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/executions/{execution_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Note */
+        get: operations["get_note_work_context_executions__execution_id__note_get"];
+        /** Put Note */
+        put: operations["put_note_work_context_executions__execution_id__note_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/preference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preference */
+        get: operations["get_preference_work_context_preference_get"];
+        /** Put Preference */
+        put: operations["put_preference_work_context_preference_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evidence */
+        get: operations["evidence_work_context_evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/work-context/actions/{action_id}/last-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Last Note */
+        get: operations["last_note_work_context_actions__action_id__last_note_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2613,26 +2786,26 @@ export interface components {
         ActionDetail: {
             /** Actionid */
             actionId: string;
+            /** Title */
+            title: string;
             /** Category */
             category: string;
+            /** Status */
+            status: string;
+            /** Priority */
+            priority: number;
             /** Estimatedminutes */
             estimatedMinutes: number;
+            /** Targetdate */
+            targetDate: string;
+            /** Source */
+            source: string;
+            /** Whynow */
+            whyNow: string | null;
             /** Firststep */
             firstStep: string | null;
             /** Goalid */
             goalId: string | null;
-            /** Priority */
-            priority: number;
-            /** Source */
-            source: string;
-            /** Status */
-            status: string;
-            /** Targetdate */
-            targetDate: string;
-            /** Title */
-            title: string;
-            /** Whynow */
-            whyNow: string | null;
         };
         /**
          * ActionItemDraft
@@ -5351,26 +5524,35 @@ export interface components {
          */
         RecoveryProposalsResponse: {
             /**
+             * Isdraft
+             * @default true
+             */
+            isDraft: boolean;
+            /**
              * Aisource
              * @default llm
              * @enum {string}
              */
             aiSource: "llm" | "rule";
-            /** Cards */
-            cards: components["schemas"]["RecoveryCard"][];
             /** Executionid */
             executionId: string;
-            /**
-             * Isdraft
-             * @default true
-             */
-            isDraft: boolean;
+            /** Cards */
+            cards: components["schemas"]["RecoveryCard"][];
+            /** Strategylevel */
+            strategyLevel?: string | null;
+            /** Selectionbasis */
+            selectionBasis?: string | null;
             /**
              * Recoverymode
              * @default standard
              * @enum {string}
              */
             recoveryMode: "standard" | "goal_renegotiation";
+            /**
+             * Personalizationskipped
+             * @default false
+             */
+            personalizationSkipped: boolean;
         };
         /**
          * ReflectionBatchItem
@@ -5970,16 +6152,16 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /**
          * VapidPublicKeyResponse
@@ -6242,6 +6424,131 @@ export interface components {
              * Format: date
              */
             weekStart: string;
+        };
+        /** ReentryEvent */
+        ReentryEvent: {
+            /**
+             * Event
+             * @enum {string}
+             */
+            event: "viewed" | "selected" | "start_clicked" | "start_failed" | "first_step_completed" | "leave";
+        };
+        /** ReentryPrepare */
+        ReentryPrepare: {
+            /**
+             * Requestid
+             * Format: uuid
+             */
+            requestId: string;
+        };
+        /** ReentryStart */
+        ReentryStart: {
+            /** Firststep */
+            firstStep: string;
+        };
+        /** ReentryState */
+        ReentryState: {
+            /**
+             * Attemptid
+             * Format: uuid
+             */
+            attemptId: string;
+            /** Actionid */
+            actionId: string;
+            /** Title */
+            title: string;
+            /** Actionstatus */
+            actionStatus: string;
+            /** Entrykind */
+            entryKind: string;
+            /** Firststep */
+            firstStep: string | null;
+            /** Executionid */
+            executionId: string | null;
+            /** Executionstatus */
+            executionStatus: string | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Stepcompletedat */
+            stepCompletedAt: string | null;
+            /** Endedat */
+            endedAt: string | null;
+            /** Elapsedseconds */
+            elapsedSeconds: number;
+            /** Canstart */
+            canStart: boolean;
+            /** Blockedreason */
+            blockedReason: string | null;
+        };
+        /** QuickAction */
+        QuickAction: {
+            /**
+             * Requestid
+             * Format: uuid
+             */
+            requestId: string;
+            /** Title */
+            title: string;
+            /** Firststep */
+            firstStep: string;
+            /** Attemptminutes */
+            attemptMinutes: number;
+            /** Goalid */
+            goalId?: string | null;
+        };
+        /** ResourceView */
+        ResourceView: {
+            resource: components["schemas"]["ResourceInput"] | null;
+        };
+        /** PreferenceInput */
+        PreferenceInput: {
+            /** Preference */
+            preference: ("smaller_step" | "context_first" | "rest") | null;
+        };
+        /** ReentryEvidence */
+        ReentryEvidence: {
+            /**
+             * Weekstart
+             * Format: date
+             */
+            weekStart: string;
+            /**
+             * Weekend
+             * Format: date
+             */
+            weekEnd: string;
+            /** Attempts */
+            attempts: number;
+            /** Started */
+            started: number;
+            /** Firststepsreported */
+            firstStepsReported: number;
+            /** Taskscompleted */
+            tasksCompleted: number;
+            /** Preference */
+            preference: ("smaller_step" | "context_first" | "rest") | null;
+            /**
+             * Evidencekind
+             * @default self_report
+             */
+            evidenceKind: string;
+        };
+        /** NoteView */
+        NoteView: {
+            /** Memo */
+            memo: string | null;
+        };
+        /** NoteInput */
+        NoteInput: {
+            /** Memo */
+            memo: string;
+        };
+        /** ResourceInput */
+        ResourceInput: {
+            /** Url */
+            url: string;
+            /** Label */
+            label: string;
         };
     };
     responses: never;
@@ -10216,6 +10523,457 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutionEventResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prepare_reentry_actions__action_id__prepare_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReentryPrepare"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReentryState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_reentry_attempts__attempt_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReentryStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReentryState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_reentry_attempts__attempt_id__events_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReentryEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReentryState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quick_action_work_context_quick_action_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_resource_work_context_actions__action_id__resource_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_resource_work_context_actions__action_id__resource_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_resource_work_context_actions__action_id__resource_unlink_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_note_work_context_executions__execution_id__note_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_note_work_context_executions__execution_id__note_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preference_work_context_preference_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceInput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_preference_work_context_preference_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferenceInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceInput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evidence_work_context_evidence_get: {
+        parameters: {
+            query: {
+                week_start: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReentryEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    last_note_work_context_actions__action_id__last_note_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteView"];
                 };
             };
             /** @description Validation Error */

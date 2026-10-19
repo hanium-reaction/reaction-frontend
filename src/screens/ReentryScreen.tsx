@@ -1,5 +1,7 @@
+import { ReentryPreferenceHint } from '../components/ReentryEvidenceCard';
+import { ActionResourcePanel } from '../components/ActionResourcePanel';
 import React, { useEffect, useRef, useState } from 'react';
-import { friendlyError, reentryApi } from '../lib/api';
+import { friendlyError, reentryApi, workContextApi } from '../lib/api';
 import type { ReentryState } from '../types/api';
 import type { Task } from '../types';
 import '../components/reentry.css';
@@ -14,6 +16,12 @@ export function ReentryScreen({ task, onStart, onBack }: {
   const busy = useRef(false);
   const [state, setState] = useState<ReentryState | null>(null);
   const [step, setStep] = useState('');
+  const [memo, setMemo] = useState<string | null>(null);
+  const [memoError, setMemoError] = useState(false);
+  useEffect(() => { let cancelled = false; setMemo(null); setMemoError(false);
+    if (task && import.meta.env.VITE_REENTRY_P0 === 'true') workContextApi.lastNote(task.id).then(r => { if (!cancelled) setMemo(r.memo); }, () => { if (!cancelled) setMemoError(true); });
+    return () => { cancelled = true; };
+  }, [task?.id]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -59,6 +67,9 @@ export function ReentryScreen({ task, onStart, onBack }: {
     </header>
     {!state && !error && <p role="status">현재 작업 상태를 확인하는 중…</p>}
     {state && <section className="guided-approval">
+      {import.meta.env.VITE_REENTRY_P0 === 'true' && <ReentryPreferenceHint />}
+      {memo && <p><strong>마지막에 남긴 메모</strong><br />{memo}</p>}
+      {memoError && <p role="status">이전 메모를 불러오지 못했어요. 시작은 계속할 수 있어요.</p>}
       <label htmlFor="reentry-step"><strong>이번에 할 행동 하나</strong></label>
       <textarea id="reentry-step" value={step} maxLength={500} rows={3}
         disabled={saving || (!!state.startedAt && !!state.firstStep)}
@@ -73,6 +84,7 @@ export function ReentryScreen({ task, onStart, onBack }: {
       </button>
       <button className="reentry-secondary" disabled={saving} onClick={leave}>지금은 쉬기</button>
     </section>}
+    {task && import.meta.env.VITE_REENTRY_P0 === 'true' && <ActionResourcePanel actionId={task.id} />}
     {error && <div role="alert"><p>{error}</p><button className="reentry-secondary" disabled={saving} onClick={() => setRetry(x => x + 1)}>상태 다시 불러오기</button></div>}
   </div></div>;
 }

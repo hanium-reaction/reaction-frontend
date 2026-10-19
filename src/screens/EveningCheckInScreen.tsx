@@ -210,7 +210,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
   // 남기고 싶지 않으면 [건너뛰기] 로 넘어가면 된다.
   const submitTag = () => {
     const target = tagTargets[tagIndex];
-    if (!target || tagSelected.length === 0) return;
+    if (!target || (tagSelected.length === 0 && !(import.meta.env.VITE_REENTRY_P0 === 'true' && tagMemo.trim()))) return;
     setTagSaving(true);
     setTagError(null);
     reflectionApi.tagExecution(target.executionId, {
@@ -319,17 +319,18 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
           </div>
         )}
 
+        {tagMemo.trim() && <p>작성한 메모를 저장하거나 지운 뒤 건너뛸 수 있어요.</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={skipTag}
-            disabled={tagSaving}
+            disabled={tagSaving || !!tagMemo.trim()}
             style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: tagSaving ? 'default' : 'pointer' }}
           >
             건너뛰기
           </button>
           <button
             onClick={submitTag}
-            disabled={tagSelected.length === 0 || tagSaving}
+            disabled={(tagSelected.length === 0 && !(import.meta.env.VITE_REENTRY_P0 === 'true' && tagMemo.trim())) || tagSaving}
             className="guided-evening-cta" style={{ flex: 2 }}
           >
             {tagSaving ? '저장하는 중…' : isLast ? '저장하고 완료 →' : '저장하고 다음 →'}
@@ -337,7 +338,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
         </div>
         <button
           onClick={skipRemainingTags}
-          disabled={tagSaving}
+          disabled={tagSaving || !!tagMemo.trim()}
           style={{ alignSelf: 'center', background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 12, fontFamily: 'inherit', textDecoration: 'underline', cursor: tagSaving ? 'default' : 'pointer', padding: 4 }}
         >
           나중에 할게요

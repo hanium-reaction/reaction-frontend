@@ -1,0 +1,44 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { QuickStart } from './QuickStart';
+import { ActionResourcePanel } from './ActionResourcePanel';
+import { ReentryEvidenceCard } from './ReentryEvidenceCard';
+import { workContextApi } from '../lib/api';
+vi.mock('../lib/api', async original => ({ ...await original<typeof import('../lib/api')>(), workContextApi: { quickAction: vi.fn(), resource: vi.fn(), saveResource: vi.fn(), unlink: vi.fn(), evidence: vi.fn(), savePreference: vi.fn() } }));
+beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); });
+it('빠른 시작 실패는 입력과 요청 ID를 보존하며 성공 후에만 이동한다', async () => {
+  vi.mocked(workContextApi.quickAction).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ actionId: 'action-new' } as never);
+  const start = vi.fn(); render(<QuickStart userId="u" onStart={start} onDetailed={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText('진행 중인 일'), { target: { value: '보고서' } });
+  fireEvent.change(screen.getByLabelText('지금 할 행동 하나'), { target: { value: '첫 문장' } });
+  fireEvent.click(screen.getByText('이 행동으로 시작 준비'));
+  await screen.findByRole('alert'); expect(start).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('이 행동으로 시작 준비'));
+  await waitFor(() => expect(start).toHaveBeenCalledOnce());
+  expect(vi.mocked(workContextApi.quickAction).mock.calls[0]).toEqual(vi.mocked(workContextApi.quickAction).mock.calls[1]);
+  expect(sessionStorage.getItem('reaction.quick-start.u.')).toBeNull();
+});
+it('자료 연결 실패는 입력을 유지하고 연결 해제는 서버 성공 후 반영한다', async () => {
+  vi.mocked(workContextApi.resource).mockResolvedValue({ resource: null });
+  vi.mocked(workContextApi.saveResource).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ resource: { url: 'https://example.org', label: '자료' } });
+  vi.mocked(workContextApi.unlink).mockResolvedValue({ resource: null });
+  render(<ActionResourcePanel actionId="action-a" />);
+  await screen.findByText('연결한 자료가 없어도 시작할 수 있어요.');
+  fireEvent.click(screen.getByText('자료 연결·수정'));
+  fireEvent.change(screen.getByLabelText('표시 이름'), { target: { value: '자료' } });
+  fireEvent.change(screen.getByLabelText('웹 주소'), { target: { value: 'https://example.org' } });
+  fireEvent.click(screen.getByText('연결 저장')); await screen.findByRole('alert');
+  expect(screen.getByLabelText('웹 주소')).toHaveValue('https://example.org');
+  fireEvent.click(screen.getByText('연결 저장'));
+  const link = await screen.findByRole('link'); expect(link).toHaveAttribute('target', '_blank');
+  fireEvent.click(screen.getByText('연결 해제'));
+  await waitFor(() => expect(screen.queryByRole('link')).not.toBeInTheDocument());
+});
+it('주간 근거는 표본을 표시하고 선호 적용과 철회를 저장한다', async () => {
+  vi.mocked(workContextApi.evidence).mockResolvedValue({ weekStart: '2026-10-19', weekEnd: '2026-10-25', attempts: 1, started: 1, firstStepsReported: 1, tasksCompleted: 0, preference: null, evidenceKind: 'self_report' });
+  vi.mocked(workContextApi.savePreference).mockResolvedValueOnce({ preference: 'rest' }).mockResolvedValueOnce({ preference: null });
+  render(<ReentryEvidenceCard weekStart="2026-10-19" />);
+  await screen.findByText(/기록이 적어/); fireEvent.click(screen.getByText('쉬고 나서 다시 확인하기'));
+  fireEvent.click(await screen.findByText('선호 해제'));
+  await waitFor(() => expect(workContextApi.savePreference).toHaveBeenLastCalledWith(null));
+});

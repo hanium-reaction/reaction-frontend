@@ -823,6 +823,8 @@ export interface RecoveryCard {
 }
 
 export interface RecoveryProposalsResponse {
+  strategyLevel?: string | null;
+  selectionBasis?: string | null;
   executionId: string;
   cards: RecoveryCard[];
   aiSource?: string;
