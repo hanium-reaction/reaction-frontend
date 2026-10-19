@@ -7995,6 +7995,187 @@
         ],
         "title": "WeeklyReviewResponse",
         "type": "object"
+      },
+      "ReentryEvent": {
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "viewed",
+              "selected",
+              "start_clicked",
+              "start_failed",
+              "first_step_completed",
+              "leave"
+            ],
+            "title": "Event"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event"
+        ],
+        "title": "ReentryEvent"
+      },
+      "ReentryPrepare": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requestid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requestId"
+        ],
+        "title": "ReentryPrepare"
+      },
+      "ReentryStart": {
+        "properties": {
+          "firstStep": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Firststep"
+          }
+        },
+        "type": "object",
+        "required": [
+          "firstStep"
+        ],
+        "title": "ReentryStart"
+      },
+      "ReentryState": {
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attemptid"
+          },
+          "actionId": {
+            "type": "string",
+            "title": "Actionid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "actionStatus": {
+            "type": "string",
+            "title": "Actionstatus"
+          },
+          "entryKind": {
+            "type": "string",
+            "title": "Entrykind"
+          },
+          "firstStep": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firststep"
+          },
+          "executionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executionid"
+          },
+          "executionStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executionstatus"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "stepCompletedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stepcompletedat"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "elapsedSeconds": {
+            "type": "integer",
+            "title": "Elapsedseconds"
+          },
+          "canStart": {
+            "type": "boolean",
+            "title": "Canstart"
+          },
+          "blockedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockedreason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attemptId",
+          "actionId",
+          "title",
+          "actionStatus",
+          "entryKind",
+          "firstStep",
+          "executionId",
+          "executionStatus",
+          "startedAt",
+          "stepCompletedAt",
+          "endedAt",
+          "elapsedSeconds",
+          "canStart",
+          "blockedReason"
+        ],
+        "title": "ReentryState"
       }
     }
   },
@@ -14922,6 +15103,212 @@
         "tags": [
           "today"
         ]
+      }
+    },
+    "/reentry/actions/{action_id}/prepare": {
+      "post": {
+        "tags": [
+          "reentry"
+        ],
+        "summary": "Prepare",
+        "operationId": "prepare_reentry_actions__action_id__prepare_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReentryPrepare"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReentryState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reentry/attempts/{attempt_id}/start": {
+      "post": {
+        "tags": [
+          "reentry"
+        ],
+        "summary": "Start",
+        "operationId": "start_reentry_attempts__attempt_id__start_post",
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Attempt Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReentryStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReentryState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reentry/attempts/{attempt_id}/events": {
+      "post": {
+        "tags": [
+          "reentry"
+        ],
+        "summary": "Record",
+        "operationId": "record_reentry_attempts__attempt_id__events_post",
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Attempt Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReentryEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReentryState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

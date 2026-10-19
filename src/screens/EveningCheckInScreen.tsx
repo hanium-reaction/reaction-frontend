@@ -439,7 +439,7 @@ export function EveningCheckInScreen({ onDone }: EveningCheckInScreenProps) {
       )}
       <button
         onClick={goNext}
-        disabled={!energy || submitting}
+        disabled={submitting}
         className="guided-evening-cta"
       >
         {submitting ? '기록하는 중…' : items.length > 0 ? `${items.length}건 기록하고 다음 →` : '다음 →'}

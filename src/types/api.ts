@@ -1280,3 +1280,27 @@ export interface ApiErrorPayload {
   // KST ISO 8601 with offset (api-contract §1.5)
   server_time: string;
 }
+
+// P0 first-action contract; completion is self-reported and never whole-task completion.
+export interface ReentryState {
+  attemptId: string;
+  actionId: string;
+  title: string;
+  actionStatus: string;
+  entryKind: 'initial' | 'restart' | 'resume';
+  firstStep: string | null;
+  executionId: string | null;
+  executionStatus: string | null;
+  startedAt: string | null;
+  stepCompletedAt: string | null;
+  endedAt: string | null;
+  elapsedSeconds: number;
+  canStart: boolean;
+  blockedReason: string | null;
+}
+
+export interface ActionDetail {
+  actionId: string; title: string; category: string; status: string; priority: number;
+  estimatedMinutes: number; targetDate: string; source: string;
+  whyNow: string | null; firstStep: string | null; goalId: string | null;
+}

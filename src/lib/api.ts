@@ -625,6 +625,7 @@ export const habitsApi = {
 // ── Today / Execution (S10-S13) ───────────────────────────────
 // start·check-ins 는 백엔드 #13 구현됨. agenda/action 상세·pause/resume 은 미구현.
 export const todayApi = {
+  getActionDetail: (id: string) => request<import('../types/api').ActionDetail>(`/today/actions/${id}`),
   agenda: () => request<TodayAgenda>('/today/agenda'),
 
   getAction: (actionItemId: string) =>
@@ -882,4 +883,10 @@ export const privacyApi = {
 
   updateConsent: (body: ConsentUpdateRequest) =>
     request<ConsentRecord>('/privacy/consent', { method: 'POST', body }),
+};
+
+export const reentryApi = {
+  prepare: (actionId: string, requestId: string) => request<import('../types/api').ReentryState>(`/reentry/actions/${actionId}/prepare`, { method: 'POST', body: { requestId } }),
+  start: (attemptId: string, firstStep: string) => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/start`, { method: 'POST', body: { firstStep } }),
+  event: (attemptId: string, event: 'viewed' | 'selected' | 'start_clicked' | 'start_failed' | 'first_step_completed' | 'leave') => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/events`, { method: 'POST', body: { event } }),
 };

@@ -768,6 +768,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
             )}
 
             {usingRealAgenda && <RestartCard tasks={tasks}
+              onResume={import.meta.env.VITE_REENTRY_P0 === 'true' ? onOpen : undefined}
               onReview={(id) => { setSelectedTaskId(id); setDetailTask(tasks.find((task) => task.id === id) ?? null); }}
               onRecovery={onOpenRecovery} />}
             {/* 시간순은 유지하고, 예정·재계획·완료를 한 목록에서 찾고 미리 본다. */}
