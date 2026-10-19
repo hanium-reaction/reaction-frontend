@@ -270,7 +270,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
     }
     // 선택 저장 다음에 변경 내용을 검토한다. 일정 승인은 다음 화면에서 따로 한다.
     setAccepted(true);
-    if (chosen) setTimeout(() => onAccept(chosen, requiresReplan), 1400);
+    if (chosen) onAccept(chosen, requiresReplan);
   };
 
   if (accepted) {

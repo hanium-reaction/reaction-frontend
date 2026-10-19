@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { RecoveredScreen } from './RecoveredScreen';
-import { replanApi } from '../lib/api';
+import { replanApi, todayApi } from '../lib/api';
 
 vi.mock('../lib/api', async (original) => ({
   ...await original<typeof import('../lib/api')>(),
+  todayApi: { getActionDetail: vi.fn() },
   replanApi: { diff: vi.fn(), approve: vi.fn() },
 }));
 const applied = { taskTitle: '공부', failReason: '', proposalTitle: '회복', proposalDesc: '', proposalTime: '' };
@@ -81,4 +82,30 @@ it('미리보기는 승인 전 상태이며 승인 실패 시 화면을 유지�
   expect(onDone).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText('다시 시도'));
   await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+});
+
+
+it('승인 후 조회 실패는 승인 반복 없이 재조회하고 실제 작업으로 연결한다', async () => {
+  vi.mocked(replanApi.diff).mockResolvedValue({ before: { title: '공부' }, after: { title: '10분 공부' } } as never);
+  vi.mocked(replanApi.approve).mockResolvedValue({ actionItemId: 'action-new', startAt: '2020-01-01T00:00:00Z' } as never);
+  const detail = { actionItemId: 'action-new', title: '10분 공부' };
+  vi.mocked(todayApi.getActionDetail).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(detail as never);
+  const onStartAction = vi.fn(); const onDone = vi.fn();
+  render(<RecoveredScreen executionId="exec-1" applied={applied} onDone={onDone} onStartAction={onStartAction} />);
+  fireEvent.click(await screen.findByText('일정 반영하기'));
+  fireEvent.click(await screen.findByText('이 행동 시작 준비'));
+  fireEvent.click(await screen.findByText('작업 다시 불러오기'));
+  await waitFor(() => expect(onStartAction).toHaveBeenCalledWith(detail));
+  expect(replanApi.approve).toHaveBeenCalledTimes(1);
+  expect(onDone).not.toHaveBeenCalled();
+});
+
+it('승인된 미래 일정은 지금 시작하지 않고 주간 계획으로 연결한다', async () => {
+  vi.mocked(replanApi.diff).mockResolvedValue({ before: { title: '공부' }, after: { title: '10분 공부', actionItemId: 'action-new', startAt: '2099-01-01T00:00:00Z' }, alreadyApproved: true } as never);
+  const weekly = vi.fn();
+  render(<RecoveredScreen executionId="exec-1" applied={applied} onDone={vi.fn()} onStartAction={vi.fn()} onOpenWeekly={weekly} />);
+  fireEvent.click(await screen.findByText('예정된 작업 보기'));
+  expect(weekly).toHaveBeenCalledOnce();
+  expect(todayApi.getActionDetail).not.toHaveBeenCalled();
+  expect(replanApi.approve).not.toHaveBeenCalled();
 });

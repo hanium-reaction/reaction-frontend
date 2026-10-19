@@ -1,3 +1,5 @@
+import { ReentryScreen } from '../screens/ReentryScreen';
+import type { ReentryState } from '../types/api';
 import React, { useEffect, useRef, useState } from 'react';
 import { CaretLeft, Question } from '@phosphor-icons/react';
 import { MergedTabBar } from '../components/TabBar';
@@ -37,6 +39,7 @@ import { GuidedTourOverlay } from '../components/GuidedTourOverlay';
 //   intro → goal-intake → goal-classify → calendar-schedule(S04+S05)
 //   → weekly-plan(S06) → today. 모닝 브리프는 오늘 화면의 하루 1회 시트로 통합한다.
 const NAV_META: Record<ScreenId, { label: string; back: ScreenId | null }> = {
+  'reentry': { label: '다음 행동', back: 'today' },
   'intro':                  { label: 'RE:ACTION',      back: null },
   'goal-intake':            { label: '목표 파악',      back: 'intro' },
   'goal-classify':          { label: '목표 분류',      back: 'goal-intake' },
@@ -132,6 +135,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     setInterviewOutcomeState(outcome);
     if (typeof window !== 'undefined') writeInterviewOutcome(window.localStorage, outcome);
   };
+  const [reentry, setReentry] = useState<ReentryState | null>(null);
+  const reentryEnabled = import.meta.env.VITE_REENTRY_P0 === 'true';
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [failReason, setFailReason] = useState('');
   // task.id → 실 executionId. FocusScreen(시작) 또는 markFailed(실패시 auto-start)로 채워지며,
@@ -285,15 +290,16 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
     if (t.status === 'done' || t.status === 'failed') return;
-    setTasks((ts) =>
+    if (!reentryEnabled) setTasks((ts) =>
       ts.map((x) => {
         if (x.id === id) return { ...x, status: 'in_progress' as const };
         if (x.status === 'in_progress') return { ...x, status: 'todo' as const };
         return x;
       }),
     );
-    setActiveTask({ ...t, status: 'in_progress' });
-    setScreen('focus');
+    setActiveTask(reentryEnabled ? t : { ...t, status: 'in_progress' });
+    setReentry(null);
+    setScreen(reentryEnabled ? 'reentry' : 'focus');
   };
 
   const openRecovery = (id?: string) => {
@@ -413,11 +419,15 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
             onUncheckedChange={setUncheckedCount}
           />
         )}
+        {screen === 'reentry' && <ReentryScreen key={activeTask?.id} task={activeTask}
+          onBack={() => setScreen('today')}
+          onStart={(value) => { setReentry(value); setScreen('focus'); }} />}
         {screen === 'focus' && (
           // activeTask 가 없어도(완료/상태 race) 백지 대신 FocusScreen 내부의
           // "시작할 카드가 없어요" 안내가 뜨도록 항상 렌더한다(task=null 허용).
           <FocusScreen
             task={activeTask}
+            reentry={reentry}
             elapsedMin={0} totalMin={45}
             onBack={() => { setScreen('today'); setActiveTask(null); }}
             onPause={() => setScreen('today')}
@@ -445,6 +455,10 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
         {screen === 'recovered' && (
           <RecoveredScreen
             applied={appliedRecovery}
+            onStartAction={reentryEnabled ? (detail) => {
+              setActiveTask({ id: detail.actionId, title: detail.title, status: 'todo', firstStep: detail.firstStep ?? undefined, dur: `${detail.estimatedMinutes}분` });
+              setReentry(null); setScreen('reentry');
+            } : undefined}
             onOpenWeekly={() => { setWeekOffset(0); setTab('weekly'); setScreen('weekly'); }}
             onDone={() => { setTab('today'); setScreen('today'); setAppliedRecovery(null); }}
             executionId={activeTask

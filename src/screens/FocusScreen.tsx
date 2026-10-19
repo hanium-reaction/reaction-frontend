@@ -1,14 +1,16 @@
+import type { ReentryState } from '../types/api';
 import React, { useRef } from 'react';
 import { CaretLeft, Pause, Play, Check, X } from '@phosphor-icons/react';
 import { Chip } from '../components/Chip';
 import { FailureTagPicker, useFailureTagCatalog, canContinueInterruption, type FailureTagOption } from '../components/FailureTagPicker';
 import { ReButton } from '../components/ReButton';
-import { ApiError, friendlyError, todayApi } from '../lib/api';
+import { ApiError, friendlyError, todayApi, reentryApi } from '../lib/api';
 import { readFocusSession, removeFocusSession, writeFocusSession, type RunIntent } from '../lib/executionSync';
 import type { Task } from '../types';
 import '../styles/guided-redesign.css';
 
 interface FocusScreenProps {
+  reentry?: ReentryState | null;
   // 잘못된 상태(force navigation, 빈 tasks 등)로 마운트되어도 폭발하지 않도록 null 허용.
   task: Task | null;
   // 이어하기용 초기 경과(분). 새로 시작이면 0.
@@ -35,7 +37,11 @@ interface FocusScreenProps {
   onExecutionStart?: (taskId: string, executionId: string) => void;
 }
 
-export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+  const [stepDone, setStepDone] = React.useState(!!reentry?.stepCompletedAt);
+  const [stepSaving, setStepSaving] = React.useState(false);
+  const [stepError, setStepError] = React.useState<string | null>(null);
+  const stepBusy = useRef(false);
   type SyncState = 'pending' | 'synced' | 'retrying' | 'failed';
   const executionIdRef = useRef<string | null>(null);
   const queuedRunIntentRef = useRef<RunIntent | null>(null);
@@ -94,6 +100,12 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
   // 최초 마운트 — sessionStorage 에 진행 중 세션이 있으면 복원, 없으면 새로 시작.
   React.useEffect(() => {
     if (!task) return;
+    if (reentry?.executionId) {
+      writeFocusSession(sessionStorage, task.id, {
+        version: 1, startAt: Date.now() - reentry.elapsedSeconds * 1000, pausedMs: 0,
+        pauseAt: null, running: true, executionId: reentry.executionId, queuedIntent: null,
+      });
+    }
     let restored = false;
     try {
       const o = readFocusSession(sessionStorage, task.id);
@@ -344,6 +356,15 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
     onStopWithResult(task.id, result, spent, failure);
   };
 
+  const reportStep = async () => {
+    if (!reentry || stepBusy.current || stepDone) return;
+    stepBusy.current = true; setStepSaving(true); setStepError(null);
+    try {
+      await reentryApi.event(reentry.attemptId, 'first_step_completed');
+      setStepDone(true);
+    } catch (err) { setStepError(friendlyError(err, '첫 행동 기록을 저장하지 못했어요. 다시 시도해 주세요.')); }
+    finally { stepBusy.current = false; setStepSaving(false); }
+  };
   const totalSec = Math.max(1, totalMin * 60);
   const pct = Math.min(elapsedSec / totalSec, 1);
   const mm = Math.floor(elapsedSec / 60);
@@ -381,6 +402,15 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
       <p className="tnum" style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 36 }}>시작 {startLabel} · 목표 {totalMin}분</p>
       </header>
 
+      {reentry && <section className="guided-approval" aria-label="이번 첫 행동">
+        <h2>{reentry.firstStep}</h2>
+        <p>이 행동의 수행만 기록해요. 전체 과제 완료와는 다릅니다.</p>
+        {stepError && <p role="alert">{stepError}</p>}
+        {stepDone ? <><p role="status">첫 행동을 기록했어요. 전체 과제는 아직 진행 중이에요.</p>
+          <button className="reentry-secondary" onClick={handleExit}>여기까지 하고 쉬기</button>
+          <p>계속 진행해도 좋아요. 과제를 모두 마쳤을 때 아래 전체 완료를 눌러 주세요.</p></>
+          : <button className="reentry-primary" disabled={stepSaving} onClick={() => void reportStep()}>{stepSaving ? '기록 중…' : '첫 행동 했어요'}</button>}
+      </section>}
       <section className="guided-timer-stage" aria-label="집중 타이머">
       <div className="guided-timer">
         <svg width="280" height="280" viewBox="0 0 280 280" role="img" aria-label={`경과 ${timeLabel}, ${remainLabel}`}>
@@ -410,7 +440,7 @@ export function FocusScreen({ task, elapsedMin, totalMin, onComplete, onBack, on
           <X size={16} /> 중단
         </ReButton>
         <ReButton variant="primary" size="lg" full style={{ padding: '0 12px' }} onClick={() => void handleComplete()} disabled={completing || syncState === 'pending' || syncState === 'retrying'}>
-          <Check size={16} /> {completing ? '저장 중…' : '완료'}
+          <Check size={16} /> {completing ? '저장 중…' : reentry ? '전체 과제 완료' : '완료'}
         </ReButton>
       </div>
       <p className="guided-focus-footnote">경과 시간과 실제 완료는 달라요. 일을 마쳤다면 완료를 눌러 기록해 주세요.</p>

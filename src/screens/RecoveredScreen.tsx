@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { friendlyError, replanApi } from '../lib/api';
-import type { ReplanBlock, ReplanDiff } from '../types/api';
+import { friendlyError, replanApi, todayApi } from '../lib/api';
+import type { ActionDetail, ReplanApproveResponse, ReplanBlock, ReplanDiff } from '../types/api';
 import { ErrorBanner } from '../components/ErrorBanner';
 import '../components/reentry.css';
 import '../styles/guided-redesign.css';
@@ -10,6 +10,7 @@ export interface AppliedRecovery {
   requiresReplan?: boolean; proposalType?: string;
 }
 interface RecoveredScreenProps {
+  onStartAction?: (action: ActionDetail) => void;
   recoveryCount?: number; applied?: AppliedRecovery | null; onDone: () => void; onOpenWeekly?: () => void; executionId?: string;
 }
 function schedule(block: ReplanBlock) {
@@ -18,8 +19,11 @@ function schedule(block: ReplanBlock) {
   const format = (date: Date) => date.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
   return `${format(start)} – ${format(end)} (한국 시간)`;
 }
-export function RecoveredScreen({ applied, onDone, onOpenWeekly, executionId }: RecoveredScreenProps) {
+export function RecoveredScreen({ onStartAction, applied, onDone, onOpenWeekly, executionId }: RecoveredScreenProps) {
   const needsReplan = applied?.requiresReplan ?? true;
+  const [appliedResult, setAppliedResult] = useState<ReplanApproveResponse | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [diff, setDiff] = useState<ReplanDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [approveError, setApproveError] = useState<string | null>(null);
@@ -37,16 +41,26 @@ export function RecoveredScreen({ applied, onDone, onOpenWeekly, executionId }: 
     return () => { cancelled = true; };
   }, [executionId, needsReplan, retry]);
   if (!applied || !executionId) return <div className="reentry-page guided-surface guided-recovered"><h1>확인할 회복 기록이 없어요</h1><p>오늘 화면에서 다시 살펴볼 항목과 방법을 먼저 선택해 주세요.</p><button className="reentry-secondary" onClick={onDone}>오늘로 돌아가기</button></div>;
-  const approved = !!diff?.alreadyApproved;
+  const approved = !!diff?.alreadyApproved || !!appliedResult;
+  const targetId = appliedResult?.actionItemId ?? diff?.after.actionItemId;
+  const targetStart = appliedResult?.startAt ?? diff?.after.startAt;
+  const readyNow = !!targetStart && Number.isFinite(Date.parse(targetStart)) && Date.parse(targetStart) <= Date.now();
+  const openApproved = async () => {
+    if (!approved || !targetId || !onStartAction || opening) return;
+    setOpening(true); setOpenError(null);
+    try { onStartAction(await todayApi.getActionDetail(targetId)); }
+    catch (err) { setOpenError(friendlyError(err, '승인은 반영됐지만 작업을 불러오지 못했어요. 다시 불러와 주세요.')); }
+    finally { setOpening(false); }
+  };
   const handleDone = async () => {
     if (approving || (needsReplan && !diff)) return;
     if (needsReplan && !approved) {
       setApproving(true); setApproveError(null);
-      try { await replanApi.approve(executionId, `replan-${executionId}`); }
+      try { const result = await replanApi.approve(executionId, `replan-${executionId}`); if (onStartAction) setAppliedResult(result); }
       catch (error) { setApproveError(friendlyError(error, '일정 반영을 완료하지 못했어요. 다시 시도해 주세요.')); setApproving(false); return; }
       setApproving(false);
     }
-    onDone();
+    if (!onStartAction || !needsReplan) onDone();
   };
   return <div className="reentry-page guided-surface guided-recovered"><div className="reentry-page-inner">
     <ol className="reentry-steps" aria-label="다시 시작 순서"><li>01 항목 확인</li><li>02 방법 선택</li><li aria-current="step">03 변경 확인</li></ol>
@@ -71,7 +85,12 @@ export function RecoveredScreen({ applied, onDone, onOpenWeekly, executionId }: 
     <section className="reentry-footnote" aria-label="남아 있는 계획"><strong>남아 있는 계획도 확인해 주세요</strong><p>여기서는 선택한 항목의 변경 내용만 보여드려요. 전체 일정은 주간 계획에서 확인해 주세요. 계획을 줄인 시간은 실제 완료량이나 남은 작업량을 뜻하지 않아요.</p></section>
     {(diffError || approveError) && <ErrorBanner>{approveError ?? diffError}</ErrorBanner>}
     {diffError && <button className="reentry-secondary" onClick={() => setRetry((value) => value + 1)}>변경 내용 다시 불러오기</button>}
-    <button className="reentry-primary" disabled={approving || (needsReplan && !diff)} onClick={handleDone}>{approving ? '반영하는 중…' : approveError ? '다시 시도' : needsReplan && !approved ? '일정 반영하기' : '오늘로 돌아가기'}</button>
+    {onStartAction && approved ? <>
+      {openError && <ErrorBanner>{openError}</ErrorBanner>}
+      {readyNow ? <button className="reentry-primary" disabled={opening} onClick={() => void openApproved()}>{opening ? '작업 확인 중…' : openError ? '작업 다시 불러오기' : '이 행동 시작 준비'}</button>
+        : <><p>예정된 시각에 이어갈 수 있어요.</p><button className="reentry-primary" onClick={onOpenWeekly ?? onDone}>예정된 작업 보기</button></>}
+      <button className="reentry-secondary" onClick={onDone}>오늘로 돌아가기</button>
+    </> : <button className="reentry-primary" disabled={approving || (needsReplan && !diff)} onClick={handleDone}>{approving ? '반영하는 중…' : approveError ? '다시 시도' : needsReplan && !approved ? '일정 반영하기' : '오늘로 돌아가기'}</button>}
     {needsReplan && !approved && <button className="reentry-secondary" style={{ width: '100%', marginTop: 10 }} disabled={approving} onClick={onDone}>지금은 반영하지 않고 돌아가기</button>}
     {!needsReplan && applied.proposalType === 'RESCHEDULE' && onOpenWeekly && <button className="reentry-secondary" style={{ width: '100%', marginTop: 10 }} onClick={onOpenWeekly}>주간 계획 열기</button>}
     <p style={{ fontSize: 11, textAlign: 'center' }}>일정 반영은 실행 완료 기록과 달라요. 실제로 한 일은 실행 후 기록해 주세요.</p>

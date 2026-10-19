@@ -15,6 +15,7 @@ export type BlockStatus = 'pending' | 'done' | 'failed';
 export type CopingStyle = 'smaller' | 'rest' | 'retry' | 'skip';
 
 export type ScreenId =
+  | 'reentry'
   | 'intro'
   | 'goal-intake'
   | 'goal-classify'
