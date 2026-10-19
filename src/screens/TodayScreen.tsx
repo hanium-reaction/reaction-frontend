@@ -1,3 +1,4 @@
+import { ActionResourcePanel } from '../components/ActionResourcePanel';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { todayPresentation } from '../lib/todayPresentation';
 import { visibleCalendarConflict } from '../lib/calendarConflict';
@@ -982,7 +983,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
       {/* Action Detail sheet (S11) — 왜 지금 / 예상 시간 / 첫 걸음 + 시작 */}
       {detailTask && (
         <div onClick={() => setDetailTask(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(26,23,20,.45)', zIndex: 40, display: 'flex', alignItems: 'flex-end' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 20px 40px', boxShadow: 'var(--shadow-xl)' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--surface-raised)', width: '100%', borderRadius: '22px 22px 0 0', padding: '10px 20px 40px', boxShadow: 'var(--shadow-xl)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ width: 36, height: 4, borderRadius: 9999, background: 'var(--sand-300)', margin: '0 auto 16px' }} />
             <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               {detailTask.goal && <span style={{ height: 'var(--ctrl-xs)', padding: '0 8px', borderRadius: 9999, background: 'var(--sand-100)', border: '1px solid var(--sand-200)', fontSize: 10, color: 'var(--text-2)', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}>{detailTask.goal}</span>}
@@ -1001,6 +1002,7 @@ export function MergedTodayScreen({ tasks: allTasks, onOpen, onMarkDone, onParti
                 <p style={{ margin: 0, fontSize: 13, color: 'var(--coral-700)', lineHeight: 1.55 }}>{detailTask.firstStep}</p>
               </div>
             )}
+            {import.meta.env.VITE_REENTRY_P0 === 'true' && <ActionResourcePanel actionId={detailTask.id} />}
             {detailTask.missedCheckIn && <div className="reentry-review"><strong>실제로 한 만큼 확인해 주세요</strong><p>기록이 비어 있어요. 아직 결과를 알 수 없어요.</p><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}><button className="reentry-secondary" onClick={() => { onMarkDone(detailTask.id); setDetailTask(null); }}>완료했어요</button><button className="reentry-secondary" onClick={() => { setPartialSheet(detailTask.id); setDetailTask(null); }}>일부 했어요</button><button className="reentry-secondary" onClick={() => { setFailSheet(detailTask.id); setFailTags([]); setFailMemo(''); setDetailTask(null); }}>아직 못 했어요</button></div></div>}
             <button onClick={() => { const id = detailTask.id; setDetailTask(null); onOpen(id); }} style={{ width: '100%', height: 48, marginTop: 12, borderRadius: 12, border: 'none', background: 'var(--text-1)', color: '#FAF6EE', fontWeight: 700, fontSize: 15, fontFamily: 'inherit', cursor: 'pointer' }}>시작하기</button>
             {/* 취소는 BE 가 가능하다고 한 카드에만 보여준다(cancellable). 이미 시작했거나

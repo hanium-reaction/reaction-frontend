@@ -73,7 +73,7 @@ export function primaryFailureReasons(reasons: FailureTagOption[]): FailureTagOp
 
 export function canContinueInterruption(selected: FailureTagOption[], memo: string): boolean {
   // The API rejects a memo without a tag. Never invent a tag or discard a draft.
-  return selected.length > 0 || !memo.trim();
+  return import.meta.env.VITE_REENTRY_P0 === 'true' || selected.length > 0 || !memo.trim();
 }
 
 export function FailureTagPicker({

@@ -784,11 +784,14 @@ export const reflectionApi = {
   // 실패 태그 마스터 카탈로그 (#17)
   failureTags: () => request<FailureTagMaster[]>('/reflection/failure-tags'),
 
-  tagExecution: (executionId: string, body: FailureTagRequest) =>
-    request<FailureTagResponse>(`/reflection/failure-tags/${executionId}`, {
-      method: 'POST',
-      body: normalizeFailureTagRequest(body),
-    }),
+  tagExecution: async (executionId: string, body: FailureTagRequest): Promise<FailureTagResponse> => {
+    if (import.meta.env.VITE_REENTRY_P0 === 'true' && body.tagCodes.length === 0 && body.memo?.trim()) {
+      if (body.taskAversiveness != null) await request<FailureTagResponse>(`/reflection/failure-tags/${executionId}`, { method: 'POST', body: { tagCodes: [], taskAversiveness: body.taskAversiveness } });
+      await workContextApi.saveNote(executionId, body.memo.trim());
+      return { executionId, tagCodes: [], hasMemo: true };
+    }
+    return request<FailureTagResponse>(`/reflection/failure-tags/${executionId}`, { method: 'POST', body: normalizeFailureTagRequest(body) });
+  },
 };
 
 // ── Recovery / Replan (S19·S20) — recovery 는 백엔드 #20 구현됨 ──
@@ -889,4 +892,21 @@ export const reentryApi = {
   prepare: (actionId: string, requestId: string) => request<import('../types/api').ReentryState>(`/reentry/actions/${actionId}/prepare`, { method: 'POST', body: { requestId } }),
   start: (attemptId: string, firstStep: string) => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/start`, { method: 'POST', body: { firstStep } }),
   event: (attemptId: string, event: 'viewed' | 'selected' | 'start_clicked' | 'start_failed' | 'first_step_completed' | 'leave') => request<import('../types/api').ReentryState>(`/reentry/attempts/${attemptId}/events`, { method: 'POST', body: { event } }),
+};
+
+
+export type ReentryPreference = 'smaller_step' | 'context_first' | 'rest' | null;
+export interface ReentryEvidence { weekStart: string; weekEnd: string; attempts: number; started: number; firstStepsReported: number; tasksCompleted: number; preference: ReentryPreference; evidenceKind: string; }
+export interface LinkedResource { url: string; label: string; }
+export const workContextApi = {
+  lastNote: (actionId: string) => request<{ memo: string | null }>(`/work-context/actions/${actionId}/last-note`),
+  quickAction: (body: { requestId: string; title: string; firstStep: string; attemptMinutes: number; goalId?: string }) => request<import('../types/api').ActionDetail>('/work-context/quick-action', { method: 'POST', body }),
+  resource: (id: string) => request<{ resource: LinkedResource | null }>(`/work-context/actions/${id}/resource`),
+  saveResource: (id: string, body: LinkedResource) => request<{ resource: LinkedResource | null }>(`/work-context/actions/${id}/resource`, { method: 'PUT', body }),
+  unlink: (id: string) => request<{ resource: LinkedResource | null }>(`/work-context/actions/${id}/resource/unlink`, { method: 'POST' }),
+  note: (id: string) => request<{ memo: string | null }>(`/work-context/executions/${id}/note`),
+  saveNote: (id: string, memo: string) => request<{ memo: string | null }>(`/work-context/executions/${id}/note`, { method: 'PUT', body: { memo } }),
+  evidence: (week: string) => request<ReentryEvidence>(`/work-context/evidence?week_start=${week}`),
+  preference: () => request<{ preference: ReentryPreference }>('/work-context/preference'),
+  savePreference: (preference: ReentryPreference) => request<{ preference: ReentryPreference }>('/work-context/preference', { method: 'PUT', body: { preference } }),
 };

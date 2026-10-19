@@ -104,6 +104,7 @@ interface MergedRecoveryScreenProps {
   // 선택된 실제 제안 객체를 그대로 올려준다 — 컨트롤러가 더미에서 id 로 재조회하지
   // 않고, 실제 카드 내용을 그대로 써야 정직하다(#80).
   onAccept: (proposal: RecoveryProposal, requiresReplan: boolean) => void;
+  onOpenGoals?: () => void;
   onDismiss: () => void;
   // 시작/실패한 실제 실행의 executionId. 데모 task 엔 없으므로 optional.
   // 있으면 백엔드 LLM 회복 제안(POST /recovery/proposals/generate)과 연동한다.
@@ -116,7 +117,7 @@ interface MergedRecoveryScreenProps {
   onOpenWeekly: () => void;
 }
 
-export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, executionId, preparing = false, preparationError, onOpenWeekly }: MergedRecoveryScreenProps) {
+export function MergedRecoveryScreen({ onOpenGoals, task, failReason, onAccept, onDismiss, executionId, preparing = false, preparationError, onOpenWeekly }: MergedRecoveryScreenProps) {
   const [sel, setSel] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
@@ -132,6 +133,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
   const [alreadyDecided, setAlreadyDecided] = useState(false);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
+  const [selectionBasis, setSelectionBasis] = useState<string | null>(null);
   const [recoveryMode, setRecoveryMode] = useState<'standard' | 'goal_renegotiation'>('standard');
   // 재관여 앵커(#221) — PARK/CARRY_OVER 수락 시 "다음에 다시 볼 시점". 기본값은 다음
   // 주간 리뷰(다음 주 월요일 09:00)로 미리 채워, 마찰 없이 그대로 확인만 해도 되게 한다.
@@ -181,6 +183,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
       (res) => {
         setProposals(dedupeByGroup(res.cards ?? []).map(cardToProposal));
         setAiSource(res.aiSource === 'rule' ? 'rule' : 'llm');
+        setSelectionBasis(res.selectionBasis ?? null);
         setRecoveryMode(res.recoveryMode === 'goal_renegotiation' ? 'goal_renegotiation' : 'standard');
         setUsingRealProposals(true);
         setSel(null);
@@ -327,6 +330,8 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
               : '지금 가능한 방법 하나를 골라요. 일정은 변경 내용을 확인한 뒤 반영해요.'}
           </p>
 
+          {selectionBasis && <p>{selectionBasis}</p>}
+          {renegotiating && onOpenGoals && <button onClick={onOpenGoals}>목표 범위 다시 살펴보기</button>}
           {/* 대기 안내는 DemoNotice 로 띄우지 않는다 — 그건 sessionStorage 로 한 번
               닫으면 세션 내내 사라지는 배너라, 닫아둔 사용자에게는 카드 자리가 아무
               설명 없는 빈 공간이 됐다. 기다리는 중이라는 사실은 닫히지 않아야 한다. */}
@@ -375,7 +380,7 @@ export function MergedRecoveryScreen({ task, failReason, onAccept, onDismiss, ex
                 timeLabel={p.time}
                 // 재협상 3장은 AI 가 고른 "제일 나은 하나"가 아니라 동등한 세 방향
                 // (축소/재조정/보류)이라 추천 뱃지를 붙이지 않는다.
-                recommended={!renegotiating && i === 0}
+                recommended={import.meta.env.VITE_REENTRY_P0 !== 'true' && !renegotiating && i === 0}
                 selected={sel === p.id}
                 onSelect={() => { if (!deciding) setSel(p.id); }}
                 why={p.why}

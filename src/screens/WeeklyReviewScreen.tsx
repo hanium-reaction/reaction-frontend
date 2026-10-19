@@ -1,3 +1,4 @@
+import { ReentryEvidenceCard } from '../components/ReentryEvidenceCard';
 import { ScoreDonut } from '../components/ScoreDonut';
 import '../styles/planning-redesign.css';
 import { SectionHeader } from '../components/SectionHeader';
@@ -63,9 +64,14 @@ export function WeeklyReviewScreenV2() {
   const [penalties, setPenalties] = useState<HabitPenaltyCandidate[]>([]);
   const [proposalBusy, setProposalBusy] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
-  const acceptPenalty = (habitId: string) => {
-    setPenalties((cur) => cur.filter((c) => c.habitId !== habitId)); // optimistic
-    reviewsApi.acceptHabitPenalty(habitId, `hp-${habitId}`).catch(() => {});
+  const acceptPenalty = async (habitId: string) => {
+    if (proposalBusy) return;
+    setProposalBusy(habitId); setProposalError(null);
+    try {
+      await reviewsApi.acceptHabitPenalty(habitId, `hp-${habitId}`);
+      setPenalties(cur => cur.filter(c => c.habitId !== habitId));
+    } catch (err) { setProposalError(friendlyError(err, '변경을 저장하지 못했어요. 다시 시도해 주세요.')); }
+    finally { setProposalBusy(null); }
   };
   const dismissPenalty = (habitId: string) => setPenalties((cur) => cur.filter((c) => c.habitId !== habitId));
 
@@ -175,6 +181,7 @@ export function WeeklyReviewScreenV2() {
     <div className="planning-screen" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Scrollable content */}
       <div className="planning-scroll">
+        {import.meta.env.VITE_REENTRY_P0 === 'true' && <ReentryEvidenceCard weekStart={thisMonday()} />}
 
         {/* Header */}
         <header className="planning-heading">
@@ -213,7 +220,7 @@ export function WeeklyReviewScreenV2() {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => dismissPenalty(c.habitId)} style={{ flex: 1, height: 40, borderRadius: 10, border: '1px solid var(--sand-200)', background: 'transparent', color: 'var(--text-2)', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>지금대로 유지</button>
-              <button onClick={() => acceptPenalty(c.habitId)} style={{ flex: 1.4, height: 40, borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>주 {c.suggestedFrequency}회로 조정</button>
+              <button disabled={proposalBusy !== null} onClick={() => void acceptPenalty(c.habitId)} style={{ flex: 1.4, height: 40, borderRadius: 10, border: 'none', background: 'var(--brand-surface)', color: '#FFFCF6', fontWeight: 700, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>주 {c.suggestedFrequency}회로 조정</button>
             </div>
           </div>
         ))}

@@ -1,3 +1,4 @@
+import { ActionResourcePanel } from '../components/ActionResourcePanel';
 import type { ReentryState } from '../types/api';
 import React, { useRef } from 'react';
 import { CaretLeft, Pause, Play, Check, X } from '@phosphor-icons/react';
@@ -19,8 +20,7 @@ interface FocusScreenProps {
   onPause: () => void;
   onComplete: () => void;
   onBack: () => void;
-  // 중단하면서 결과를 남길 때 — 회복 흐름으로 이어진다. progressPct 는 경과 시간
-  // 비율(0~99)이라 사용자가 진행률을 따로 입력하지 않아도 근거 있는 값이 남는다.
+  // 경과 시간은 과제 진행률이 아니다. 직접 입력하지 않은 진행률은 미정으로 둔다.
   //
   // `failure` 는 '잘 안됐어요' 에서만 채워진다. **회복 제안 품질이 여기에 달려 있다** —
   // 백엔드 `select_strategies(failure_tags, ...)` 가 태그로 전략을 고르고,
@@ -29,7 +29,7 @@ interface FocusScreenProps {
   onStopWithResult: (
     taskId: string,
     result: 'partial_done' | 'failed',
-    progressPct: number,
+    progressPct: number | undefined,
     failure?: { tagCodes: string[]; memo: string; taskAversiveness: number | null },
   ) => void;
   // 실 executionId 확보 시 컨트롤러로 리프트 — 실패→회복→수락 화면들이 이 값으로
@@ -37,7 +37,8 @@ interface FocusScreenProps {
   onExecutionStart?: (taskId: string, executionId: string) => void;
 }
 
-export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+export function FocusScreen({ reentry, task, elapsedMin, totalMin: fallbackMinutes, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+  const totalMin = reentry?.estimatedMinutes ?? fallbackMinutes;
   const leaving = useRef(false);
   const [stepDone, setStepDone] = React.useState(!!reentry?.stepCompletedAt);
   const [stepSaving, setStepSaving] = React.useState(false);
@@ -369,8 +370,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
     setExitSheet(false);
     setAskingReason(false);
     // 경과 시간 비율. 목표 시간을 넘겼어도 '일부만' 이므로 99 에서 멈춘다.
-    const spent = Math.min(99, Math.max(1, Math.round((elapsedSec / Math.max(1, totalMin * 60)) * 100)));
-    onStopWithResult(task.id, result, spent, failure);
+    onStopWithResult(task.id, result, undefined, failure);
   };
 
   const reportStep = async () => {
@@ -402,6 +402,7 @@ export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, o
       <Chip tone={running ? 'amber' : 'neutral'} style={{ marginBottom: 12, background: running ? '#D9F99D' : '#E2E8F0', color: running ? '#365314' : '#64748B' }}>
         {running ? '● 집중 중' : '❚❚ 일시정지됨'}
       </Chip>
+      {reentry && task && import.meta.env.VITE_REENTRY_P0 === 'true' && <ActionResourcePanel actionId={task.id} />}
       {syncState !== 'synced' && (
         <div role="status" aria-live="polite" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: syncState === 'failed' ? '#FFF1ED' : 'var(--sand-100)', color: 'var(--text-2)', fontSize: 13, lineHeight: 1.5 }}>
           <strong style={{ display: 'block', color: 'var(--text-1)', marginBottom: syncError ? 3 : 0 }}>

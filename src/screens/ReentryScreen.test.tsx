@@ -77,3 +77,8 @@ it('쉬기 저장 실패는 화면을 유지하고 저장 후에만 돌아간다
   await waitFor(() => expect(back).toHaveBeenCalledOnce());
   expect(todayApi.pause).not.toHaveBeenCalled();
 });
+
+it('집중 시간은 호출 화면의 고정값 대신 서버에 저장된 시간을 사용한다', () => {
+  render(<FocusScreen task={task} reentry={{ ...state, estimatedMinutes:10, executionId:'exec_server', startedAt:new Date().toISOString() }} elapsedMin={0} totalMin={45} onPause={vi.fn()} onComplete={vi.fn()} onBack={vi.fn()} onStopWithResult={vi.fn()} />);
+  expect(screen.getByText(/목표 10분/)).toBeInTheDocument();
+});

@@ -1,3 +1,4 @@
+import { subscribePush } from '../lib/push';
 import { useEffect, useState } from 'react';
 import {
   Plus, Trash, ArrowRight,
@@ -177,6 +178,19 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
     onDone();
   };
 
+  const [permission, setPermission] = useState(() => typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+  const [pushBusy, setPushBusy] = useState(false);
+  const enableReminder = async () => {
+    setPushBusy(true); setError(null);
+    try {
+      const subscription = await subscribePush();
+      setPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+      if (!subscription) { setError('이 기기에서 알림을 연결하지 못했어요. 알림 없이도 계속할 수 있어요.'); return; }
+      await notificationsApi.subscribe(subscription);
+      setSettings(await notificationsApi.getSettings());
+    } catch (err) { setError(friendlyError(err, '알림 구독을 저장하지 못했어요. 알림 없이도 계속할 수 있어요.')); }
+    finally { setPushBusy(false); }
+  };
   const sleepPolicy = policies.find((p) => p.policyType === 'sleep');
   const sleepWindow = sleepPolicy ? summarize(sleepPolicy) : null;
 
@@ -190,7 +204,7 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
           마지막 확인이에요
         </h1>
         <p style={{ color: 'var(--text-2)', fontSize: 13, marginBottom: 16 }}>
-          AI 가 인터뷰 답에서 일정·시간·알림을 미리 잡아뒀어요. 맞으면 그대로 다음으로.
+          저장된 일정과 설정을 확인해 주세요. 지금 정하기 어려운 항목은 나중에 바꿀 수 있어요.
         </p>
         <ol className="guided-setup-checklist"><li><span>01</span> 이미 정해진 일정</li><li><span>02</span> 꼭 지킬 시간</li><li><span>03</span> 알림 받을 때</li></ol>
 
@@ -198,7 +212,7 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 14, padding: '8px 10px', background: 'var(--brand-soft)', border: '1px solid var(--coral-200)', borderRadius: 10 }}>
             <Sparkle size={12} weight="fill" color="var(--brand)" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ fontSize: 11, color: 'var(--coral-700)', lineHeight: 1.5 }}>
-              인터뷰 답에서 <b>수면 {sleepWindow}</b> 로 잡고, 그 사이엔 알림도 자동으로 꺼둘게요.
+              저장된 수면 시간은 <b>{sleepWindow}</b>이에요. 아래에서 확인하거나 수정할 수 있어요.
             </div>
           </div>
         )}
@@ -211,6 +225,8 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
           </div>
         )}
 
+        {import.meta.env.VITE_REENTRY_P0 === 'true' && <section className="guided-setup-section"><h2>저장된 설정 요약</h2>{isLoading ? <p>저장된 설정 확인 중…</p> : settings ? <p>고정 일정 {schedules.length}개 · 시간 정책 {policies.filter(p => p.isActive).length}개</p> : <p>저장된 설정을 확인하지 못했어요.</p>}<p>알림 권한: {permission === 'granted' ? '이 기기에서 허용' : permission === 'denied' ? '이 기기에서 거부됨' : permission === 'unsupported' ? '브라우저 권한 확인 불가' : '아직 요청하지 않음'} · 서버 구독: {settings?.pushSubscribed ? '연결됨' : '확인되지 않음'}</p><p>설정된 시각은 발송 예약 완료를 뜻하지 않아요. 알림은 권한과 서버 제한에 따라 달라져요.</p><button disabled={pushBusy || !settings} onClick={() => void enableReminder()}>원할 때만 알림 연결</button><button disabled={isSaving} onClick={onDone}>나중에 설정하고 계속</button></section>}
+        <details open={import.meta.env.VITE_REENTRY_P0 !== 'true'}><summary>일정·시간·알림 설정 확인 및 수정</summary>
         {/* 1. 캘린더 + 고정 일정 */}
         <section className="guided-setup-section" aria-label="일정 설정">
         <SectionTitle>일정</SectionTitle>
@@ -315,6 +331,7 @@ export function SetupScreen({ onDone }: SetupScreenProps) {
           </div>
         )}
         </section>
+        </details>
         </div>
       </div>
 

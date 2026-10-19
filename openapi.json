@@ -16,19 +16,49 @@
         "type": "object"
       },
       "ActionDetail": {
-        "description": "GET /today/actions/{id} 응답 — S11 카드 상세.",
         "properties": {
           "actionId": {
-            "title": "Actionid",
-            "type": "string"
+            "type": "string",
+            "title": "Actionid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
           },
           "category": {
-            "title": "Category",
-            "type": "string"
+            "type": "string",
+            "title": "Category"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
           },
           "estimatedMinutes": {
-            "title": "Estimatedminutes",
-            "type": "integer"
+            "type": "integer",
+            "title": "Estimatedminutes"
+          },
+          "targetDate": {
+            "type": "string",
+            "title": "Targetdate"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "whyNow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whynow"
           },
           "firstStep": {
             "anyOf": [
@@ -51,39 +81,9 @@
               }
             ],
             "title": "Goalid"
-          },
-          "priority": {
-            "title": "Priority",
-            "type": "integer"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "targetDate": {
-            "title": "Targetdate",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "whyNow": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Whynow"
           }
         },
+        "type": "object",
         "required": [
           "actionId",
           "title",
@@ -98,7 +98,7 @@
           "goalId"
         ],
         "title": "ActionDetail",
-        "type": "object"
+        "description": "GET /today/actions/{id} 응답 — S11 카드 상세."
       },
       "ActionItemDraft": {
         "description": "leaf 노드에 매달리는 실행 항목 — SMART + tiny_first_step.",
@@ -2448,12 +2448,12 @@
             "items": {
               "$ref": "#/components/schemas/ValidationError"
             },
-            "title": "Detail",
-            "type": "array"
+            "type": "array",
+            "title": "Detail"
           }
         },
-        "title": "HTTPValidationError",
-        "type": "object"
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "Habit": {
         "description": "습관 — GET/POST/PATCH 응답 항목.",
@@ -6204,49 +6204,76 @@
         "type": "object"
       },
       "RecoveryProposalsResponse": {
-        "description": "후보 2~4장 — Draft Layer (`is_draft=True` 강제, 라우터 책임).",
         "properties": {
+          "isDraft": {
+            "type": "boolean",
+            "title": "Isdraft",
+            "default": true
+          },
           "aiSource": {
-            "default": "llm",
+            "type": "string",
             "enum": [
               "llm",
               "rule"
             ],
             "title": "Aisource",
-            "type": "string"
+            "default": "llm"
+          },
+          "executionId": {
+            "type": "string",
+            "title": "Executionid"
           },
           "cards": {
             "items": {
               "$ref": "#/components/schemas/RecoveryCard"
             },
-            "title": "Cards",
-            "type": "array"
+            "type": "array",
+            "title": "Cards"
           },
-          "executionId": {
-            "title": "Executionid",
-            "type": "string"
+          "strategyLevel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategylevel"
           },
-          "isDraft": {
-            "default": true,
-            "title": "Isdraft",
-            "type": "boolean"
+          "selectionBasis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectionbasis"
           },
           "recoveryMode": {
-            "default": "standard",
+            "type": "string",
             "enum": [
               "standard",
               "goal_renegotiation"
             ],
             "title": "Recoverymode",
-            "type": "string"
+            "default": "standard"
+          },
+          "personalizationSkipped": {
+            "type": "boolean",
+            "title": "Personalizationskipped",
+            "default": false
           }
         },
+        "type": "object",
         "required": [
           "executionId",
           "cards"
         ],
         "title": "RecoveryProposalsResponse",
-        "type": "object"
+        "description": "후보 2~4장 — Draft Layer (`is_draft=True` 강제, 라우터 책임)."
       },
       "ReflectionBatchItem": {
         "description": "POST /reflection/batch 항목 — 미체크 실행 1건의 최종 결과 + 선택적 실패 사유.\n\n`failure_tags`/`memo`/`task_aversiveness`(#299) 는 `completion_status` 가\nfailed/partial_done 일 때만 유효(그 외 값과 함께 오면 422). `memo` 는 서버가 at-rest\n암호화한다. `task_aversiveness` 는 태그 선택 여부와 무관하게 독립적으로 유효하다.\n`memo` 는 `failure_tags` 가 1개 이상일 때만 유효(#203) — memo 는 태그 행에 얹혀\n저장되므로 태그 없이 보내면 422 `COMMON_VALIDATION_ERROR`.",
@@ -7398,13 +7425,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -7416,25 +7436,32 @@
                 }
               ]
             },
-            "title": "Location",
-            "type": "array"
+            "type": "array",
+            "title": "Location"
           },
           "msg": {
-            "title": "Message",
-            "type": "string"
+            "type": "string",
+            "title": "Message"
           },
           "type": {
-            "title": "Error Type",
-            "type": "string"
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
+        "type": "object",
         "required": [
           "loc",
           "msg",
           "type"
         ],
-        "title": "ValidationError",
-        "type": "object"
+        "title": "ValidationError"
       },
       "VapidPublicKeyResponse": {
         "description": "GET /notifications/vapid-public-key 응답 — FE `applicationServerKey` 용 공개값.\n\n`publicKey` 가 null 이면 서버에 VAPID 미설정 → FE 는 **구독을 만들지 말고** '알림 미지원'\n을 표시해야 한다. 서버가 발송할 수 없는데 구독만 만들면, 브라우저 subscribe 는 성공해도\n발송 시 push 서비스가 키 불일치로 403 을 던져 도달 못 하는 구독이 조용히 쌓인다.",
@@ -8138,6 +8165,17 @@
             ],
             "title": "Endedat"
           },
+          "estimatedMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimatedminutes"
+          },
           "elapsedSeconds": {
             "type": "integer",
             "title": "Elapsedseconds"
@@ -8176,6 +8214,215 @@
           "blockedReason"
         ],
         "title": "ReentryState"
+      },
+      "QuickAction": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requestid"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "firstStep": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Firststep"
+          },
+          "attemptMinutes": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Attemptminutes"
+          },
+          "goalId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goalid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requestId",
+          "title",
+          "firstStep",
+          "attemptMinutes"
+        ],
+        "title": "QuickAction"
+      },
+      "ResourceView": {
+        "properties": {
+          "resource": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource"
+        ],
+        "title": "ResourceView"
+      },
+      "PreferenceInput": {
+        "properties": {
+          "preference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "smaller_step",
+                  "context_first",
+                  "rest"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preference"
+        ],
+        "title": "PreferenceInput"
+      },
+      "ReentryEvidence": {
+        "properties": {
+          "weekStart": {
+            "type": "string",
+            "format": "date",
+            "title": "Weekstart"
+          },
+          "weekEnd": {
+            "type": "string",
+            "format": "date",
+            "title": "Weekend"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "started": {
+            "type": "integer",
+            "title": "Started"
+          },
+          "firstStepsReported": {
+            "type": "integer",
+            "title": "Firststepsreported"
+          },
+          "tasksCompleted": {
+            "type": "integer",
+            "title": "Taskscompleted"
+          },
+          "preference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "smaller_step",
+                  "context_first",
+                  "rest"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preference"
+          },
+          "evidenceKind": {
+            "type": "string",
+            "title": "Evidencekind",
+            "default": "self_report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "weekStart",
+          "weekEnd",
+          "attempts",
+          "started",
+          "firstStepsReported",
+          "tasksCompleted",
+          "preference"
+        ],
+        "title": "ReentryEvidence"
+      },
+      "NoteView": {
+        "properties": {
+          "memo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "memo"
+        ],
+        "title": "NoteView"
+      },
+      "NoteInput": {
+        "properties": {
+          "memo": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Memo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "memo"
+        ],
+        "title": "NoteInput"
+      },
+      "ResourceInput": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "label"
+        ],
+        "title": "ResourceInput"
       }
     }
   },
@@ -15294,6 +15541,594 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReentryState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/quick-action": {
+      "post": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Quick Action",
+        "operationId": "quick_action_work_context_quick_action_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/actions/{action_id}/resource": {
+      "get": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Get Resource",
+        "operationId": "get_resource_work_context_actions__action_id__resource_get",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Put Resource",
+        "operationId": "put_resource_work_context_actions__action_id__resource_put",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/actions/{action_id}/resource/unlink": {
+      "post": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Unlink Resource",
+        "operationId": "unlink_resource_work_context_actions__action_id__resource_unlink_post",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/executions/{execution_id}/note": {
+      "get": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Get Note",
+        "operationId": "get_note_work_context_executions__execution_id__note_get",
+        "parameters": [
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Execution Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Put Note",
+        "operationId": "put_note_work_context_executions__execution_id__note_put",
+        "parameters": [
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Execution Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/preference": {
+      "put": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Put Preference",
+        "operationId": "put_preference_work_context_preference_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceInput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Get Preference",
+        "operationId": "get_preference_work_context_preference_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceInput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/evidence": {
+      "get": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Evidence",
+        "operationId": "evidence_work_context_evidence_get",
+        "parameters": [
+          {
+            "name": "week_start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Week Start"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReentryEvidence"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-context/actions/{action_id}/last-note": {
+      "get": {
+        "tags": [
+          "work-context"
+        ],
+        "summary": "Last Note",
+        "operationId": "last_note_work_context_actions__action_id__last_note_get",
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
                 }
               }
             }

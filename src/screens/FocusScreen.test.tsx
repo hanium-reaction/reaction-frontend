@@ -137,7 +137,7 @@ describe('FocusScreen 중단 시트', () => {
     view(vi.fn(), onBack, onStop);
     fireEvent.click(await screen.findByRole('button', { name: /중단/ }));
     fireEvent.click(screen.getByRole('button', { name: /일부만 했어요/ }));
-    expect(onStop).toHaveBeenCalledWith(task.id, 'partial_done', expect.any(Number), undefined);
+    expect(onStop).toHaveBeenCalledWith(task.id, 'partial_done', undefined, undefined);
     // 결과를 남기는 쪽은 오늘 화면으로 빠지지 않는다 — 부모가 회복으로 보낸다.
     expect(onBack).not.toHaveBeenCalled();
   });
@@ -168,7 +168,7 @@ describe('FocusScreen 중단 시트', () => {
     expect(onStop).toHaveBeenCalledWith(
       task.id,
       'failed',
-      expect.any(Number),
+      undefined,
       expect.objectContaining({ tagCodes: ['과대 과제'] }),
     );
   });
@@ -179,6 +179,6 @@ describe('FocusScreen 중단 시트', () => {
     fireEvent.click(await screen.findByRole('button', { name: /중단/ }));
     fireEvent.click(screen.getByRole('button', { name: /잘 안됐어요/ }));
     fireEvent.click(screen.getByRole('button', { name: '사유 없이 다음 행동 보기' }));
-    expect(onStop).toHaveBeenCalledWith(task.id, 'failed', expect.any(Number), { tagCodes: [], memo: '', taskAversiveness: null });
+    expect(onStop).toHaveBeenCalledWith(task.id, 'failed', undefined, { tagCodes: [], memo: '', taskAversiveness: null });
   });
 });

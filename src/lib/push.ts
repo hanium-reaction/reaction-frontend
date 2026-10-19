@@ -1,15 +1,9 @@
 // Web Push 구독 헬퍼 (#25).
 // VAPID public key 는 GET /notifications/vapid-public-key 로 서버에서 받는다(백엔드 구현됨).
-// 서버가 짝키를 직접 알려줘야 키 rotate 에도 구독이 어긋나지 않는다 — 하드코딩/빌드타임
-// 주입은 rotate 시 조용히 깨진다. 호출 실패/미설정(publicKey=null) 시에만 데모 키로 fallback.
+// 서버 키를 확인하지 못하면 구독하지 않는다. 데모 키로 성공처럼 처리하지 않는다.
 
 import type { PushSubscribeRequest } from '../types/api';
 import { notificationsApi } from './api';
-
-// 서버 미동작/미설정 시에만 쓰는 시연용 폴백 키. 이 키로 구독해도 서버가 그 private key 를
-// 갖고 있지 않으니 실제 발송은 안 된다 — subscribe API 응답 모양 확인용.
-const FALLBACK_VAPID_PUBLIC_KEY =
-  'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
 
 const NOTIFICATION_ID_PARAM = 'notificationId';
 const PENDING_OPEN_KEY = 'reaction.pendingNotificationOpen';
@@ -19,13 +13,9 @@ let markOpenedInFlight: Promise<void> | null = null;
 async function resolveVapidPublicKey(): Promise<string> {
   const envKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
   if (envKey) return envKey;
-  try {
-    const { publicKey } = await notificationsApi.vapidPublicKey();
-    if (publicKey) return publicKey;
-  } catch {
-    /* 미인증/오류 — 데모 키로 fallback */
-  }
-  return FALLBACK_VAPID_PUBLIC_KEY;
+  const { publicKey } = await notificationsApi.vapidPublicKey();
+  if (!publicKey) throw new Error('알림 서버의 공개 키가 준비되지 않았어요.');
+  return publicKey;
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -45,7 +35,7 @@ export async function getPushPermission(): Promise<boolean> {
 
 export async function subscribePush(): Promise<PushSubscribeRequest | null> {
   if (typeof window === 'undefined') return null;
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
 
   // permission 요청
   if (Notification.permission === 'default') {

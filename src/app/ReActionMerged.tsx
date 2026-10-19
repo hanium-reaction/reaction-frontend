@@ -1,3 +1,4 @@
+import { QuickStart } from '../components/QuickStart';
 import { ReentryScreen } from '../screens/ReentryScreen';
 import type { ReentryState } from '../types/api';
 import React, { useEffect, useRef, useState } from 'react';
@@ -105,7 +106,7 @@ interface ReActionMergedProps {
 }
 
 export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
-  const { screen, tab, setScreen, setTab, setWeekOffset, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId, setInterviewGoalId } = useNavigation();
+  const { user, interviewGoalId, screen, tab, setScreen, setTab, setWeekOffset, interviewReturnTo, setInterviewReturnTo, mandalaGoalId, setMandalaGoalId, setInterviewGoalId } = useNavigation();
 
   // 초기값 비움 → /today/agenda 로딩 중엔 TodayScreen 의 스켈레톤이 대신 표시된다.
   // 실패 시에도 더미로 가리지 않고 빈 목록 + 정직 배너를 보여준다.
@@ -136,6 +137,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     if (typeof window !== 'undefined') writeInterviewOutcome(window.localStorage, outcome);
   };
   const [reentry, setReentry] = useState<ReentryState | null>(null);
+  const [detailedIntake, setDetailedIntake] = useState(false);
+  useEffect(() => { if (screen !== "goal-intake") setDetailedIntake(false); }, [screen]);
   const reentryEnabled = import.meta.env.VITE_REENTRY_P0 === 'true';
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [failReason, setFailReason] = useState('');
@@ -180,8 +183,8 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
     });
   };
 
-  const markPartial = (id: string, pct: number) => {
-    const status = pct >= 100 ? 'done' : pct === 0 ? 'todo' : 'partial_done';
+  const markPartial = (id: string, pct?: number) => {
+    const status = pct !== undefined && pct >= 100 ? 'done' : pct === 0 ? 'todo' : 'partial_done';
     setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status, progress: pct } : t));
     // 0% 는 "안 한 걸로 되돌린다" 라서 서버에 남길 결과가 없다.
     if (status === 'todo') {
@@ -257,7 +260,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   const stopFocusWithResult = (
     id: string,
     result: 'partial_done' | 'failed',
-    progressPct: number,
+    progressPct: number | undefined,
     failure?: { tagCodes: string[]; memo: string; taskAversiveness: number | null },
   ) => {
     if (result === 'failed') {
@@ -391,7 +394,9 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
           <SystemIntroScreen onDone={() => setScreen('goal-intake')} />
         )}
         {screen === 'goal-intake' && (
-          <GoalIntakeScreen onDone={() => setScreen(afterInterviewDone())} onOutcome={setInterviewOutcome} />
+          reentryEnabled && !detailedIntake && user ? <QuickStart key={`${user.userId}.${interviewGoalId ?? ""}`} userId={user.userId} goalId={interviewGoalId ?? undefined} onBack={() => setScreen(interviewReturnTo ?? "today")} onDetailed={() => setDetailedIntake(true)} onStart={detail => {
+            setActiveTask({ id: detail.actionId, title: detail.title, status: 'todo', firstStep: detail.firstStep ?? undefined, dur: `${detail.estimatedMinutes}분` }); setReentry(null); setScreen('reentry');
+          }} /> : <GoalIntakeScreen onDone={() => setScreen(afterInterviewDone())} onOutcome={setInterviewOutcome} />
         )}
         {screen === 'goal-classify' && (
           <GoalClassificationScreen onNext={() => setScreen('setup')} outcome={interviewOutcome} />
@@ -437,7 +442,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
           />
         )}
         {screen === 'recovery' && (
-          <MergedRecoveryScreen
+          <MergedRecoveryScreen onOpenGoals={() => setScreen('goals')}
             task={activeTask}
             failReason={failReason}
             onAccept={acceptRecovery}
