@@ -6473,6 +6473,8 @@ export interface components {
             stepCompletedAt: string | null;
             /** Endedat */
             endedAt: string | null;
+            /** Estimatedminutes */
+            estimatedMinutes?: number | null;
             /** Elapsedseconds */
             elapsedSeconds: number;
             /** Canstart */

@@ -138,6 +138,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
   };
   const [reentry, setReentry] = useState<ReentryState | null>(null);
   const [detailedIntake, setDetailedIntake] = useState(false);
+  useEffect(() => { if (screen !== "goal-intake") setDetailedIntake(false); }, [screen]);
   const reentryEnabled = import.meta.env.VITE_REENTRY_P0 === 'true';
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [failReason, setFailReason] = useState('');
@@ -393,7 +394,7 @@ export function ReActionMerged({ hideTabs = false }: ReActionMergedProps) {
           <SystemIntroScreen onDone={() => setScreen('goal-intake')} />
         )}
         {screen === 'goal-intake' && (
-          reentryEnabled && !detailedIntake && user ? <QuickStart key={`${user.userId}.${interviewGoalId ?? ""}`} userId={user.userId} goalId={interviewGoalId ?? undefined} onDetailed={() => setDetailedIntake(true)} onStart={detail => {
+          reentryEnabled && !detailedIntake && user ? <QuickStart key={`${user.userId}.${interviewGoalId ?? ""}`} userId={user.userId} goalId={interviewGoalId ?? undefined} onBack={() => setScreen(interviewReturnTo ?? "today")} onDetailed={() => setDetailedIntake(true)} onStart={detail => {
             setActiveTask({ id: detail.actionId, title: detail.title, status: 'todo', firstStep: detail.firstStep ?? undefined, dur: `${detail.estimatedMinutes}분` }); setReentry(null); setScreen('reentry');
           }} /> : <GoalIntakeScreen onDone={() => setScreen(afterInterviewDone())} onOutcome={setInterviewOutcome} />
         )}

@@ -181,7 +181,7 @@ export function WeeklyReviewScreenV2() {
     <div className="planning-screen" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Scrollable content */}
       <div className="planning-scroll">
-        {import.meta.env.VITE_REENTRY_P0 === 'true' && <ReentryEvidenceCard weekStart={thisMonday()} />} 
+        {import.meta.env.VITE_REENTRY_P0 === 'true' && <ReentryEvidenceCard weekStart={thisMonday()} />}
 
         {/* Header */}
         <header className="planning-heading">

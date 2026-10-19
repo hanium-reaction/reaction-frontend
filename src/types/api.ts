@@ -1296,6 +1296,7 @@ export interface ReentryState {
   startedAt: string | null;
   stepCompletedAt: string | null;
   endedAt: string | null;
+  estimatedMinutes?: number | null;
   elapsedSeconds: number;
   canStart: boolean;
   blockedReason: string | null;

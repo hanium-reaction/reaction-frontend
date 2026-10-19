@@ -37,7 +37,8 @@ interface FocusScreenProps {
   onExecutionStart?: (taskId: string, executionId: string) => void;
 }
 
-export function FocusScreen({ reentry, task, elapsedMin, totalMin, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+export function FocusScreen({ reentry, task, elapsedMin, totalMin: fallbackMinutes, onComplete, onBack, onStopWithResult, onExecutionStart }: FocusScreenProps) {
+  const totalMin = reentry?.estimatedMinutes ?? fallbackMinutes;
   const leaving = useRef(false);
   const [stepDone, setStepDone] = React.useState(!!reentry?.stepCompletedAt);
   const [stepSaving, setStepSaving] = React.useState(false);

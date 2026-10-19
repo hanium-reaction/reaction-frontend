@@ -32,3 +32,10 @@
 .reentry-page button:focus-visible, .restart-card :focus-visible, .reentry-sheet :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
 @media (min-width: 640px) { .reentry-diff { grid-template-columns: 1fr 1fr; } .reentry-page { padding: 40px; } .restart-card { padding: 28px; } }
 @media (max-width: 380px) { .reentry-sheet { padding: 18px; } .restart-card { padding: 18px; } }
+
+.work-context label { display: grid; gap: 8px; margin: 16px 0; font-size: 14px; font-weight: 650; }
+.work-context input, .work-context select { width: 100%; box-sizing: border-box; min-height: 46px; border: 1px solid var(--sand-300); background: var(--surface-raised); color: var(--text-1); border-radius: 12px; padding: 10px 12px; font: inherit; }
+.work-context button { margin: 6px 8px 6px 0; }
+.work-context summary { cursor: pointer; padding: 12px 0; }
+.work-context a { overflow-wrap: anywhere; color: var(--brand-ink); }
+.work-context button[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); }
